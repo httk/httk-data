@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "httk-placeholder"
+version = "0.1.0"
+description = "httk₂ module providing placeholder functionality."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+authors = [{ name = "Rickard Armiento", email = "gitcommits@armiento.net" }]
+dependencies = [
+  "httk-core>=2.0.0,<3",
+]
+keywords = [
+  "Materials Discovery",
+  "Materials Informatics",
+  "Materials Science",
+  "Machine Learning",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Chemistry",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.urls]
+Homepage = "https://httk.org"
+Documentation = "https://docs.httk.org/httk-placeholder/"
+Repository = "https://github.com/httk/httk-placeholder"
+Issues = "https://github.com/httk/httk-placeholder/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "black",
+  "ruff",
+  "isort",
+  "pyright",
+  "mypy"
+]
+docs = [
+  "sphinx",
+  "furo",
+  "myst-parser",
+  "myst-nb",
+  "sphinx-autodoc-typehints",
+  "sphinx-copybutton",
+  "sphinx-autoapi"
+]
+release = [
+  "build>=1.2",
+  "twine>=6.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"httk.placeholder" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+target-version = "py312"
+src = ["src", "examples"]
+
+[tool.black]
+target-version = ["py312"]
+line-length = 120
+skip-string-normalization = true
+
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["src", "examples"]
+extraPaths = ["src"]  
+reportMissingImports = true
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "examples"]
+mypy_path = ["src"]
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "markdown", "docutils", "docutils.*"]
+ignore_missing_imports = true
