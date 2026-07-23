@@ -1,0 +1,98 @@
+"""Offline JSON-Schema validation of values against OPTIMADE property definitions.
+
+httk-core models each OPTIMADE property as a self-describing definition whose
+:meth:`~httk.core.PropertyDefinition.as_optimade` document *is* a JSON Schema
+(plus ``x-optimade-*`` annotations that validators ignore). This module uses
+that document directly to validate concrete values with ``jsonschema``'s Draft
+2020-12 dialect.
+
+The definitions are self-contained: they carry no ``$ref``, so validation never
+needs to resolve or fetch anything. The document's ``$schema`` key points at the
+OPTIMADE property-definition *meta*-schema URI (which describes definitions, not
+values); it is removed before building the validator so ``jsonschema`` never
+attempts to resolve it, and the dialect is pinned explicitly to
+``jsonschema.Draft202012Validator``. Validation is therefore fully offline.
+"""
+
+from collections.abc import Mapping
+from typing import Any
+
+import jsonschema
+import jsonschema.exceptions
+from httk.core import EntryTypeDefinition, PropertyDefinition
+
+
+class PropertyValidationError(ValueError):
+    """A value did not conform to its OPTIMADE property definition.
+
+    Carries the offending property ``name`` and a human-readable ``message``. For
+    single-value failures the message wraps the underlying ``jsonschema`` error
+    message, and that ``jsonschema.exceptions.ValidationError`` is preserved
+    as the chained ``__cause__``.
+    """
+
+    def __init__(self, name: str, message: str) -> None:
+        self.name = name
+        self.message = message
+        super().__init__(f"Property {name!r}: {message}")
+
+
+def _validator_schema(definition: PropertyDefinition) -> dict[str, Any]:
+    """The definition's OPTIMADE document as a self-contained JSON Schema.
+
+    Drops the ``$schema`` meta-schema reference so ``jsonschema`` treats the
+    document as a plain schema for the *value* (pinned to Draft 2020-12 by the
+    caller) and never tries to resolve the meta-schema URI.
+    """
+    schema = definition.as_optimade()
+    schema.pop("$schema", None)
+    return schema
+
+
+def validate_property(definition: PropertyDefinition, value: Any) -> None:
+    """Validate a single ``value`` against ``definition``'s JSON-Schema payload.
+
+    Builds a ``jsonschema.Draft202012Validator`` directly from the
+    definition's document (with the ``$schema`` meta-schema reference removed)
+    and validates ``value`` against it. Returns ``None`` on success; raises
+    :class:`PropertyValidationError` on failure, chaining the underlying
+    ``jsonschema.exceptions.ValidationError`` as the cause. No network
+    access or registry lookup ever happens.
+    """
+    validator = jsonschema.Draft202012Validator(_validator_schema(definition))
+    try:
+        validator.validate(value)
+    except jsonschema.exceptions.ValidationError as exc:
+        raise PropertyValidationError(definition.name, exc.message) from exc
+
+
+def validate_record(entry_type: EntryTypeDefinition, record: Mapping[str, Any]) -> None:
+    """Validate every property present in ``record`` against ``entry_type``.
+
+    Each key in ``record`` must be described by ``entry_type``; unknown property
+    names are rejected with a :class:`PropertyValidationError` naming them and the
+    entry type. ``id`` and ``type`` must both be present. Properties described by
+    the definition but absent from ``record`` are simply not checked (serving a
+    subset of the described properties is normal). The value of every property
+    that *is* present is validated via :func:`validate_property`. Returns ``None``
+    on success.
+    """
+    properties = entry_type.properties
+
+    unknown = sorted(name for name in record if name not in properties)
+    if unknown:
+        plural = "y" if len(unknown) == 1 else "ies"
+        raise PropertyValidationError(
+            ", ".join(unknown),
+            f"unknown propert{plural} for entry type {entry_type.name!r}: {', '.join(unknown)}.",
+        )
+
+    for required in ("id", "type"):
+        if required not in record:
+            raise PropertyValidationError(
+                required,
+                f"required property {required!r} is missing from the {entry_type.name!r} record.",
+            )
+
+    for name, value in record.items():
+        validate_property(properties[name], value)

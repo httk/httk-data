@@ -3,9 +3,9 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "httk-placeholder"
+name = "httk-data"
 version = "0.1.0"
-description = "httk₂ module providing placeholder functionality."
+description = "httk₂ module for data management: entry providers, property-definition validation, and (upcoming) database storage."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Rickard Armiento", email = "gitcommits@armiento.net" }]
 dependencies = [
   "httk-core>=2.0.0,<3",
+  "jsonschema>=4",
 ]
 keywords = [
   "Materials Discovery",
@@ -33,9 +34,9 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://httk.org"
-Documentation = "https://docs.httk.org/httk-placeholder/"
-Repository = "https://github.com/httk/httk-placeholder"
-Issues = "https://github.com/httk/httk-placeholder/issues"
+Documentation = "https://docs.httk.org/httk-data/"
+Repository = "https://github.com/httk/httk-data"
+Issues = "https://github.com/httk/httk-data/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -65,9 +66,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = true
 
 [tool.setuptools.package-data]
-"httk.placeholder" = ["py.typed"]
+"httk.data" = ["py.typed"]
+"httk.handlers.data" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -87,7 +90,13 @@ skip-string-normalization = true
 [tool.pyright]
 pythonVersion = "3.12"
 include = ["src", "examples"]
-extraPaths = ["src"]  
+extraPaths = ["src"]
+# Resolve the httk-core runtime dependency (and jsonschema) against the shared
+# workspace venv, where httk-core is installed editable; pyright falls back to
+# default resolution where that venv does not exist (e.g. CI, where the deps are
+# installed into the job env).
+venvPath = ".."
+venv = ".venv"
 reportMissingImports = true
 
 [tool.mypy]
@@ -99,5 +108,8 @@ explicit_package_bases = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["yaml", "markdown", "docutils", "docutils.*"]
+# jsonschema (a hard runtime dependency) ships no inline type information; we do
+# not vendor its optional third-party stubs, so treat its imports as untyped.
+module = ["jsonschema", "jsonschema.*"]
 ignore_missing_imports = true
+disable_error_code = ["import-untyped"]

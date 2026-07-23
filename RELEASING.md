@@ -1,4 +1,4 @@
-# Releasing `httk-placeholder`
+# Releasing `httk-data`
 
 Releases are built and published by GitHub Actions. PyPI authentication uses
 Trusted Publishing, so the repository does not need a stored PyPI API token.
@@ -13,9 +13,9 @@ Trusted Publishing, so the repository does not need a stored PyPI API token.
    also recommended.
 3. On PyPI, add a pending GitHub Trusted Publisher with these values:
 
-   - PyPI project name: `httk-placeholder`
+   - PyPI project name: `httk-data`
    - Owner: `httk`
-   - Repository: `httk-placeholder`
+   - Repository: `httk-data`
    - Workflow: `release.yml`
    - Environment: `pypi`
 
@@ -54,15 +54,15 @@ When the workflow run has completed (approving the
 in a fresh environment:
 
 ```console
-python -m venv /tmp/httk-placeholder-test
-/tmp/httk-placeholder-test/bin/python -m pip install \
-  --index-url https://test.pypi.org/simple/ --no-deps httk-placeholder==0.1.0
-/tmp/httk-placeholder-test/bin/python -c "import httk.placeholder"
+python -m venv /tmp/httk-data-test
+/tmp/httk-data-test/bin/python -m pip install \
+  --index-url https://test.pypi.org/simple/ --no-deps httk-data==0.1.0
+/tmp/httk-data-test/bin/python -c "import httk.data"
 ```
 
 Replace `0.1.0` with the version being tested. `--no-deps` keeps the isolation
-test focused on the wheel itself; installing without it would also pull
-`httk-core` (this module's runtime dependency) from the index.
+test focused on the wheel itself; installing without it would also pull this
+module's runtime dependencies (`httk-core` and `jsonschema`) from the index.
 
 ## PyPI
 
@@ -70,7 +70,7 @@ test focused on the wheel itself; installing without it would also pull
 2. Push the commit and create a GitHub release whose tag is `v` followed by the
    package version, for example `v0.1.0`.
 3. Publish the GitHub release and approve the protected `pypi` environment.
-4. Verify the release from a fresh environment with `pip install httk-placeholder`.
+4. Verify the release from a fresh environment with `pip install httk-data`.
 
 The workflow rejects a Git tag that does not match `project.version`, rebuilds
 the distributions from the tagged source, checks them, and publishes them via
