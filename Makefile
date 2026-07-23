@@ -20,9 +20,10 @@ docs-clean:
 # network); docs builds themselves resolve against these vendored files offline.
 docs-inventories:
 	curl -fsSL https://docs.python.org/3/objects.inv -o docs/_inventories/python.inv
+	curl -fsSL $(DOCS_BASE_URL)/httk-core/objects.inv -o docs/_inventories/httk-core.inv
 
 dist-clean:
-	rm -rf build $(DIST_DIR) src/httk_placeholder.egg-info
+	rm -rf build $(DIST_DIR) src/httk_data.egg-info
 
 clean: docs-clean dist-clean
 	find . -name "*.pyc" -print0 | xargs -0 rm -f
