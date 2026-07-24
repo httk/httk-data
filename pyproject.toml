@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "httk-data"
-version = "0.1.0"
-description = "httk₂ module for data management: entry providers, property-definition validation, and (upcoming) database storage."
+version = "0.2.0"
+description = "httk₂ module for data management: entry providers, property-definition validation, and database storage."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -45,7 +45,8 @@ dev = [
   "ruff",
   "isort",
   "pyright",
-  "mypy"
+  "mypy",
+  "sqlalchemy>=2.0,<3"
 ]
 docs = [
   "sphinx",
@@ -60,6 +61,8 @@ release = [
   "build>=1.2",
   "twine>=6.0",
 ]
+db = ["sqlalchemy>=2.0,<3"]
+duckdb = ["httk-data[db]", "duckdb_engine>=0.13", "duckdb>=1.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

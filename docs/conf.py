@@ -111,6 +111,15 @@ nitpick_ignore = [
     ("py:class", "typing.Optional"),
     ("py:class", "typing.Union"),
     ("py:class", "Ellipsis"),
+    # sqlalchemy is an optional dependency ([db] extra) whose docs inventory is
+    # not vendored; the SQL layer's internal-facing signatures reference it.
+    ("py:class", "sqlalchemy.Engine"),
+    ("py:class", "sqlalchemy.MetaData"),
+    ("py:class", "sqlalchemy.Table"),
+    ("py:class", "sqlalchemy.ColumnElement"),
+    ("py:class", "sqlalchemy.FromClause"),
+    # PEP 695 method type parameters (e.g. SqlStore.fetch[T]) are not classes.
+    ("py:class", "T"),
 ]
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True

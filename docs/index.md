@@ -6,14 +6,17 @@ documentation of *httk₂* as a whole, see [docs.httk.org](https://docs.httk.org
 *httk-data* is a [*httk₂*](https://github.com/httk/httk2) module for **data
 management**. It is the *capability* layer built on the stdlib-only *contracts
 and models* in *httk-core*: it serves httk-core's record models through the
-neutral `httk.core.EntryProvider` contract, and validates values against their
-OPTIMADE property definitions with `jsonschema`. It is also the intended future
-home of the v1-style sqlite/database storage layer (not built yet).
+neutral `httk.core.EntryProvider` contract, validates values against their
+OPTIMADE property definitions with `jsonschema`, and provides the database
+storage layer `httk.data.db` — relational storage and querying of plain frozen
+dataclasses over SQLite or DuckDB (via the `httk-data[db]` /
+`httk-data[duckdb]` extras).
 
 ```{admonition} Quick links
 :class: tip
 
 - **Data management guide**: {doc}`data`
+- **Database storage guide**: {doc}`db`
 - **API reference**: {doc}`reference/index`
 - **Examples notebook**: {doc}`notebooks/examples`
 ````
@@ -49,6 +52,7 @@ validate_record(
 :caption: Documentation
 
 data
+db
 reference/index
 notebooks/examples
 ```
