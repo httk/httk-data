@@ -93,20 +93,26 @@ very same object. Join-objects pointing at a stored instance are found with
 `httk.data.query`: bind classes to variables, add conditions, declare outputs,
 iterate. Variables of the same class self-join; reference fields chain
 (`v.reference.name`); variable-length fields support the set operations
-(`has_any`, `has_only`, ...) with for-all semantics via `add_all`:
+(`has_any`, `has_only`), and `~` negates them as sets. String matching
+(`contains`, `startswith`, `endswith`) always takes **literal** text — `%` and
+`_` match themselves:
 
 ```python
 search = store.searcher()
 s = search.variable(StructureRecord)
 search.add(s.spacegroup == 225)
 search.add(s.reference.name == "Ada")            # auto-joins the author table
-only_oxides = s.symbols.has_only("O", "Ca", "Ti")
-search.add(only_oxides)
-search.add_all(only_oxides)                      # for-all over the child rows
+search.add(s.symbols.has_only("O", "Ca", "Ti"))  # for-all over the child rows
+search.add(~s.symbols.has_any("Fe"))             # no child row is iron
 search.output(s, "structure")
-for (structure,), _names in search:
-    print(structure.formula)                     # a fully reconstructed instance
+for values, _names in search:                    # one SearchResult per match
+    print(values[0].formula)                     # a fully reconstructed instance
 ```
+
+Iteration yields a `SearchResult`: a named 2-tuple of `values` (one entry per
+`output()` call, in declaration order) and `names`. It unpacks and indexes like
+the plain tuple it always was, so `for (structure,), _names in search:` and
+`result[0][0]` keep working.
 
 ## Exact rationals, approximate comparisons
 

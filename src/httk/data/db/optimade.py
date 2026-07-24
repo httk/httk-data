@@ -72,14 +72,14 @@ def _related_id_has_handlers(related_type: str, field: str) -> Mapping[str, Call
     """The ``'<related_type>.id'`` HAS handler over a reference or child-of-storable field."""
 
     def has_handler(
-        entry: str, ops: Any, values: Any, search_variable: SearchVariable, has_type: str, inv: bool
-    ) -> tuple[SearchExpression, bool]:
+        entry: str, ops: Any, values: Any, search_variable: SearchVariable, has_type: str
+    ) -> SearchExpression:
         # A SqlVariable satisfies the set-handler contract here: both its
         # reference fields (via SqlReference's set operations over the foreign
         # key) and its child-of-storable fields (a SqlColumn over the child
         # element column) accept sid values.
         sids = [_related_sid(related_type, value) for value in values]
-        return set_handler(field, ops, sids, inv, has_type, search_variable)
+        return set_handler(field, ops, sids, has_type, search_variable)
 
     return {'HAS': has_handler}
 
@@ -164,14 +164,14 @@ def optimade_filter_searcher(
     served = served_specs(schema, prefix)
     property_fulltypes: dict[str, str] = {"id": "string", "type": "string"}
     property_fulltypes.update({name: fulltype for name, _spec, fulltype in served})
-    columns = {name: spec.field for name, spec, _fulltype in served}
+    property_keys = {name: spec.field for name, spec, _fulltype in served}
     if definition is not None:
         for name, prop in definition.properties.items():
             if name in ("id", "type"):
                 continue
             property_fulltypes[name] = _definition_fulltype(prop)
 
-    handlers = simple_property_handlers(cls.__name__, columns, property_fulltypes)
+    handlers = simple_property_handlers(cls.__name__, property_keys, property_fulltypes)
     # The default id/type handlers of simple_property_handlers query the
     # serving-layer '__id' column and constant entry-type name; neither exists
     # on a store row, so drop them (see the docstring: id/type filtering needs

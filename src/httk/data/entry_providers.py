@@ -41,11 +41,11 @@ def _normalized_relationships(
     return {str(key): tuple(value) for key, value in relationships.items()}
 
 
-def _provider_columns(record_type: type[Any]) -> dict[str, str]:
-    """The served-property to record-column map for a standard entry type."""
-    columns = {"id": "__id", "type": "type"}
-    columns.update({field.name: field.name for field in fields(record_type)})
-    return columns
+def _provider_property_keys(record_type: type[Any]) -> dict[str, str]:
+    """The served-property-name to record-key map for a standard entry type."""
+    property_keys = {"id": "__id", "type": "type"}
+    property_keys.update({field.name: field.name for field in fields(record_type)})
+    return property_keys
 
 
 def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -79,10 +79,10 @@ class ReferenceEntryProvider(EntryProvider):
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"references": standard_entry_type("references")}
 
-    def columns(self, entry_type: str) -> Mapping[str, str]:
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
         if entry_type != "references":
             raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
-        return _provider_columns(Reference)
+        return _provider_property_keys(Reference)
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
         if entry_type != "references":
@@ -115,10 +115,10 @@ class FileEntryProvider(EntryProvider):
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"files": standard_entry_type("files")}
 
-    def columns(self, entry_type: str) -> Mapping[str, str]:
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
         if entry_type != "files":
             raise KeyError("FileEntryProvider serves only the 'files' entry type.")
-        return _provider_columns(File)
+        return _provider_property_keys(File)
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
         if entry_type != "files":
@@ -151,10 +151,10 @@ class CalculationEntryProvider(EntryProvider):
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"calculations": standard_entry_type("calculations")}
 
-    def columns(self, entry_type: str) -> Mapping[str, str]:
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
         if entry_type != "calculations":
             raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
-        return _provider_columns(Calculation)
+        return _provider_property_keys(Calculation)
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
         if entry_type != "calculations":

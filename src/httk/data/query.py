@@ -8,12 +8,13 @@ layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can
 stand in for a real store in tests.
 """
 
-from typing import Any, Iterator, Protocol
+from typing import Any, Iterator, NamedTuple, Protocol
 
 __all__ = [
     "SearchExpression",
-    "SearchColumn",
+    "SearchField",
     "SearchVariable",
+    "SearchResult",
     "Searcher",
     "Store",
 ]
@@ -27,40 +28,81 @@ class SearchExpression(Protocol):
     def __invert__(self) -> "SearchExpression": ...
 
 
-class SearchColumn(Protocol):
-    """A queryable column of a search variable.
+class SearchField(Protocol):
+    """A queryable field of a search variable.
 
-    In addition to the methods below, columns support the rich comparison
-    operators (``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``) and
-    ``startswith``/``endswith``, returning :class:`SearchExpression`. The
-    handlers invoke those via ``getattr(column, '__eq__')(value)`` since the
-    comparison dunders cannot be typed as expression-returning.
+    In addition to the methods below, fields support the rich comparison
+    operators (``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``), returning
+    :class:`SearchExpression`. The handlers invoke those via
+    ``getattr(field, '__eq__')(value)`` since the comparison dunders cannot be
+    typed as expression-returning.
+
+    The three string-matching methods take **literal** text: no wildcard or
+    pattern syntax whatsoever crosses this contract, so ``%`` and ``_`` (and
+    any other metacharacter) match themselves. A backend is therefore free to
+    implement them with SQL ``LIKE`` over an escaped pattern, with a regular
+    expression, or with a full-text index — the choice is invisible here.
     """
 
     def has_any(self, *values: Any) -> SearchExpression: ...
 
-    def has_inv_any(self, *values: Any) -> SearchExpression: ...
-
     def has_only(self, *values: Any) -> SearchExpression: ...
 
-    def has_inv_only(self, *values: Any) -> SearchExpression: ...
+    def contains(self, text: str) -> SearchExpression:
+        """Match values containing ``text`` as a literal substring."""
+        ...
 
-    def like(self, pattern: str) -> SearchExpression: ...
+    def startswith(self, prefix: str) -> SearchExpression:
+        """Match values beginning with the literal ``prefix``."""
+        ...
+
+    def endswith(self, suffix: str) -> SearchExpression:
+        """Match values ending with the literal ``suffix``."""
+        ...
 
 
 class SearchVariable(Protocol):
-    """A query variable bound to a target table/type; attribute access yields columns."""
+    """A query variable bound to a target type; attribute access yields fields.
 
-    def __getattr__(self, name: str) -> SearchColumn: ...
+    ``always_true``/``always_false`` are reserved names: they are real methods
+    of the variable, never stored fields resolved through ``__getattr__``.
+    They exist so a translation layer can express a constant truth value
+    without inventing a probe field — the old ``field == field`` trick was
+    also NULL-unsound, since it yields NULL (not true) for a NULL field.
+    """
+
+    def always_true(self) -> SearchExpression:
+        """An expression that matches every row."""
+        ...
+
+    def always_false(self) -> SearchExpression:
+        """An expression that matches no row."""
+        ...
+
+    def __getattr__(self, name: str) -> SearchField: ...
+
+
+class SearchResult(NamedTuple):
+    """One match: the declared output values, and the names they were declared under.
+
+    ``values`` holds one entry per :meth:`Searcher.output` call in declaration
+    order; it is a tuple, so ``values, names = result`` and ``result[0][0]``
+    both work.
+    """
+
+    values: tuple[Any, ...]
+    names: tuple[str, ...]
 
 
 class Searcher(Protocol):
     """A single query under construction, and its results once iterated.
 
-    Iteration yields items where ``item[0][0]`` is the matched row object.
-    The expressions received by ``add``/``add_all`` are always ones produced
-    by this same backend's search variables, so implementations may type them
-    as their own expression class.
+    Iteration yields one :class:`SearchResult` per match, so ``item[0][0]`` is
+    the first declared output of the match (typically the matched row object).
+    The expressions received by ``add`` are always ones produced by this same
+    backend's search variables, so implementations may type them as their own
+    expression class; a backend that needs a second (post-filter) evaluation
+    position decides that from the expression itself, not from the caller.
     """
 
     offset: int
@@ -71,17 +113,15 @@ class Searcher(Protocol):
 
     def add(self, expression: Any) -> None: ...
 
-    def add_all(self, expression: Any) -> None: ...
-
     def count(self) -> int: ...
 
     def set_limit(self, limit: int) -> None: ...
 
     def add_offset(self, offset: int) -> None: ...
 
-    def add_sort(self, column: Any, descending: bool) -> None: ...
+    def add_sort(self, field: Any, descending: bool) -> None: ...
 
-    def __iter__(self) -> Iterator[Any]: ...
+    def __iter__(self) -> Iterator[SearchResult]: ...
 
 
 class Store(Protocol):

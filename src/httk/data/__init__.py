@@ -48,7 +48,14 @@ from .optimade_query import (
     simple_property_handlers,
     translate_filter_ast,
 )
-from .query import SearchColumn, Searcher, SearchExpression, SearchVariable, Store
+from .query import (
+    Searcher,
+    SearchExpression,
+    SearchField,
+    SearchResult,
+    SearchVariable,
+    Store,
+)
 from .validation import PropertyValidationError, validate_property, validate_record
 
 __all__ = [
@@ -59,8 +66,9 @@ __all__ = [
     "validate_property",
     "validate_record",
     "SearchExpression",
-    "SearchColumn",
+    "SearchField",
     "SearchVariable",
+    "SearchResult",
     "Searcher",
     "Store",
     "FilterTranslationCategory",

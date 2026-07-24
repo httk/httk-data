@@ -1,5 +1,6 @@
 """Tests for the query DSL (httk.data.db.searcher): operators, joins, set semantics, parity."""
 
+import gc
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, ClassVar
@@ -35,6 +36,19 @@ class Tag:
 
 
 @dataclass(frozen=True)
+class Label:
+    """A string field carrying LIKE metacharacters, plus a nullable companion.
+
+    Kept apart from :class:`Rec` on purpose: the escaping and NULL-safety tests
+    need values that would break a naive pattern rendering, and RECORDS must
+    stay readable as the plain operator/set-semantics fixture.
+    """
+
+    text: str
+    note: str | None = None
+
+
+@dataclass(frozen=True)
 class Cell:
     name: str
     basis: Annotated[FracVector, Shape(3, 3)]
@@ -60,6 +74,22 @@ TAGS = [
 
 ALL_FORMULAS = {rec.formula for rec in RECORDS}
 
+# `%` and `_` are LIKE metacharacters; the neutral protocol matches them
+# literally, so every "wrong" row below is one a naive (unescaped) rendering
+# would wrongly match.
+LABELS = [
+    Label("50% Mg"),
+    Label("5012 Mg"),
+    Label("a_b"),
+    Label("axb"),
+    Label("Mg 50%"),
+    Label("Mg 5012"),
+    Label("Mg a_b"),
+    Label("Mg axb"),
+]
+
+ALL_LABELS = {label.text for label in LABELS}
+
 
 @pytest.fixture(params=["sqlite", "duckdb"])
 def store(request):
@@ -76,6 +106,8 @@ def store(request):
                 sql_store.save(rec)
             for tag in TAGS:
                 sql_store.save(tag)
+            for label in LABELS:
+                sql_store.save(label)
         yield sql_store
 
 
@@ -87,6 +119,17 @@ def rec_searcher(store):
     searcher = store.searcher()
     variable = searcher.variable(Rec)
     searcher.output(variable, "rec")
+    return searcher, variable
+
+
+def texts(searcher) -> set[str]:
+    return {item[0][0].text for item in searcher}
+
+
+def label_searcher(store):
+    searcher = store.searcher()
+    variable = searcher.variable(Label)
+    searcher.output(variable, "label")
     return searcher, variable
 
 
@@ -108,7 +151,7 @@ def rec_searcher(store):
         (lambda v: v.energy < Fraction(0), {"CaTiO3", "MgO"}),
         (lambda v: v.energy <= Fraction(-1, 3), {"CaTiO3", "MgO"}),
         (lambda v: v.energy >= Fraction(7, 8), {"SrCaTiO", "X"}),
-        (lambda v: v.formula.like("%aTi%"), {"CaTiO3", "SrCaTiO"}),
+        (lambda v: v.formula.contains("aTi"), {"CaTiO3", "SrCaTiO"}),
         (lambda v: v.formula.startswith("Ca"), {"CaTiO3", "CaO"}),
         (lambda v: v.formula.endswith("O"), {"MgO", "CaO", "SrCaTiO"}),
         (lambda v: v.formula.is_in("NaCl", "MgO"), {"NaCl", "MgO"}),
@@ -132,6 +175,38 @@ def test_combinators(store):
     searcher, v = rec_searcher(store)
     searcher.add(~(v.spacegroup == 225))
     assert formulas(searcher) == {"CaTiO3", "SrCaTiO", "X"}
+
+
+# --------------------------------------------------------------- literal string matching
+
+# contains/startswith/endswith take literal text: `%` and `_` match themselves.
+# Each case pairs a query with the rows it must match; the LABELS rows that are
+# *not* listed are exactly the ones a naive (unescaped LIKE) rendering would
+# wrongly return.
+LITERAL_MATCH_CASES = [
+    (lambda v: v.text.contains("50%"), {"50% Mg", "Mg 50%"}),
+    (lambda v: v.text.contains("a_b"), {"a_b", "Mg a_b"}),
+    (lambda v: v.text.startswith("50%"), {"50% Mg"}),
+    (lambda v: v.text.startswith("a_b"), {"a_b"}),
+    (lambda v: v.text.endswith("50%"), {"Mg 50%"}),
+    (lambda v: v.text.endswith("a_b"), {"a_b", "Mg a_b"}),
+]
+
+
+@pytest.mark.parametrize("build, expected", LITERAL_MATCH_CASES)
+def test_literal_string_matching_escapes_like_metacharacters(store, build, expected):
+    searcher, v = label_searcher(store)
+    searcher.add(build(v))
+    assert texts(searcher) == expected
+    assert searcher.count() == len(expected)
+
+
+def test_like_is_private_to_the_sql_backend(store):
+    # The neutral protocol carries no pattern language; `like` was removed from
+    # the column surface and the LIKE rendering is an implementation detail.
+    _searcher, v = label_searcher(store)
+    assert not hasattr(v.text, "like")
+    assert hasattr(v.text, "_like")
 
 
 # --------------------------------------------------------------------- references
@@ -203,12 +278,6 @@ def test_self_join(store):
 # --------------------------------------------------------------------- child set operations
 
 
-def translate(searcher, expression):
-    """The httk-optimade translate_filter pattern for needs_post expressions."""
-    searcher.add(expression)
-    searcher.add_all(expression)
-
-
 def test_has_any_where_position(store):
     searcher, v = rec_searcher(store)
     searcher.add(v.symbols.has_any("O"))
@@ -225,7 +294,7 @@ def test_has_any_does_not_duplicate_parents(store):
 
 def test_has_only_exact_subset_superset_disjoint(store):
     searcher, v = rec_searcher(store)
-    translate(searcher, v.symbols.has_only("O", "Ca", "Ti"))
+    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
     # exact ({O,Ca,Ti}) and subset ({Ca,O}) match; superset (+Sr) and
     # disjoint ({Na,Cl}, {Mg,O}) do not; the empty set matches (see below).
     assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
@@ -233,7 +302,7 @@ def test_has_only_exact_subset_superset_disjoint(store):
 
 def test_has_only_includes_empty_child_record(store):
     searcher, v = rec_searcher(store)
-    translate(searcher, v.symbols.has_only("Na", "Cl"))
+    searcher.add(v.symbols.has_only("Na", "Cl"))
     # Locked-in semantics: a record with no child rows satisfies has_only
     # (the empty set is a subset of any value set), matching the reference
     # in-memory store's exact set predicate.
@@ -246,19 +315,79 @@ def test_has_any_excludes_empty_child_record(store):
     assert formulas(searcher) == ALL_FORMULAS - {"X"}
 
 
-def test_not_has_any_via_inv_any(store):
+def test_not_has_any(store):
     searcher, v = rec_searcher(store)
-    translate(searcher, ~v.symbols.has_inv_any("Ca", "Ti"))
+    searcher.add(~v.symbols.has_any("Ca", "Ti"))
     # NOT (symbols HAS ANY "Ca","Ti"): records with no symbol in the set,
-    # including the record with no symbols at all.
+    # including the record with no symbols at all. This is the exact result set
+    # the removed `~has_inv_any(...)` + add_all pattern produced.
     assert formulas(searcher) == {"NaCl", "MgO", "X"}
+    assert searcher.count() == len(list(searcher))
 
 
-def test_not_has_only_via_inv_only(store):
+def test_not_has_only(store):
     searcher, v = rec_searcher(store)
-    translate(searcher, ~v.symbols.has_inv_only("O", "Ca", "Ti"))
-    # NOT (symbols HAS ONLY "O","Ca","Ti"): some symbol outside the set.
+    searcher.add(~v.symbols.has_only("O", "Ca", "Ti"))
+    # NOT (symbols HAS ONLY "O","Ca","Ti"): some symbol outside the set. The
+    # exact result set the removed `~has_inv_only(...)` + add_all pattern gave.
     assert formulas(searcher) == {"NaCl", "MgO", "SrCaTiO"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_has_only_alone_is_complete(store):
+    # Previously `add(has_only(...))` on its own rendered as constant TRUE and
+    # matched everything; the expression now carries its own post-filter
+    # placement, so one add() is the whole condition.
+    searcher, v = rec_searcher(store)
+    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
+    assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
+    assert searcher.count() == 3
+
+
+def test_is_in_on_a_child_field_is_for_all(store):
+    # On a child field is_in reads as "every child value is in the set" — the
+    # same aggregate as has_only, and likewise complete from a single add().
+    searcher, v = rec_searcher(store)
+    searcher.add(v.symbols.is_in("O", "Ca", "Ti"))
+    assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_not_has_all_is_negation_of_anded_has_any(store):
+    # NOT (symbols HAS ALL "Ca","Ti"): everything except the records holding
+    # both. Negating a conjunction of set predicates goes through the aggregate.
+    searcher, v = rec_searcher(store)
+    searcher.add(~(v.symbols.has_any("Ca") & v.symbols.has_any("Ti")))
+    assert formulas(searcher) == ALL_FORMULAS - {"CaTiO3", "SrCaTiO"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_double_not_round_trips(store):
+    searcher, v = rec_searcher(store)
+    searcher.add(~~v.symbols.has_any("Ca", "Ti"))
+    assert formulas(searcher) == {"CaTiO3", "CaO", "SrCaTiO"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_not_inside_and_with_a_scalar(store):
+    searcher, v = rec_searcher(store)
+    searcher.add((v.spacegroup == 225) & ~v.symbols.has_any("Ca"))
+    assert formulas(searcher) == {"NaCl", "MgO"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_not_over_a_mixed_conjunction(store):
+    searcher, v = rec_searcher(store)
+    searcher.add(~((v.spacegroup == 225) & v.symbols.has_any("Ca")))
+    assert formulas(searcher) == ALL_FORMULAS - {"CaO"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_not_over_a_mixed_disjunction(store):
+    searcher, v = rec_searcher(store)
+    searcher.add(~((v.spacegroup == 225) | v.symbols.has_any("Ti")))
+    assert formulas(searcher) == {"X"}
+    assert searcher.count() == len(list(searcher))
 
 
 def test_repeated_child_access_makes_fresh_joins(store):
@@ -288,6 +417,89 @@ def test_has_all_pattern_no_false_positives(store):
     assert formulas(searcher) == set()
 
 
+# ------------------------------------------------- grouping of HAVING-referenced columns
+
+
+def test_mixed_scalar_and_set_filter(store):
+    # A scalar WHERE condition alongside a set condition in HAVING position.
+    searcher, v = rec_searcher(store)
+    searcher.add(v.formula == "CaTiO3")
+    searcher.add(~v.symbols.has_any("Na", "Cl"))
+    assert formulas(searcher) == {"CaTiO3"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_for_all_with_scalar_filter(store):
+    # The OPTIMADE `nelements=3 AND elements HAS ONLY ...` shape: one expression
+    # applied in both positions, so the scalar column reaches HAVING and must be
+    # grouped by (a BinderException on DuckDB before the grouping fix).
+    searcher, v = rec_searcher(store)
+    searcher.add((v.spacegroup == 225) & v.symbols.has_only("Na", "Cl"))
+    assert formulas(searcher) == {"NaCl"}
+    assert searcher.count() == len(list(searcher))
+
+
+def test_sort_under_grouped_mode(store):
+    # ORDER BY on a root column while grouped: the sort key must join the group
+    # set (a BinderException on DuckDB before the grouping fix).
+    searcher, v = rec_searcher(store)
+    searcher.add(v.symbols.has_any("O"))
+    searcher.add_sort(v.formula, False)
+    assert [item[0][0].formula for item in searcher] == ["CaO", "CaTiO3", "MgO", "SrCaTiO"]
+    assert searcher.count() == len(list(searcher))
+
+
+def test_reference_comparison_under_grouped_mode(store):
+    # A foreign-key comparison in HAVING position groups by the foreign key.
+    searcher, v = rec_searcher(store)
+    searcher.add((v.ref == REF_B) & ~v.symbols.has_any("Na"))
+    assert formulas(searcher) == {"MgO", "SrCaTiO"}
+    assert searcher.count() == len(list(searcher))
+
+
+# ------------------------------------------------------------- constant expressions
+
+def test_always_true_and_always_false_are_constants(store):
+    searcher, v = label_searcher(store)
+    searcher.add(v.always_true())
+    assert texts(searcher) == ALL_LABELS
+    assert searcher.count() == len(ALL_LABELS)
+
+    searcher, v = label_searcher(store)
+    searcher.add(v.always_false())
+    assert texts(searcher) == set()
+    assert searcher.count() == 0
+
+
+def test_always_true_is_null_safe_where_column_self_comparison_was_not(store):
+    # Every LABELS row has a NULL `note`. `always_true()` still matches them all;
+    # the `column == column` convention it replaced evaluates to NULL — not true
+    # — for a NULL column, and so silently dropped exactly these rows.
+    searcher, v = label_searcher(store)
+    searcher.add(v.always_true())
+    assert texts(searcher) == ALL_LABELS
+
+    searcher, v = label_searcher(store)
+    searcher.add(v.note == v.note)
+    assert texts(searcher) == set()
+
+
+def test_true_handler_filter_matches_rows_with_a_null_scalar(store):
+    # End to end through the OPTIMADE translation: `IS KNOWN` on a property the
+    # handler table declares always-known routes through true_handler, and must
+    # match even though the underlying column is NULL for every row.
+    from httk.data.optimade_query import filter_searcher
+
+    searcher = filter_searcher(
+        store,
+        Label,
+        "note IS KNOWN",
+        entry_type="labels",
+        property_fulltypes={"text": "string", "note": "string"},
+    )
+    assert texts(searcher) == ALL_LABELS
+
+
 # --------------------------------------------------------------------- outputs and iteration shape
 
 
@@ -306,6 +518,22 @@ def test_iteration_shape_and_object_identity(store):
     assert items[0][0][0] is values[0]  # item[0][0] is the matched object
 
 
+def test_search_result_is_a_named_two_tuple(store):
+    searcher = store.searcher()
+    v = searcher.variable(Label)
+    searcher.output(v, "label")
+    searcher.output(v.text, "text")
+    searcher.add(v.text == "a_b")
+    (result,) = list(searcher)
+    values, names = result  # unpacks as the plain 2-tuple it always was
+    assert len(result) == 2
+    assert names == ("label", "text")
+    assert result.names == names and result.values == values
+    assert values[0].text == "a_b"
+    assert values[1] == "a_b"
+    assert result[0][0] is values[0]
+
+
 def test_iteration_without_outputs_raises(store):
     searcher = store.searcher()
     searcher.variable(Rec)
@@ -318,7 +546,7 @@ def test_output_column_alongside_object_in_grouped_mode(store):
     v = searcher.variable(Rec)
     searcher.output(v, "rec")
     searcher.output(v.spacegroup, "spacegroup")
-    translate(searcher, v.symbols.has_only("O", "Ca", "Ti"))
+    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
     results = {(item[0][0].formula, item[0][1]) for item in searcher}
     assert results == {("CaTiO3", 221), ("CaO", 225), ("X", 1)}
 
@@ -386,7 +614,7 @@ def test_count_ignores_limit_and_offset(store):
 
 def test_count_grouped(store):
     searcher, v = rec_searcher(store)
-    translate(searcher, v.symbols.has_only("O", "Ca", "Ti"))
+    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
     searcher.set_limit(1)
     assert searcher.count() == 3
 
@@ -424,24 +652,50 @@ def _program_has_any(searcher, v):
 
 
 def _program_has_only(searcher, v):
-    expression = v.symbols.has_only("O", "Ca", "Ti")
-    searcher.add(expression)
-    searcher.add_all(expression)
+    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
 
 
 def _program_not_has_any(searcher, v):
-    expression = ~v.symbols.has_inv_any("Ca", "Ti")
-    searcher.add(expression)
-    searcher.add_all(expression)
+    searcher.add(~v.symbols.has_any("Ca", "Ti"))
+
+
+def _program_not_has_only(searcher, v):
+    searcher.add(~v.symbols.has_only("O", "Ca", "Ti"))
+
+
+def _program_not_has_all(searcher, v):
+    # NOT (HAS ALL "Ca","Ti") — the translation layer's HAS ALL is a
+    # conjunction of has_any, so this negates a conjunction of set predicates.
+    searcher.add(~(v.symbols.has_any("Ca") & v.symbols.has_any("Ti")))
+
+
+def _program_not_inside_and(searcher, v):
+    searcher.add((v.spacegroup == 225) & ~v.symbols.has_any("Ca"))
+
+
+def _program_not_over_mixed_and(searcher, v):
+    searcher.add(~((v.spacegroup == 225) & v.symbols.has_any("Ca")))
+
+
+def _program_not_over_mixed_or(searcher, v):
+    searcher.add(~((v.spacegroup == 225) | v.symbols.has_any("Ti")))
+
+
+def _program_double_not(searcher, v):
+    searcher.add(~~v.symbols.has_any("Ca", "Ti"))
 
 
 def _program_string_ops(searcher, v):
     searcher.add(v.formula.startswith("Ca") | v.formula.endswith("O"))
-    searcher.add(v.formula.like("%a%"))
+    searcher.add(v.formula.contains("a"))
 
 
 def _program_numeric_range(searcher, v):
     searcher.add((v.energy > 0.0) & (v.energy <= 1.0))
+
+
+def _program_mixed_scalar_and_set(searcher, v):
+    searcher.add((v.spacegroup == 225) & v.symbols.has_only("Na", "Cl"))
 
 
 PARITY_PROGRAMS = [
@@ -450,10 +704,17 @@ PARITY_PROGRAMS = [
     _program_not_has_any,
     _program_string_ops,
     _program_numeric_range,
+    _program_mixed_scalar_and_set,
+    _program_not_has_only,
+    _program_not_has_all,
+    _program_not_inside_and,
+    _program_not_over_mixed_and,
+    _program_not_over_mixed_or,
+    _program_double_not,
 ]
 
 
-def test_parity_with_in_memory_store():
+def test_parity_with_in_memory_store(store):
     pytest.importorskip("httk.optimade")
     from httk.optimade.backend.memory_store import InMemoryStore
 
@@ -468,23 +729,111 @@ def test_parity_with_in_memory_store():
     ]
     memory_store = InMemoryStore({"recs": memory_rows})
 
-    with Database.sqlite() as database:
-        sql_store = SqlStore(database)
-        for rec in RECORDS:
-            sql_store.save(rec)
+    for program in PARITY_PROGRAMS:
+        memory_searcher = memory_store.searcher()
+        memory_variable = memory_searcher.variable("recs")
+        memory_searcher.output(memory_variable, "rec")
+        program(memory_searcher, memory_variable)
+        memory_ids = {item[0][0]["formula"] for item in memory_searcher}
 
-        for program in PARITY_PROGRAMS:
-            memory_searcher = memory_store.searcher()
-            memory_variable = memory_searcher.variable("recs")
-            memory_searcher.output(memory_variable, "rec")
-            program(memory_searcher, memory_variable)
-            memory_ids = {item[0][0]["formula"] for item in memory_searcher}
+        sql_searcher = store.searcher()
+        sql_variable = sql_searcher.variable(Rec)
+        sql_searcher.output(sql_variable, "rec")
+        program(sql_searcher, sql_variable)
+        sql_ids = {item[0][0].formula for item in sql_searcher}
 
-            sql_searcher = sql_store.searcher()
-            sql_variable = sql_searcher.variable(Rec)
-            sql_searcher.output(sql_variable, "rec")
-            program(sql_searcher, sql_variable)
-            sql_ids = {item[0][0].formula for item in sql_searcher}
+        assert sql_ids == memory_ids, program.__name__
+        assert sql_searcher.count() == memory_searcher.count(), program.__name__
 
-            assert sql_ids == memory_ids, program.__name__
-            assert sql_searcher.count() == memory_searcher.count(), program.__name__
+
+def test_literal_string_matching_parity_with_in_memory_store(store):
+    pytest.importorskip("httk.optimade")
+    from httk.optimade.backend.memory_store import InMemoryStore
+
+    memory_store = InMemoryStore(
+        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
+    )
+
+    for build, expected in LITERAL_MATCH_CASES:
+        memory_searcher = memory_store.searcher()
+        memory_variable = memory_searcher.variable("labels")
+        memory_searcher.output(memory_variable, "label")
+        memory_searcher.add(build(memory_variable))
+        memory_texts = {item[0][0]["text"] for item in memory_searcher}
+
+        sql_searcher, sql_variable = label_searcher(store)
+        sql_searcher.add(build(sql_variable))
+        sql_texts = texts(sql_searcher)
+
+        assert sql_texts == memory_texts == expected
+        assert sql_searcher.count() == memory_searcher.count()
+
+
+def test_constant_expression_parity_with_in_memory_store(store):
+    pytest.importorskip("httk.optimade")
+    from httk.optimade.backend.memory_store import InMemoryStore
+
+    memory_store = InMemoryStore(
+        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
+    )
+    for build, expected in [
+        (lambda v: v.always_true(), ALL_LABELS),
+        (lambda v: v.always_false(), set()),
+    ]:
+        memory_searcher = memory_store.searcher()
+        memory_variable = memory_searcher.variable("labels")
+        memory_searcher.output(memory_variable, "label")
+        memory_searcher.add(build(memory_variable))
+        memory_texts = {item[0][0]["text"] for item in memory_searcher}
+
+        sql_searcher, sql_variable = label_searcher(store)
+        sql_searcher.add(build(sql_variable))
+        assert texts(sql_searcher) == memory_texts == expected
+
+
+def test_search_result_names_parity_with_in_memory_store(store):
+    # The reference store used to swallow output() entirely, so `values, names =
+    # result` raised there while working over SQL. Both now agree on the shape.
+    pytest.importorskip("httk.optimade")
+    from httk.optimade.backend.memory_store import InMemoryStore
+
+    memory_store = InMemoryStore(
+        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
+    )
+    memory_searcher = memory_store.searcher()
+    memory_variable = memory_searcher.variable("labels")
+    memory_searcher.output(memory_variable, "label")
+    memory_searcher.output(memory_variable.text, "text")
+
+    sql_searcher = store.searcher()
+    sql_variable = sql_searcher.variable(Label)
+    sql_searcher.output(sql_variable, "label")
+    sql_searcher.output(sql_variable.text, "text")
+
+    memory_results = list(memory_searcher)
+    sql_results = list(sql_searcher)
+    assert {result.names for result in memory_results} == {("label", "text")}
+    assert {result.names for result in sql_results} == {("label", "text")}
+    assert {result[0][1] for result in memory_results} == {result[0][1] for result in sql_results} == ALL_LABELS
+
+
+def test_object_outputs_survive_reconstruction_on_every_row(store):
+    """Every match is yielded even when each object output needs a real fetch.
+
+    Reconstructing an object output issues a nested query on the searcher's own
+    connection. A DuckDB connection carries only one active result set, so
+    streaming the outer cursor across that nested query truncates the match set
+    after the first row. The shared fixture cannot catch it — ``RECORDS`` keeps
+    its instances alive, so every reconstruction hits the store's identity cache
+    and never queries — hence this test saves throwaway rows and drops all
+    references to them before searching.
+    """
+    for index in range(4):
+        store.save(Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]))
+    gc.collect()  # drop the identity-cache entries, forcing real fetches below
+
+    searcher, variable = rec_searcher(store)
+    searcher.add(variable.formula.startswith("Throwaway"))
+    matched = formulas(searcher)
+    assert matched == {f"Throwaway{index}" for index in range(4)}
+    assert searcher.count() == 4

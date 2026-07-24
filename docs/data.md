@@ -21,8 +21,9 @@ top of those models:
 map a `{id: record}` mapping — where each record is a httk-core dataclass (or a
 plain mapping coerced into one) — onto the neutral contract. A provider answers
 three questions: which entry types it serves (each described by a first-class
-`httk.core.EntryTypeDefinition`), which record column holds each served property
-(`columns()`), and what the records are (`records()`, plain JSON-able mappings).
+`httk.core.EntryTypeDefinition`), which record key holds each served property
+(`property_keys()`), and what the records are (`records()`, plain JSON-able
+mappings).
 
 ```python
 from httk.core import Reference
@@ -40,9 +41,9 @@ entry_types = provider.entry_types()
 assert list(entry_types) == ["references"]
 assert entry_types["references"].properties["title"].optimade_type == "string"
 
-# columns() maps served property name -> record column; records() are JSON-able:
-columns = provider.columns("references")
-assert columns["id"] == "__id" and columns["type"] == "type"
+# property_keys() maps served property name -> record key; records() are JSON-able:
+property_keys = provider.property_keys("references")
+assert property_keys["id"] == "__id" and property_keys["type"] == "type"
 
 records = list(provider.records("references"))
 assert {r["__id"] for r in records} == {"ref-1", "ref-2"}
