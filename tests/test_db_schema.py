@@ -6,7 +6,17 @@ from fractions import Fraction
 from typing import Annotated, ClassVar
 
 import pytest
-from httk.core import FracVector, Indexed, Shape, Skip, StorageInfo, Unique, stored_property
+from httk.core import (
+    FracVector,
+    Indexed,
+    Related,
+    RelationshipLink,
+    Shape,
+    Skip,
+    StorageInfo,
+    Unique,
+    stored_property,
+)
 
 from httk.data.db import SchemaError, register_schema_override, resolve_schema, snake_case
 
@@ -406,3 +416,132 @@ def test_reserved_field_names_are_errors():
 def test_fracvector_without_shape_is_an_error():
     with pytest.raises(SchemaError, match="BareFracVectorRecord.cell.*Shape"):
         resolve_schema(BareFracVectorRecord)
+
+
+# --------------------------------------------------------------------- Related markers and links
+
+
+@dataclass(frozen=True)
+class Author:
+    name: str
+
+
+@dataclass(frozen=True)
+class RelatedMarkerRecord:
+    author: Annotated[Author | None, Related(role="creator", description="Wrote it")] = None
+
+
+@dataclass(frozen=True)
+class RelatedChildRecord:
+    authors: Annotated[tuple[Author, ...], Related(role="creator", serve=False)] = ()
+
+
+@dataclass(frozen=True)
+class RelatedOnScalarRecord:
+    name: Annotated[str, Related(role="creator")] = ""
+
+
+@dataclass(frozen=True)
+class RelatedOnScalarListRecord:
+    names: Annotated[list[str], Related()] = None  # type: ignore[assignment]
+
+
+@dataclass(frozen=True)
+class RelatedOnSkipRecord:
+    author: Annotated[Author | None, Skip(), Related()] = None
+
+
+def test_related_marker_resolved_on_reference_field():
+    spec = resolve_schema(RelatedMarkerRecord).field("author")
+    assert spec.role == "reference"
+    assert spec.related == Related(role="creator", description="Wrote it")
+
+
+def test_related_marker_resolved_on_child_of_storable_field():
+    spec = resolve_schema(RelatedChildRecord).field("authors")
+    assert spec.role == "child" and spec.target is Author
+    assert spec.related is not None
+    assert spec.related.serve is False
+
+
+def test_related_marker_on_scalar_field_is_an_error():
+    with pytest.raises(SchemaError, match="RelatedOnScalarRecord.name.*Related"):
+        resolve_schema(RelatedOnScalarRecord)
+
+
+def test_related_marker_on_scalar_list_field_is_an_error():
+    with pytest.raises(SchemaError, match="RelatedOnScalarListRecord.names.*Related"):
+        resolve_schema(RelatedOnScalarListRecord)
+
+
+def test_related_marker_on_skipped_field_is_an_error():
+    with pytest.raises(SchemaError, match="RelatedOnSkipRecord.author.*Skip"):
+        resolve_schema(RelatedOnSkipRecord)
+
+
+@dataclass(frozen=True)
+class LinkedJoinRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        links=(RelationshipLink("author", None, role="wrote", description="Inverse of author"),)
+    )
+
+    title: str
+    author: Author | None = None
+
+
+@dataclass(frozen=True)
+class UnknownLinkFieldRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(links=(RelationshipLink("nope", None),))
+
+    author: Author | None = None
+
+
+@dataclass(frozen=True)
+class ScalarLinkEndpointRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(links=(RelationshipLink("title", None),))
+
+    title: str
+    author: Author | None = None
+
+
+@dataclass(frozen=True)
+class ChildLinkEndpointRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(links=(RelationshipLink(None, "authors"),))
+
+    authors: tuple[Author, ...] = ()
+
+
+@dataclass(frozen=True)
+class DoubleDeclaredRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(links=(RelationshipLink(None, "author"),))
+
+    author: Annotated[Author | None, Related(role="creator")] = None
+
+
+def test_valid_link_carried_on_schema():
+    schema = resolve_schema(LinkedJoinRecord)
+    assert schema.links == (RelationshipLink("author", None, role="wrote", description="Inverse of author"),)
+
+
+def test_links_default_empty():
+    assert resolve_schema(Author).links == ()
+
+
+def test_link_with_unknown_field_is_an_error():
+    with pytest.raises(SchemaError, match="UnknownLinkFieldRecord.*unknown field 'nope'"):
+        resolve_schema(UnknownLinkFieldRecord)
+
+
+def test_link_with_non_reference_endpoint_is_an_error():
+    with pytest.raises(SchemaError, match="ScalarLinkEndpointRecord.*'title'.*'scalar'"):
+        resolve_schema(ScalarLinkEndpointRecord)
+
+
+def test_link_with_child_endpoint_is_an_error():
+    with pytest.raises(SchemaError, match="ChildLinkEndpointRecord.*'authors'.*'child'"):
+        resolve_schema(ChildLinkEndpointRecord)
+
+
+def test_field_declared_via_both_forms_is_an_error():
+    with pytest.raises(SchemaError, match="DoubleDeclaredRecord.author.*both.*Related.*RelationshipLink"):
+        resolve_schema(DoubleDeclaredRecord)

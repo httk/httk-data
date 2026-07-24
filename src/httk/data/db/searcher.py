@@ -242,10 +242,14 @@ class SqlReference:
 
     Supports ``== other_variable`` (join condition), ``== stored_object``
     (the object must be known to the store), and ``== None`` (no referent);
-    ``!=`` gives the negated forms. Attribute access LEFT OUTER JOINs the
-    target class's table (once per reference path per variable) and delegates
-    to the joined sub-variable, so chains like ``v.ref.doi`` — or deeper —
-    work and repeated access hits the same join alias.
+    ``!=`` gives the negated forms. The four set operations (``has_any`` etc.)
+    treat the reference as the (at most one-element) set of its referent,
+    rendering directly over the foreign-key column (WHERE-position ``IN``);
+    their values are stored instances or raw sids (:class:`int`, as returned
+    by :meth:`~httk.data.db.store.SqlStore.save`). Attribute access LEFT OUTER
+    JOINs the target class's table (once per reference path per variable) and
+    delegates to the joined sub-variable, so chains like ``v.ref.doi`` — or
+    deeper — work and repeated access hits the same join alias.
     """
 
     def __init__(self, variable: "SqlVariable", spec: FieldSpec) -> None:
@@ -283,6 +287,30 @@ class SqlReference:
     def __hash__(self) -> int:
         return id(self)
 
+    # ------------------------------------------------------------------ set operations
+
+    def _fk_column(self) -> SqlColumn:
+        return SqlColumn(self._variable._searcher, self._fk)
+
+    def _sid_value(self, value: Any) -> int:
+        return value if isinstance(value, int) else self._target_sid(value)
+
+    def has_any(self, *values: Any) -> SqlExpression:
+        """The referent is among ``values`` (stored instances or raw sids): FK ``IN``."""
+        return self._fk_column().has_any(*[self._sid_value(value) for value in values])
+
+    def has_inv_any(self, *values: Any) -> SqlExpression:
+        """The inverse-relation form of :meth:`has_any` (see :meth:`SqlColumn.has_inv_any`)."""
+        return self._fk_column().has_inv_any(*[self._sid_value(value) for value in values])
+
+    def has_only(self, *values: Any) -> SqlExpression:
+        """The referent (when set) is among ``values`` (see :meth:`SqlColumn.has_only`)."""
+        return self._fk_column().has_only(*[self._sid_value(value) for value in values])
+
+    def has_inv_only(self, *values: Any) -> SqlExpression:
+        """The inverse-relation form of :meth:`has_only` (see :meth:`SqlColumn.has_inv_only`)."""
+        return self._fk_column().has_inv_only(*[self._sid_value(value) for value in values])
+
     def __getattr__(self, name: str) -> "SqlColumn | SqlReference":
         if name.startswith("_"):
             raise AttributeError(name)
@@ -294,9 +322,11 @@ class SqlVariable:
 
     Attribute access resolves stored fields (including stored properties) into
     :class:`SqlColumn` / :class:`SqlReference` objects per the class's
-    :class:`~httk.data.db.schema.TableSchema`; accessing a variable-length
-    (child-table) field registers a LEFT OUTER JOIN and switches the searcher
-    into grouped mode. Unknown names raise :class:`AttributeError`;
+    :class:`~httk.data.db.schema.TableSchema`; ``sid`` (a reserved field name)
+    yields the store-managed integer primary key column; accessing a
+    variable-length (child-table) field registers a LEFT OUTER JOIN and
+    switches the searcher into grouped mode. Unknown names raise
+    :class:`AttributeError`;
     fixed-shape tensor fields raise :class:`~httk.data.db.schema.SchemaError`
     (they are not queryable as a whole).
     """
@@ -312,6 +342,10 @@ class SqlVariable:
     def __getattr__(self, name: str) -> "SqlColumn | SqlReference":
         if name.startswith("_"):
             raise AttributeError(name)
+        if name == "sid":
+            # The store-managed integer primary key ('sid' is a reserved field
+            # name, so this never shadows a stored field).
+            return SqlColumn(self._searcher, self._alias.c[SID_COLUMN])
         try:
             spec = self._schema.field(name)
         except SchemaError:

@@ -120,6 +120,11 @@ nitpick_ignore = [
     ("py:class", "sqlalchemy.FromClause"),
     # PEP 695 method type parameters (e.g. SqlStore.fetch[T]) are not classes.
     ("py:class", "T"),
+    # AutoAPI renders the value of the RelatedPropertyResolver type alias with a
+    # bare (unqualified) FilterAst class xref; the name comes from httk-core (a
+    # separate distribution sharing the "httk" namespace), so it cannot resolve
+    # here. Qualified httk.core.FilterAst references resolve via intersphinx.
+    ("py:class", "FilterAst"),
 ]
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True

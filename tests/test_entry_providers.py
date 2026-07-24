@@ -2,7 +2,7 @@
 
 import pytest
 
-from httk.core import Calculation, EntryTypeDefinition, File, known_entry_providers
+from httk.core import Calculation, EntryTypeDefinition, File, RelatedEntry, known_entry_providers
 from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
 from httk.data import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider
@@ -47,6 +47,36 @@ def test_provider_rejects_wrong_entry_type() -> None:
     provider = ReferenceEntryProvider({})
     with pytest.raises(KeyError):
         provider.columns("files")
+    with pytest.raises(KeyError):
+        provider.relationships("files")
+
+
+def test_relationships_default_empty() -> None:
+    assert ReferenceEntryProvider({"ref-1": {"title": "T"}}).relationships("references") == {}
+    assert FileEntryProvider({}).relationships("files") == {}
+    assert CalculationEntryProvider({}).relationships("calculations") == {}
+
+
+def test_relationships_round_trip_with_roles() -> None:
+    related = (
+        RelatedEntry("files", "f-in", description="The input file", role="input"),
+        RelatedEntry("files", "f-out", role="output"),
+        RelatedEntry("structures", "s-1"),
+    )
+    provider = CalculationEntryProvider(
+        {"calc-1": Calculation()},
+        relationships={"calc-1": list(related)},  # any iterable normalizes to a tuple
+    )
+    assert provider.relationships("calculations") == {"calc-1": related}
+    assert provider.relationships("calculations")["calc-1"][0].role == "input"
+
+
+def test_relationships_keys_normalized_to_str() -> None:
+    provider = ReferenceEntryProvider(
+        {"1": {"title": "T"}},
+        relationships={1: (RelatedEntry("structures", "s-1"),)},  # type: ignore[dict-item]
+    )
+    assert provider.relationships("references") == {"1": (RelatedEntry("structures", "s-1"),)}
 
 
 # --- registry / discovery -----------------------------------------------------
