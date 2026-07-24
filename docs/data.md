@@ -9,11 +9,11 @@ providers and no third-party dependencies. httk-data builds the capabilities on
 top of those models:
 
 - **entry providers** that serve the record models through the provider
-  contract, and
-- **property-definition validation** on `jsonschema`.
-
-It is also the intended future home of the v1-style **sqlite/database** storage
-layer; that is not built yet.
+  contract,
+- **property-definition validation** on `jsonschema`, and
+- the **database storage layer** `httk.data.db` (see {doc}`db`), which stores
+  plain frozen dataclasses relationally and serves them through the same
+  provider contract.
 
 ## Entry providers
 
@@ -52,9 +52,10 @@ assert records[0]["type"] == "references"
 ### Discovery through the registry
 
 The three providers self-register when `httk.core` discovers the module, under
-the names `data-references`, `data-files`, and `data-calculations`. A serving
-module (such as *httk-optimade*) can therefore find them through the registry
-without importing httk-data directly:
+the names `data-references`, `data-files`, and `data-calculations` (the
+database-backed provider of {doc}`db` registers alongside them as
+`data-db-store`). A serving module (such as *httk-optimade*) can therefore
+find them through the registry without importing httk-data directly:
 
 ```python
 import httk.core
@@ -139,8 +140,9 @@ except PropertyValidationError as exc:
     assert exc.name == "id"
 ```
 
-## Upcoming: database storage
+## Database-backed serving
 
-httk-data is the planned home of the v1-style **sqlite/database** layer (record
-storage and querying backing the providers above). It is intentionally not
-implemented in this release; the entry providers here are in-memory.
+The entry providers above are in-memory. To store records in a database and
+serve them the same way, see {doc}`db`: `httk.data.db.SqlStore` stores plain
+frozen dataclasses in SQLite or DuckDB, and `StoreEntryProvider` (registered
+as `data-db-store`) serves them through the identical provider contract.

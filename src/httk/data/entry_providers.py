@@ -11,8 +11,10 @@ OPTIMADE standard definition loaded from httk-core via
 
 The record *models* live in httk-core (contracts and models); these *providers*
 live in httk-data (the capability layer built on those models), together with
-property-definition validation. httk-data is also the intended future home of
-the v1-style sqlite/database storage layer, which is not built yet.
+property-definition validation. The database storage layer in
+:mod:`httk.data.db` complements them with a database-backed provider
+(:class:`~httk.data.db.entry_provider.StoreEntryProvider`) serving stored
+dataclasses the same way.
 """
 
 from collections.abc import Iterable, Mapping

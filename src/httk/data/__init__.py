@@ -10,13 +10,20 @@ supplies *capabilities*:
 - **property-definition validation** (:func:`validate_property`,
   :func:`validate_record`, :class:`PropertyValidationError`) built on
   ``jsonschema`` (Draft 2020-12), checking record values against their OPTIMADE
-  property definitions fully offline.
+  property definitions fully offline; and
+- the **store/searcher query protocols** (:mod:`httk.data.query`) — the
+  backend-agnostic query contract implemented by httk data stores and consumed
+  by serving modules; and
+- the **database storage layer** (:mod:`httk.data.db`, requiring the
+  ``httk-data[db]`` extra) — relational storage and querying of plain frozen
+  dataclasses (:class:`~httk.data.db.store.SqlStore` over SQLite or DuckDB),
+  served through the provider contract by
+  :class:`~httk.data.db.entry_provider.StoreEntryProvider`.
 
 The providers self-register (under ``httk.handlers.data``, as
-``data-references``/``data-files``/``data-calculations``) when ``httk.core``
-discovers the module, so a serving module (such as *httk-optimade*) can find
-them through the registry. httk-data is also the intended future home of the
-v1-style sqlite/database storage layer, which is not built yet.
+``data-references``/``data-files``/``data-calculations``/``data-db-store``)
+when ``httk.core`` discovers the module, so a serving module (such as
+*httk-optimade*) can find them through the registry.
 """
 
 from .entry_providers import (
@@ -24,6 +31,7 @@ from .entry_providers import (
     FileEntryProvider,
     ReferenceEntryProvider,
 )
+from .query import SearchColumn, Searcher, SearchExpression, SearchVariable, Store
 from .validation import PropertyValidationError, validate_property, validate_record
 
 __all__ = [
@@ -33,4 +41,9 @@ __all__ = [
     "PropertyValidationError",
     "validate_property",
     "validate_record",
+    "SearchExpression",
+    "SearchColumn",
+    "SearchVariable",
+    "Searcher",
+    "Store",
 ]
