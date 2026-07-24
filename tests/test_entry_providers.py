@@ -15,19 +15,19 @@ def test_reference_provider_round_trip() -> None:
     entry_types = provider.entry_types()
     assert set(entry_types) == {"references"}
     assert isinstance(entry_types["references"], EntryTypeDefinition)
-    columns = provider.columns("references")
-    assert columns["id"] == "__id"
-    assert columns["type"] == "type"
-    assert columns["title"] == "title"
+    property_keys = provider.property_keys("references")
+    assert property_keys["id"] == "__id"
+    assert property_keys["type"] == "type"
+    assert property_keys["title"] == "title"
     records = list(provider.records("references"))
     assert records[0]["__id"] == "ref-1"
     assert records[0]["type"] == "references"
     assert records[0]["title"] == "T"
     assert records[0]["url"] is None
-    # Every served column key is present in every record:
+    # Every served record key is present in every record:
     for record in records:
-        for column in columns.values():
-            assert column in record
+        for key in property_keys.values():
+            assert key in record
 
 
 def test_file_provider_records() -> None:
@@ -37,16 +37,16 @@ def test_file_provider_records() -> None:
     assert record["size"] == 512
 
 
-def test_calculation_provider_columns_cover_id_type() -> None:
+def test_calculation_provider_property_keys_cover_id_type() -> None:
     provider = CalculationEntryProvider({"calc-1": Calculation()})
-    columns = provider.columns("calculations")
-    assert {"id", "type"} <= set(columns)
+    property_keys = provider.property_keys("calculations")
+    assert {"id", "type"} <= set(property_keys)
 
 
 def test_provider_rejects_wrong_entry_type() -> None:
     provider = ReferenceEntryProvider({})
     with pytest.raises(KeyError):
-        provider.columns("files")
+        provider.property_keys("files")
     with pytest.raises(KeyError):
         provider.relationships("files")
 

@@ -191,22 +191,22 @@ def test_supplied_definition_for_unserved_entry_type_rejected(store):
         StoreEntryProvider(store, {"books": Book}, definitions=generated)
 
 
-# --------------------------------------------------------------------- columns
+# ---------------------------------------------------------------- property keys
 
 
-def test_columns_id_type_and_identity_map(provider):
-    columns = provider.columns("writers")
-    assert columns == {"id": "__id", "type": "type", "_httk_name": "_httk_name", "_httk_born": "_httk_born"}
-    book_columns = provider.columns("books")
-    assert book_columns["id"] == "__id" and book_columns["type"] == "type"
-    served = set(book_columns) - {"id", "type"}
-    assert all(book_columns[name] == name for name in served)
+def test_property_keys_id_type_and_identity_map(provider):
+    property_keys = provider.property_keys("writers")
+    assert property_keys == {"id": "__id", "type": "type", "_httk_name": "_httk_name", "_httk_born": "_httk_born"}
+    book_keys = provider.property_keys("books")
+    assert book_keys["id"] == "__id" and book_keys["type"] == "type"
+    served = set(book_keys) - {"id", "type"}
+    assert all(book_keys[name] == name for name in served)
     assert served == set(provider.entry_types()["books"].properties) - {"id", "type"}
 
 
 def test_unknown_entry_type_raises_keyerror(provider):
     with pytest.raises(KeyError, match="books"):
-        provider.columns("nope")
+        provider.property_keys("nope")
     with pytest.raises(KeyError):
         list(provider.records("nope"))
     with pytest.raises(KeyError):
@@ -477,9 +477,9 @@ def test_custom_id_of_used_on_link_paths():
 def test_every_record_validates_against_served_definition(provider):
     entry_types = provider.entry_types()
     for entry_type in entry_types:
-        columns = provider.columns(entry_type)
+        property_keys = provider.property_keys(entry_type)
         for row in provider.records(entry_type):
-            validate_record(entry_types[entry_type], {name: row[column] for name, column in columns.items()})
+            validate_record(entry_types[entry_type], {name: row[key] for name, key in property_keys.items()})
 
 
 # --------------------------------------------------------------------- OPTIMADE end to end

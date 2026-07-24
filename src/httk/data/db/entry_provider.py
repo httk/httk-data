@@ -244,7 +244,7 @@ class StoreEntryProvider(EntryProvider):
             )
         for entry_type, definition in self._definitions.items():
             described = definition.properties
-            missing = sorted(name for name in self.columns(entry_type) if name not in described)
+            missing = sorted(name for name in self.property_keys(entry_type) if name not in described)
             if missing:
                 raise ValueError(
                     f"the supplied definition for entry type {entry_type!r} does not describe the "
@@ -345,11 +345,11 @@ class StoreEntryProvider(EntryProvider):
     def _auto_definition(self, entry_type: str) -> EntryTypeDefinition:
         return auto_definition(entry_type, self._schemas[entry_type], self._prefix)
 
-    def columns(self, entry_type: str) -> Mapping[str, str]:
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
         self._require_entry_type(entry_type)
-        columns = {"id": "__id", "type": "type"}
-        columns.update({name: name for name, _spec, _fulltype in self._served_specs(entry_type)})
-        return columns
+        property_keys = {"id": "__id", "type": "type"}
+        property_keys.update({name: name for name, _spec, _fulltype in self._served_specs(entry_type)})
+        return property_keys
 
     def records(self, entry_type: str) -> Iterator[Mapping[str, Any]]:
         cls = self._require_entry_type(entry_type)

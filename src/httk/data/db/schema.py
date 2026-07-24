@@ -180,7 +180,7 @@ class TableSchema:
     """The storable dataclass this schema was resolved from."""
 
     table_name: str
-    """The table name (:attr:`~httk.core.StorageInfo.table_name` or the snake-cased class name)."""
+    """The table name (:attr:`~httk.core.StorageInfo.storage_name` or the snake-cased class name)."""
 
     fields: tuple[FieldSpec, ...]
     """The stored fields, dataclass fields first (in declaration order), then stored properties.
@@ -294,7 +294,7 @@ def _build_schema(cls: type, override: StorageInfo | None) -> TableSchema:
     info = override if override is not None else getattr(cls, STORAGE_INFO_ATTRIBUTE, None)
     if info is None:
         info = StorageInfo()
-    table_name = info.table_name if info.table_name is not None else snake_case(cls.__name__)
+    table_name = info.storage_name if info.storage_name is not None else snake_case(cls.__name__)
 
     hints = typing.get_type_hints(cls, include_extras=True)
     specs: list[FieldSpec] = []

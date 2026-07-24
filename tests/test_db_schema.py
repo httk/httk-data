@@ -123,7 +123,7 @@ class CompositeIndexRecord:
 
 @dataclass(frozen=True)
 class NamedTableRecord:
-    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(table_name="my_table", dedup="by_value")
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="my_table", dedup="by_value")
     value: int
 
 
@@ -353,14 +353,14 @@ def test_snake_case_default_table_names():
 
 
 def test_register_schema_override_wins_over_defaults():
-    register_schema_override(OverriddenRecord, StorageInfo(table_name="external_name"))
+    register_schema_override(OverriddenRecord, StorageInfo(storage_name="external_name"))
     assert resolve_schema(OverriddenRecord).table_name == "external_name"
 
 
 def test_explicit_override_argument_wins():
     default_schema = resolve_schema(ExplicitOverrideRecord)
     assert default_schema.table_name == "explicit_override_record"
-    overridden = resolve_schema(ExplicitOverrideRecord, override=StorageInfo(table_name="elsewhere"))
+    overridden = resolve_schema(ExplicitOverrideRecord, override=StorageInfo(storage_name="elsewhere"))
     assert overridden.table_name == "elsewhere"
     # The two cache entries stay distinct.
     assert resolve_schema(ExplicitOverrideRecord) is default_schema
