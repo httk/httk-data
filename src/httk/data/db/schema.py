@@ -32,6 +32,9 @@ Resolution rules (field annotation, then the resulting relational shape):
   one ``name_sid`` foreign-key column.
 - ``Annotated[..., Skip()]`` — omitted from storage (the field must have a
   default so instances can be reconstructed without it).
+- ``Annotated[..., Related(...)]`` — relationship metadata carried on the
+  resolved :class:`FieldSpec`; valid only on reference fields and on
+  lists/tuples of storable classes.
 - a :class:`~httk.core.stored_property` — resolved like a field from its return
   annotation, flagged derived: stored and queryable, recomputed (not passed to
   ``__init__``) on reconstruction.
@@ -55,6 +58,8 @@ from httk.core import (
     DedupPolicy,
     FracVector,
     Indexed,
+    Related,
+    RelationshipLink,
     Shape,
     Skip,
     StorageInfo,
@@ -151,6 +156,14 @@ class FieldSpec:
     target: type | None = None
     """The referenced storable class for reference (and child-of-storable) fields."""
 
+    related: Related | None = None
+    """The :class:`~httk.core.Related` relationship marker of the field, if any.
+
+    Only reference fields and child fields of storable elements can carry one;
+    the marker's metadata flows into the relationships an entry provider emits
+    for the field.
+    """
+
     derived: bool = False
     """True for :class:`~httk.core.stored_property` values: stored and queryable,
     recomputed rather than passed to ``__init__`` on reconstruction."""
@@ -181,6 +194,14 @@ class TableSchema:
 
     dedup: DedupPolicy
     """The deduplication policy applied when instances are saved."""
+
+    links: tuple[RelationshipLink, ...] = ()
+    """The class's :attr:`~httk.core.StorageInfo.links` relationship declarations.
+
+    Each link is validated: every non-``None`` endpoint names an existing
+    reference field of the class (child fields are not valid endpoints — a link
+    row expresses exactly one FROM→TO pair).
+    """
 
     def field(self, name: str) -> FieldSpec:
         """Return the :class:`FieldSpec` named ``name``; raise :class:`SchemaError` if absent."""
@@ -295,13 +316,42 @@ def _build_schema(cls: type, override: StorageInfo | None) -> TableSchema:
             field_names.add(name)
 
     composite_indexes = _resolve_composite_indexes(cls, info, specs)
+    _validate_links(cls, info.links, specs)
     return TableSchema(
         cls=cls,
         table_name=table_name,
         fields=tuple(specs),
         composite_indexes=composite_indexes,
         dedup=info.dedup,
+        links=info.links,
     )
+
+
+def _validate_links(cls: type, links: tuple[RelationshipLink, ...], specs: list[FieldSpec]) -> None:
+    """Validate each declared link: named endpoints are reference fields, declared once."""
+    by_name = {spec.field: spec for spec in specs}
+    for link in links:
+        for side, endpoint in (("source", link.source), ("target", link.target)):
+            if endpoint is None:
+                continue
+            spec = by_name.get(endpoint)
+            if spec is None:
+                raise SchemaError(
+                    f"{cls.__name__}: RelationshipLink({link.source!r}, {link.target!r}) {side} names "
+                    f"unknown field {endpoint!r}"
+                )
+            if spec.role != "reference":
+                raise SchemaError(
+                    f"{cls.__name__}: RelationshipLink({link.source!r}, {link.target!r}) {side} field "
+                    f"{endpoint!r} has role {spec.role!r}; link endpoints must be storable-class "
+                    f"reference fields (child fields are not valid endpoints)"
+                )
+        if link.target is not None and by_name[link.target].related is not None:
+            raise SchemaError(
+                f"{cls.__name__}.{link.target}: declared both with a Related marker and as the target of "
+                f"RelationshipLink({link.source!r}, {link.target!r}); declare the relationship once, in "
+                f"either form"
+            )
 
 
 def _stored_properties(cls: type) -> list[tuple[str, stored_property]]:
@@ -338,6 +388,7 @@ def _resolve_field(
     unique = False
     shape: Shape | None = None
     skipped = False
+    related: Related | None = None
     while True:
         origin = typing.get_origin(base)
         if origin is Annotated:
@@ -351,6 +402,8 @@ def _resolve_field(
                     skipped = True
                 elif isinstance(marker, Shape):
                     shape = marker
+                elif isinstance(marker, Related):
+                    related = marker
             base = arguments[0]
             continue
         if origin is typing.Union or origin is types.UnionType:
@@ -366,6 +419,8 @@ def _resolve_field(
         break
 
     if skipped:
+        if related is not None:
+            raise SchemaError(f"{cls.__name__}.{name}: a Skip'd field is not stored and cannot carry a Related marker")
         if not derived and not has_default:
             raise SchemaError(
                 f"{cls.__name__}.{name}: a Skip'd field must have a default so instances can be "
@@ -373,6 +428,28 @@ def _resolve_field(
             )
         return None
 
+    spec = _resolve_unwrapped_field(cls, table_name, name, base, shape, optional, indexed, unique, derived)
+    if related is not None:
+        if spec.role != "reference" and not (spec.role == "child" and spec.target is not None):
+            raise SchemaError(
+                f"{cls.__name__}.{name}: a Related marker applies only to a storable-class reference "
+                f"field or a list/tuple of storable classes, not to a {spec.role!r} field"
+            )
+        spec = dataclasses.replace(spec, related=related)
+    return spec
+
+
+def _resolve_unwrapped_field(
+    cls: type,
+    table_name: str,
+    name: str,
+    base: Any,
+    shape: Shape | None,
+    optional: bool,
+    indexed: bool,
+    unique: bool,
+    derived: bool,
+) -> FieldSpec:
     if shape is not None:
         return _resolve_shape_field(cls, table_name, name, base, shape, optional, indexed, unique, derived)
 

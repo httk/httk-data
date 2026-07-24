@@ -14,6 +14,11 @@ supplies *capabilities*:
 - the **store/searcher query protocols** (:mod:`httk.data.query`) — the
   backend-agnostic query contract implemented by httk data stores and consumed
   by serving modules; and
+- the **generic OPTIMADE filter translation** (:mod:`httk.data.optimade_query`)
+  — turning filter syntax trees parsed by
+  :func:`httk.core.parse_optimade_filter` into search expressions over the
+  query protocols (:func:`translate_filter_ast`, :func:`filter_searcher`), with
+  neutral :class:`FilterTranslationError` categories; and
 - the **database storage layer** (:mod:`httk.data.db`, requiring the
   ``httk-data[db]`` extra) — relational storage and querying of plain frozen
   dataclasses (:class:`~httk.data.db.store.SqlStore` over SQLite or DuckDB),
@@ -31,6 +36,18 @@ from .entry_providers import (
     FileEntryProvider,
     ReferenceEntryProvider,
 )
+from .optimade_query import (
+    FilterTranslationCategory,
+    FilterTranslationError,
+    HandlerTable,
+    RelatedPropertyResolver,
+    filter_searcher,
+    format_value,
+    invert_op,
+    relationship_id_handler,
+    simple_property_handlers,
+    translate_filter_ast,
+)
 from .query import SearchColumn, Searcher, SearchExpression, SearchVariable, Store
 from .validation import PropertyValidationError, validate_property, validate_record
 
@@ -46,4 +63,14 @@ __all__ = [
     "SearchVariable",
     "Searcher",
     "Store",
+    "FilterTranslationCategory",
+    "FilterTranslationError",
+    "HandlerTable",
+    "RelatedPropertyResolver",
+    "translate_filter_ast",
+    "simple_property_handlers",
+    "relationship_id_handler",
+    "filter_searcher",
+    "format_value",
+    "invert_op",
 ]

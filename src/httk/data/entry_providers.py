@@ -27,8 +27,18 @@ from httk.core import (
     EntryTypeDefinition,
     File,
     Reference,
+    RelatedEntry,
     standard_entry_type,
 )
+
+
+def _normalized_relationships(
+    relationships: Mapping[str, Iterable[RelatedEntry]] | None,
+) -> dict[str, tuple[RelatedEntry, ...]]:
+    """Normalize a caller-supplied relationships mapping to ``{str(id): tuple(entries)}``."""
+    if relationships is None:
+        return {}
+    return {str(key): tuple(value) for key, value in relationships.items()}
 
 
 def _provider_columns(record_type: type[Any]) -> dict[str, str]:
@@ -51,10 +61,20 @@ def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[
 
 
 class ReferenceEntryProvider(EntryProvider):
-    """Serves OPTIMADE ``references`` from a mapping of id to :class:`~httk.core.Reference`."""
+    """Serves OPTIMADE ``references`` from a mapping of id to :class:`~httk.core.Reference`.
 
-    def __init__(self, entries: Mapping[str, Reference | Mapping[str, Any]]) -> None:
+    ``relationships`` optionally maps a reference id to its related entries
+    (:class:`~httk.core.RelatedEntry` values, served flat per id).
+    """
+
+    def __init__(
+        self,
+        entries: Mapping[str, Reference | Mapping[str, Any]],
+        *,
+        relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
+    ) -> None:
         self._entries: dict[str, Reference] = {str(key): Reference.create(value) for key, value in entries.items()}
+        self._relationships = _normalized_relationships(relationships)
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"references": standard_entry_type("references")}
@@ -69,12 +89,28 @@ class ReferenceEntryProvider(EntryProvider):
             raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
         return _provider_records("references", Reference, self._entries)
 
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        if entry_type != "references":
+            raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
+        return self._relationships
+
 
 class FileEntryProvider(EntryProvider):
-    """Serves OPTIMADE ``files`` from a mapping of id to :class:`~httk.core.File`."""
+    """Serves OPTIMADE ``files`` from a mapping of id to :class:`~httk.core.File`.
 
-    def __init__(self, entries: Mapping[str, File | Mapping[str, Any]]) -> None:
+    ``relationships`` optionally maps a file id to its related entries
+    (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. the
+    calculations a file is ``input``/``output`` of.
+    """
+
+    def __init__(
+        self,
+        entries: Mapping[str, File | Mapping[str, Any]],
+        *,
+        relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
+    ) -> None:
         self._entries: dict[str, File] = {str(key): File.create(value) for key, value in entries.items()}
+        self._relationships = _normalized_relationships(relationships)
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"files": standard_entry_type("files")}
@@ -89,12 +125,28 @@ class FileEntryProvider(EntryProvider):
             raise KeyError("FileEntryProvider serves only the 'files' entry type.")
         return _provider_records("files", File, self._entries)
 
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        if entry_type != "files":
+            raise KeyError("FileEntryProvider serves only the 'files' entry type.")
+        return self._relationships
+
 
 class CalculationEntryProvider(EntryProvider):
-    """Serves OPTIMADE ``calculations`` from a mapping of id to :class:`~httk.core.Calculation`."""
+    """Serves OPTIMADE ``calculations`` from a mapping of id to :class:`~httk.core.Calculation`.
 
-    def __init__(self, entries: Mapping[str, Calculation | Mapping[str, Any]]) -> None:
+    ``relationships`` optionally maps a calculation id to its related entries
+    (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. its
+    ``input``/``output`` files, expressed via the ``role`` metadata.
+    """
+
+    def __init__(
+        self,
+        entries: Mapping[str, Calculation | Mapping[str, Any]],
+        *,
+        relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
+    ) -> None:
         self._entries: dict[str, Calculation] = {str(key): Calculation.create(value) for key, value in entries.items()}
+        self._relationships = _normalized_relationships(relationships)
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
         return {"calculations": standard_entry_type("calculations")}
@@ -108,3 +160,8 @@ class CalculationEntryProvider(EntryProvider):
         if entry_type != "calculations":
             raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
         return _provider_records("calculations", Calculation, self._entries)
+
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        if entry_type != "calculations":
+            raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
+        return self._relationships

@@ -1,13 +1,24 @@
 """Tests for StoreEntryProvider (httk.data.db.entry_provider): definitions, records, relationships."""
 
+import contextlib
 import datetime
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Annotated
+from typing import Annotated, ClassVar
 
 import pytest
-from httk.core import EntryTypeDefinition, FracVector, PropertyDefinition, Shape, stored_property
+from httk.core import (
+    EntryTypeDefinition,
+    FracVector,
+    PropertyDefinition,
+    Related,
+    RelatedEntry,
+    RelationshipLink,
+    Shape,
+    StorageInfo,
+    stored_property,
+)
 
 from httk.data.db import Database, SqlStore, StoreEntryProvider
 from httk.data.validation import validate_record
@@ -249,9 +260,15 @@ def test_writer_records(provider):
 def test_relationships_across_served_classes(provider):
     related = provider.relationships("books")
     # book 1: the 'author' reference (Ada, sid 1) first, then the 'coauthors'
-    # child rows in insertion order (Boole sid 2, Cara sid 3); book 2 has no
-    # related entries and is omitted.
-    assert related == {"books-1": {"writers": ("writers-1", "writers-2", "writers-3")}}
+    # child rows in insertion order (Boole sid 2, Cara sid 3), served as one
+    # flat tuple; book 2 has no related entries and is omitted.
+    assert related == {
+        "books-1": (
+            RelatedEntry("writers", "writers-1"),
+            RelatedEntry("writers", "writers-2"),
+            RelatedEntry("writers", "writers-3"),
+        )
+    }
     assert provider.relationships("writers") == {}
 
 
@@ -268,7 +285,190 @@ def test_id_of_override_used_in_records_and_relationships(store):
     provider = StoreEntryProvider(store, {"books": Book, "writers": Writer}, id_of=id_of)
     assert set(rows_by_id(provider, "books")) == {"books/Analytical Engines", "books/Silence"}
     related = provider.relationships("books")
-    assert related == {"books/Analytical Engines": {"writers": ("writers/Ada", "writers/Boole", "writers/Cara")}}
+    assert related == {
+        "books/Analytical Engines": (
+            RelatedEntry("writers", "writers/Ada"),
+            RelatedEntry("writers", "writers/Boole"),
+            RelatedEntry("writers", "writers/Cara"),
+        )
+    }
+
+
+# --------------------------------------------------------------------- relationship metadata and links
+
+
+@dataclass(frozen=True)
+class Person:
+    name: str
+
+
+@dataclass(frozen=True)
+class Project:
+    name: str
+    lead: Annotated[Person | None, Related(role="lead", description="Project lead")] = None
+    backup: Annotated[Person | None, Related(serve=False)] = None
+    members: Annotated[list[Person], Related(role="member")] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Compound:
+    formula: str
+
+
+@dataclass(frozen=True)
+class Citation:
+    doi: str
+
+
+@dataclass(frozen=True)
+class CompoundCitation:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        dedup="by_value",
+        links=(RelationshipLink("compound", "citation", role="citation", description="Cited by"),),
+    )
+
+    compound: Compound
+    citation: Citation
+
+
+@dataclass(frozen=True)
+class CompoundTag:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        dedup="none",
+        links=(
+            RelationshipLink("compound", "citation", role="primary"),
+            RelationshipLink("compound", "citation", role="secondary"),
+        ),
+    )
+
+    compound: Compound
+    citation: Citation
+
+
+@dataclass(frozen=True)
+class Simulation:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(links=(RelationshipLink("compound", None, role="output"),))
+
+    label: str
+    compound: Compound | None = None
+
+
+@contextlib.contextmanager
+def sqlite_store(*objects):
+    with Database.sqlite() as database:
+        sql_store = SqlStore(database)
+        with sql_store.transaction():
+            for obj in objects:
+                sql_store.save(obj)
+        yield sql_store
+
+
+def test_related_marker_meta_and_serve_false():
+    people = (Person("Ada"), Person("Boole"), Person("Cara"))
+    project = Project("Engine", lead=people[0], backup=people[1], members=[people[1], people[2]])
+    with sqlite_store(*people, project) as store:
+        provider = StoreEntryProvider(store, {"people": Person, "projects": Project})
+        # The suppressed 'backup' field neither becomes a property nor a relationship:
+        assert "_httk_backup" not in provider.entry_types()["projects"].properties
+        assert provider.relationships("projects") == {
+            "projects-1": (
+                RelatedEntry("people", "people-1", description="Project lead", role="lead"),
+                RelatedEntry("people", "people-2", role="member"),
+                RelatedEntry("people", "people-3", role="member"),
+            )
+        }
+
+
+def test_join_class_links_via_link_classes():
+    c1, c2 = Compound("NaCl"), Compound("SiO2")
+    z1, z2 = Citation("10.1/a"), Citation("10.1/b")
+    with sqlite_store(
+        c1, c2, z1, z2, CompoundCitation(c1, z1), CompoundCitation(c1, z2), CompoundCitation(c2, z1)
+    ) as store:
+        provider = StoreEntryProvider(
+            store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundCitation]
+        )
+        # The join class is not served as an entry type:
+        assert sorted(provider.entry_types()) == ["citations", "compounds"]
+        assert provider.relationships("compounds") == {
+            "compounds-1": (
+                RelatedEntry("citations", "citations-1", description="Cited by", role="citation"),
+                RelatedEntry("citations", "citations-2", description="Cited by", role="citation"),
+            ),
+            "compounds-2": (RelatedEntry("citations", "citations-1", description="Cited by", role="citation"),),
+        }
+        # Links are indexed by FROM side only; the TO side gains nothing:
+        assert provider.relationships("citations") == {}
+
+
+def test_served_class_link_with_none_target_is_field_inverse():
+    compound = Compound("NaCl")
+    with sqlite_store(compound, Simulation("run-1", compound), Simulation("run-2", None)) as store:
+        provider = StoreEntryProvider(store, {"compounds": Compound, "simulations": Simulation})
+        # compounds gain the inverse relationship to the simulation entry itself;
+        # the NULL-FK row (run-2) is skipped.
+        assert provider.relationships("compounds") == {
+            "compounds-1": (RelatedEntry("simulations", "simulations-1", role="output"),)
+        }
+        # The forward 'compound' reference field still serves as usual (no meta declared):
+        assert provider.relationships("simulations") == {
+            "simulations-1": (RelatedEntry("compounds", "compounds-1"),)
+        }
+
+
+def test_link_ordering_and_dedup():
+    c1 = Compound("NaCl")
+    z1 = Citation("10.1/a")
+    tag = CompoundTag(c1, z1)
+    # dedup="none": saving the same tag twice stores two rows; each row expresses
+    # both declared links, so without dedup compounds-1 would get four entries.
+    with sqlite_store(c1, z1, tag, CompoundTag(c1, z1)) as store:
+        provider = StoreEntryProvider(
+            store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundTag]
+        )
+        # Exact duplicates collapse (first occurrence wins); entries differing
+        # only in meta are both kept, in link declaration order.
+        assert provider.relationships("compounds") == {
+            "compounds-1": (
+                RelatedEntry("citations", "citations-1", role="primary"),
+                RelatedEntry("citations", "citations-1", role="secondary"),
+            )
+        }
+
+
+def test_link_with_unserved_endpoint_raises():
+    with sqlite_store() as store:
+        with pytest.raises(ValueError, match="Citation.*not served"):
+            StoreEntryProvider(store, {"compounds": Compound}, link_classes=[CompoundCitation])
+        with pytest.raises(ValueError, match="Compound.*not served"):
+            StoreEntryProvider(store, {"citations": Citation}, link_classes=[CompoundCitation])
+        # A served class declaring a link with an unserved endpoint is just as loud:
+        with pytest.raises(ValueError, match="Compound.*not served"):
+            StoreEntryProvider(store, {"simulations": Simulation})
+
+
+def test_link_class_without_links_raises():
+    with sqlite_store() as store:
+        with pytest.raises(ValueError, match="Person.*no relationship links"):
+            StoreEntryProvider(store, {"compounds": Compound}, link_classes=[Person])
+
+
+def test_custom_id_of_used_on_link_paths():
+    c1 = Compound("NaCl")
+    z1 = Citation("10.1/a")
+    with sqlite_store(c1, z1, CompoundCitation(c1, z1)) as store:
+
+        def id_of(entry_type, sid, obj):
+            return f"{entry_type}/{obj.formula if entry_type == 'compounds' else obj.doi}"
+
+        provider = StoreEntryProvider(
+            store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundCitation], id_of=id_of
+        )
+        assert provider.relationships("compounds") == {
+            "compounds/NaCl": (
+                RelatedEntry("citations", "citations/10.1/a", description="Cited by", role="citation"),
+            )
+        }
 
 
 # --------------------------------------------------------------------- validation
