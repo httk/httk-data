@@ -60,6 +60,19 @@ class SearchField(Protocol):
         """Match values ending with the literal ``suffix``."""
         ...
 
+    def __getattr__(self, name: str) -> "SearchField":
+        """The field ``name`` of the record this field refers to.
+
+        A field may hold a *reference* to another stored record, and attribute
+        access chains into that record's own fields — ``variable.ref.doi`` —
+        to any depth. Whether a given field is a reference is a property of the
+        stored class, not of this contract, so the chain is only resolved when
+        the query is built: a backend raises :class:`AttributeError` for a name
+        that is not a field of the referenced record, and for chaining off a
+        field that refers to nothing.
+        """
+        ...
+
 
 class SearchVariable(Protocol):
     """A query variable bound to a target type; attribute access yields fields.
