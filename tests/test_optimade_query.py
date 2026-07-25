@@ -82,6 +82,12 @@ class FakeField:
     def has_only(self, *values: Any) -> FakeExpression:
         return FakeExpression(("has_only", ("field", self.name), values))
 
+    def __getattr__(self, name: str) -> "FakeField":
+        # A field may refer to another record; chaining yields a field again.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return FakeField()
+
 
 class FakeVariable:
     def __init__(self, target: Any) -> None:

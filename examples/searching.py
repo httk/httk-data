@@ -182,11 +182,8 @@ def show_references(store: SqlStore) -> None:
     print("  Both conditions below are written through the same reference field,")
     print("  so they share a single join rather than joining the table twice:")
     searcher, v = structure_search(store)
-    # The neutral protocol types attribute access on a variable as SearchField,
-    # which declares no further attribute access of its own: chaining through a
-    # reference field is resolved by the backend at runtime.
-    searcher.add(v.ref.doi == "10.1/beta")  # type: ignore[attr-defined]
-    searcher.add(v.ref.title == "Beta")  # type: ignore[attr-defined]
+    searcher.add(v.ref.doi == "10.1/beta")
+    searcher.add(v.ref.title == "Beta")
     print(f"  ref.doi == '10.1/beta' AND ref.title == 'Beta'      -> {sorted(matched(searcher))}")
     print()
 

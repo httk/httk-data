@@ -68,7 +68,7 @@ the exact set semantics of the reference in-memory store.
 """
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Iterator, cast
+from typing import TYPE_CHECKING, Any, Iterator, NoReturn, cast
 
 import sqlalchemy
 
@@ -373,6 +373,22 @@ class SqlColumn:
             _bool_clause(self._match_count(outside) == 0),
             post=True,
             set_derived=True,
+        )
+
+    def __getattr__(self, name: str) -> NoReturn:
+        """Refuse to chain: this column holds a value, not a reference.
+
+        The :class:`~httk.data.query.SearchField` contract allows attribute
+        access because a field *may* refer to another record (see
+        :class:`SqlReference`); a plain value column cannot, and says so rather
+        than letting the default lookup failure suggest a typo in the method
+        name.
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+        raise AttributeError(
+            f"{self._element.name!r} holds a value, not a reference to another record, "
+            f"so {name!r} cannot be looked up through it"
         )
 
 

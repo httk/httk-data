@@ -62,8 +62,13 @@ myst_enable_extensions = [
 ]
 myst_heading_anchors = 3
 
-# myst-nb config: don't execute notebooks during docs build by default
-nb_execution_mode = "off"
+# Execute notebooks during the docs build and cache the results, so a notebook
+# is verified rather than merely rendered: a cell that raises fails the build.
+# Everything this needs (jupyter-cache, nbclient, ipykernel) already comes with
+# myst-nb, so the "docs" extra needs nothing added. The cache lives under
+# docs/_build, which `make docs-clean` removes.
+nb_execution_mode = "cache"
+nb_execution_raise_on_error = True
 
 html_theme = "furo"
 html_theme_options = {
