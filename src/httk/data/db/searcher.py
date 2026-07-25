@@ -236,13 +236,33 @@ class SqlColumn:
         return value
 
     def _plain(self, clause: Any) -> SqlExpression:
-        """A comparison on this column: one rendering for both positions, grouped by the column.
+        """A comparison on this column, rendered for both clause positions.
 
-        A root-table column reaching HAVING position must appear in GROUP BY
-        (DuckDB rejects it otherwise); a child-table column must not, since the
-        child rows are what the grouping aggregates over.
+        On a **root-table** column the same clause serves both positions, and it
+        must appear in GROUP BY to reach HAVING position (DuckDB rejects an
+        unaggregated column there; SQLite tolerates it via functional dependency
+        on the grouped primary key).
+
+        On a **child-table** column the two positions genuinely differ, exactly
+        as they do for the set operations. Row-wise, ``child.value = x`` means
+        "some joined row matches" — the right reading, and what WHERE keeps. But
+        that reading cannot be negated row-wise (no single joined row witnesses
+        "no row matches"), and it cannot stand in HAVING position unaggregated.
+        So the HAVING rendering is the aggregate existential
+        ``SUM(CASE WHEN clause THEN 1 ELSE 0 END) > 0`` and the expression is
+        marked :attr:`~SqlExpression.set_derived`, which makes ``~`` negate the
+        aggregate: ``~(v.symbols == 'O')`` then means "no symbol is O" rather
+        than "some symbol is not O", agreeing with ``~v.symbols.has_any('O')``.
+        ``post`` stays unset, so an un-negated comparison still filters in WHERE
+        alone and does not force grouped mode.
         """
-        return _same(clause, () if self._from_child else (self._element,))
+        if not self._from_child:
+            return _same(clause, (self._element,))
+        return SqlExpression(
+            _bool_clause(clause),
+            _bool_clause(self._match_count(clause) > 0),
+            set_derived=True,
+        )
 
     def _match_count(self, condition: Any) -> Any:
         """``SUM(CASE WHEN condition THEN 1 ELSE 0 END)`` — NULL rows count as 0."""
@@ -310,6 +330,11 @@ class SqlColumn:
         exactly as :meth:`has_only`, is an aggregate over the group and so
         renders as constant true in WHERE position and forces the HAVING
         rendering (:attr:`SqlExpression.post`).
+
+        Only the child form is :attr:`~SqlExpression.set_derived`: on a root
+        column ``~column.is_in(...)`` is exactly ``column NOT IN values``
+        row-wise, so negating it aggregate-style would switch the query into
+        grouped mode for no gain.
         """
         member = self._element.in_([self._encode(value) for value in values])
         where: sqlalchemy.ColumnElement[bool] = sqlalchemy.true() if self._from_child else _bool_clause(member)
@@ -317,7 +342,7 @@ class SqlColumn:
             where,
             _bool_clause(self._match_count(sqlalchemy.not_(member)) == 0),
             post=self._from_child,
-            set_derived=True,
+            set_derived=self._from_child,
         )
 
     def has_any(self, *values: Any) -> SqlExpression:

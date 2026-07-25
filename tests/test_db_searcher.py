@@ -837,3 +837,68 @@ def test_object_outputs_survive_reconstruction_on_every_row(store):
     matched = formulas(searcher)
     assert matched == {f"Throwaway{index}" for index in range(4)}
     assert searcher.count() == 4
+
+
+# ------------------------------------------------- child-field comparison set semantics
+
+
+def test_negated_child_comparison_means_no_row_matches(store):
+    """``~(child == x)`` is "no child value is x", not "some child value is not x"."""
+    searcher, v = rec_searcher(store)
+    searcher.add(~(v.symbols == "O"))
+    # Records containing O must be excluded even though they hold other symbols
+    # too; the childless record matches (it has no symbol equal to O).
+    assert formulas(searcher) == {"NaCl", "X"}
+
+    # ... which is exactly what the equivalent set operation yields.
+    reference, rv = rec_searcher(store)
+    reference.add(~rv.symbols.has_any("O"))
+    assert formulas(reference) == {"NaCl", "X"}
+
+
+def test_plain_child_comparison_keeps_existential_meaning(store):
+    """Un-negated ``child == x`` still means "some child value is x", in WHERE alone."""
+    searcher, v = rec_searcher(store)
+    expression = v.symbols == "O"
+    assert expression.post is False  # no grouped mode forced for a plain filter
+    searcher.add(expression)
+    assert formulas(searcher) == {"CaTiO3", "MgO", "CaO", "SrCaTiO"}
+
+
+def test_negated_child_string_predicate_means_no_row_matches(store):
+    searcher, v = rec_searcher(store)
+    searcher.add(~v.symbols.contains("O"))
+    assert formulas(searcher) == {"NaCl", "X"}
+
+
+def test_child_comparison_composed_with_for_all_reaches_having(store):
+    """A plain child comparison OR-ed with a for-all form is aggregated in HAVING.
+
+    Composition routes the whole expression into HAVING position; an
+    unaggregated child column there is a hard binder error on DuckDB and an
+    arbitrary-row guess on SQLite, so the child comparison must render as an
+    aggregate.
+    """
+    searcher, v = rec_searcher(store)
+    searcher.add(v.symbols.has_only("Ca", "O") | (v.symbols == "Na"))
+    # has_only({Ca,O}): CaO and the empty-symbol record; == "Na": NaCl.
+    assert formulas(searcher) == {"CaO", "X", "NaCl"}
+    assert searcher.count() == 3
+
+
+def test_is_in_is_set_derived_only_on_child_fields(store):
+    """``~root.is_in(...)`` stays row-wise; only the child form needs the aggregate."""
+    root_searcher, rv = rec_searcher(store)
+    root_expression = ~rv.formula.is_in("NaCl", "MgO")
+    assert (root_expression.set_derived, root_expression.post) == (False, False)
+    root_searcher.add(root_expression)
+    assert root_searcher._grouped is False  # no needless grouping
+    assert formulas(root_searcher) == ALL_FORMULAS - {"NaCl", "MgO"}
+
+    child_searcher, cv = rec_searcher(store)
+    child_expression = ~cv.symbols.is_in("Ca", "O")
+    assert (child_expression.set_derived, child_expression.post) == (True, True)
+    child_searcher.add(child_expression)
+    # is_in on a child field is the for-all reading, so its negation is
+    # "not every symbol is in {Ca,O}".
+    assert formulas(child_searcher) == {"CaTiO3", "NaCl", "MgO", "SrCaTiO"}
