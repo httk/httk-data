@@ -155,9 +155,15 @@ def test_bytes_reference_and_storable_children_not_served_as_properties(provider
     assert "_httk_coauthors" not in properties  # child of storables: relationships()
 
 
-def test_custom_definition_id_under_httk_base(provider):
+def test_custom_definition_id_under_httk_ad_hoc_base(provider):
+    """A generated definition lands in httk's *ad-hoc* namespace, not the published one.
+
+    ``schemas.httk.org/defs/`` is where definitions actually served from schemas.httk.org
+    live; a definition synthesized here for a stored field is not published anywhere, and
+    ``/ad-hoc/`` says so rather than implying it resolves.
+    """
     definition = provider.entry_types()["books"].properties["_httk_title"]
-    assert definition.definition_id.startswith("https://httk.org/")
+    assert definition.definition_id.startswith("https://schemas.httk.org/ad-hoc/defs/properties/")
 
 
 def test_unregistered_prefix_raises(store):
