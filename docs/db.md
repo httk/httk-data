@@ -109,6 +109,21 @@ for values, _names in search:                    # one SearchResult per match
     print(values[0].formula)                     # a fully reconstructed instance
 ```
 
+A plain comparison on a child field is existential un-negated and set-negating
+under `~`: `s.symbols == "O"` means "some symbol is O", `~(s.symbols == "O")`
+means "no symbol is O" (not "some symbol is not O"), agreeing with
+`~s.symbols.has_any("O")`. `is_in` reads by field kind: on a root field
+`s.formula.is_in("CaTiO3", "NaCl")` is plain membership, while on a child field
+`s.symbols.is_in("O", "Ca", "Ti")` is the for-all reading — every element must
+be in the set — exactly the same as `has_only`.
+
+`s.always_true()` and `s.always_false()` are constant conditions on a search
+variable. They are reserved method names that never resolve to a stored field,
+and they matter mainly to code that builds filters programmatically: the
+obvious alternative, a `field == field` probe, is not NULL-safe — it yields
+NULL rather than true for a row whose field is NULL, and so silently drops
+rows.
+
 Iteration yields a `SearchResult`: a named 2-tuple of `values` (one entry per
 `output()` call, in declaration order) and `names`. It unpacks and indexes like
 the plain tuple it always was, so `for (structure,), _names in search:` and

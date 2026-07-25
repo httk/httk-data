@@ -93,7 +93,13 @@ skip-string-normalization = true
 [tool.pyright]
 pythonVersion = "3.12"
 include = ["src", "examples"]
-extraPaths = ["src"]
+# The examples import httk as an installed package would, so point pyright at
+# the in-tree sources; ../httk-optimade/src resolves the cross-repo serving
+# example (httk-optimade is a consumer of this package, never a dependency of
+# it) against its workspace checkout, and is harmless where that path does not
+# exist. Listing extraPaths explicitly disables pyright's implicit use of ./src,
+# so "src" is listed too.
+extraPaths = ["src", "../httk-optimade/src"]
 # Resolve the httk-core runtime dependency (and jsonschema) against the shared
 # workspace venv, where httk-core is installed editable; pyright falls back to
 # default resolution where that venv does not exist (e.g. CI, where the deps are
@@ -114,5 +120,15 @@ warn_unused_ignores = true
 # jsonschema (a hard runtime dependency) ships no inline type information; we do
 # not vendor its optional third-party stubs, so treat its imports as untyped.
 module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+# httk-optimade is a *consumer* of this package, not a dependency of it: the two
+# meet only at the httk.core.EntryProvider contract. The cross-repo example
+# (examples/serve_as_optimade.py) imports it to show the serving end of that
+# contract, so its import must typecheck whether httk-optimade is absent
+# entirely or present without a py.typed marker.
+module = ["httk.optimade", "httk.optimade.*"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
