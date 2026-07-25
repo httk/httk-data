@@ -48,6 +48,25 @@ def _provider_property_keys(record_type: type[Any]) -> dict[str, str]:
     return property_keys
 
 
+def _json_value(value: Any) -> Any:
+    """A record value as one of the JSON types the provider contract promises.
+
+    The record models declare their sequence fields as tuples (immutable
+    records), but :meth:`~httk.core.EntryProvider.records` is contracted to
+    yield plain JSON-able values, and a JSON array is a ``list``. Passing a
+    tuple through reaches a consumer that type-checks against the property
+    definition — :func:`~httk.data.validation.validate_record` does — and is
+    rejected as "not of type 'array'", even though it serializes fine.
+    """
+    if isinstance(value, tuple):
+        return [_json_value(item) for item in value]
+    if isinstance(value, list):
+        return [_json_value(item) for item in value]
+    if isinstance(value, Mapping):
+        return {key: _json_value(item) for key, item in value.items()}
+    return value
+
+
 def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[str, Any]) -> list[dict[str, Any]]:
     """JSON-able records for a standard entry type, one per stored instance."""
     field_names = [field.name for field in fields(record_type)]
@@ -55,7 +74,7 @@ def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[
     for entry_id, record in entries.items():
         row: dict[str, Any] = {"__id": entry_id, "type": entry_type}
         for name in field_names:
-            row[name] = getattr(record, name)
+            row[name] = _json_value(getattr(record, name))
         records.append(row)
     return records
 

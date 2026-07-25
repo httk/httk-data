@@ -1,6 +1,7 @@
 """Tests for the SQL layer (httk.data.db.engine/mapping/store): DDL, round-trips, dedup, transactions."""
 
 import datetime
+import gc
 import os
 import pathlib
 import subprocess
@@ -344,6 +345,32 @@ def test_save_then_fetch_returns_saved_object(database):
 
 def test_sid_of_unknown_object_is_none(database):
     assert SqlStore(database).sid_of(Author("New", 1900)) is None
+
+
+def test_sid_of_tracks_unhashable_instances(database):
+    """A storable class holding a list is unhashable, and must still be tracked.
+
+    The reverse cache is keyed by equality, which such an instance cannot
+    support; without an identity-keyed fallback ``sid_of`` reported a
+    just-saved instance as never stored, and ``referring`` then raised for it.
+    """
+    store = SqlStore(database)
+    sample = make_sample()  # its `symbols: list[str]` makes it unhashable
+    with pytest.raises(TypeError):
+        hash(sample)
+
+    sid = store.save(sample)
+    assert store.sid_of(sample) == sid
+    assert store.sid_of(make_sample()) is None  # an equal but never-saved instance
+
+    # The identity entry must not outlive the instance, or a recycled id()
+    # could resolve to a stale sid.
+    throwaway = make_sample()
+    store.save(throwaway)
+    tracked_with_throwaway = len(store._sids_by_identity)
+    del throwaway
+    gc.collect()
+    assert len(store._sids_by_identity) < tracked_with_throwaway
 
 
 def test_fetch_missing_sid_raises_keyerror(database):

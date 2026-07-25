@@ -76,6 +76,12 @@ class SqlStore:
         self._metadata = sqlalchemy.MetaData()
         self._instances: weakref.WeakValueDictionary[tuple[type, int], Any] = weakref.WeakValueDictionary()
         self._sids: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()
+        self._sids_by_identity: dict[int, int] = {}
+        """Reverse cache for instances that cannot be hashed (e.g. they hold a list).
+
+        Keyed on ``id()``, with a finalizer dropping each entry when its
+        instance dies, so a recycled id can never resolve to a stale sid.
+        """
         self._local = threading.local()
 
     # ------------------------------------------------------------------ tables and transactions
@@ -119,6 +125,7 @@ class SqlStore:
         except BaseException:
             self._instances.clear()
             self._sids.clear()
+            self._sids_by_identity.clear()
             raise
 
     def _connection_stack(self) -> list[sqlalchemy.Connection]:
@@ -318,13 +325,18 @@ class SqlStore:
 
         This consults the in-memory reverse cache only — it never probes the
         database — so it knows exactly the instances that passed through
-        :meth:`save` or :meth:`fetch` (and, being weak and equality-keyed, is
-        best-effort for instances that cannot be hashed or weak-referenced).
+        :meth:`save` or :meth:`fetch`. Instances that cannot be hashed (a
+        storable class holding a ``list`` field is unhashable) are tracked by
+        identity instead, so they resolve too; only instances that cannot be
+        weak-referenced at all go untracked.
         """
         try:
-            return self._sids.get(obj)
+            cached = self._sids.get(obj)
         except TypeError:
-            return None
+            cached = None
+        if cached is None:
+            cached = self._sids_by_identity.get(id(obj))
+        return cached
 
     def searcher(self) -> SqlSearcher:
         """A new :class:`~httk.data.db.searcher.SqlSearcher` querying this store.
@@ -460,7 +472,13 @@ class SqlStore:
         try:
             self._sids[obj] = sid
         except TypeError:
-            pass  # Not hashable (e.g. holds a list); the reverse cache is best-effort.
+            # Unhashable (a storable class holding a list field is): key the
+            # reverse cache on identity instead, dropping the entry when the
+            # instance dies. Without this, sid_of() — and so referring() —
+            # would report a just-saved instance as never stored.
+            key = id(obj)
+            self._sids_by_identity[key] = sid
+            weakref.finalize(obj, self._sids_by_identity.pop, key, None)
 
 
 def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any) -> FracVector:

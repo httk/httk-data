@@ -17,7 +17,9 @@ dataclasses over SQLite or DuckDB (via the `httk-data[db]` /
 
 - **Data management guide**: {doc}`data`
 - **Database storage guide**: {doc}`db`
+- **Migrating from httk v1**: {doc}`migrating_from_v1`
 - **API reference**: {doc}`reference/index`
+- **Runnable examples**: {doc}`examples/index`
 - **Examples notebook**: {doc}`notebooks/examples`
 ````
 
@@ -53,6 +55,8 @@ validate_record(
 
 data
 db
+migrating_from_v1
 reference/index
+examples/index
 notebooks/examples
 ```

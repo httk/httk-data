@@ -14,7 +14,7 @@ docs-live:
 	HTTK_DOCS_BASE_URL=$(DOCS_BASE_URL) sphinx-autobuild docs docs/_build/html
 
 docs-clean:
-	rm -rf docs/_build docs/reference/autoapi
+	rm -rf docs/_build docs/reference/autoapi docs/examples
 
 # Refresh the committed intersphinx inventories (the one docs task that uses the
 # network); docs builds themselves resolve against these vendored files offline.

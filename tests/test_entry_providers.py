@@ -2,10 +2,18 @@
 
 import pytest
 
-from httk.core import Calculation, EntryTypeDefinition, File, RelatedEntry, known_entry_providers
+from httk.core import (
+    Calculation,
+    EntryTypeDefinition,
+    File,
+    Reference,
+    RelatedEntry,
+    known_entry_providers,
+    standard_entry_type,
+)
 from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
-from httk.data import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider
+from httk.data import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider, validate_record
 
 # --- provider round trips -----------------------------------------------------
 
@@ -99,3 +107,23 @@ def test_registered_factories_resolve_and_build() -> None:
         factory = resolve_callable(entry_providers.require(name).handler)
         provider = factory({})
         assert list(provider.entry_types()) == [entry_type]
+
+
+def test_records_yield_json_arrays_for_tuple_fields():
+    """Tuple-declared fields are served as lists, per the JSON-able records contract.
+
+    The record models declare their sequence fields as tuples, but a JSON array
+    is a list: a tuple serializes fine yet fails a type check against the
+    property definition, so the provider's own output would be rejected by
+    validate_record.
+    """
+    reference = Reference(title="T", authors=({"name": "Ada Lovelace"},), editors=({"name": "Boole"},))
+    provider = ReferenceEntryProvider({"r1": reference})
+    (record,) = provider.records("references")
+
+    assert isinstance(record["authors"], list)
+    assert record["authors"] == [{"name": "Ada Lovelace"}]
+    assert isinstance(record["editors"], list)
+
+    served = {key: value for key, value in record.items() if key != "__id"} | {"id": "r1"}
+    validate_record(standard_entry_type("references"), served)  # must not raise
