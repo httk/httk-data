@@ -490,8 +490,7 @@ def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: 
     if shape.rows == 1 and dim == (shape.cols,):
         return FracVector((tensor.noms,), tensor.denom)
     raise ValueError(
-        f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape "
-        f"({shape.rows}, {shape.cols}), got {dim}"
+        f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape ({shape.rows}, {shape.cols}), got {dim}"
     )
 
 

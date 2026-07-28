@@ -491,8 +491,7 @@ def _resolve_unwrapped_field(
 
     if isinstance(base, type) and issubclass(base, FracVector):
         raise SchemaError(
-            f"{cls.__name__}.{name}: a FracVector field needs a Shape marker, e.g. "
-            f"Annotated[FracVector, Shape(3, 3)]"
+            f"{cls.__name__}.{name}: a FracVector field needs a Shape marker, e.g. Annotated[FracVector, Shape(3, 3)]"
         )
 
     if isinstance(base, type) and dataclasses.is_dataclass(base):
@@ -532,9 +531,7 @@ def _resolve_shape_field(
         size = shape.rows * shape.cols
         columns = tuple(
             ColumnSpec(f"{name}_{i}", "float", nullable=optional, indexed=indexed, unique=unique) for i in range(size)
-        ) + (
-            ColumnSpec(f"{name}_exact", "str", nullable=optional, indexed=indexed, unique=unique),
-        )
+        ) + (ColumnSpec(f"{name}_exact", "str", nullable=optional, indexed=indexed, unique=unique),)
         return FieldSpec(
             field=name,
             python_type=base,

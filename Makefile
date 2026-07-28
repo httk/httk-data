@@ -50,10 +50,10 @@ clean: docs-clean dist-clean
 
 format:
 	$(PYTHON) -m ruff check src examples --fix
-	$(PYTHON) -m black src examples
+	$(PYTHON) -m ruff format src examples
 
 format-check: lint
-	$(PYTHON) -m black --check src examples
+	$(PYTHON) -m ruff format --check src examples
 
 lint:
 	$(PYTHON) -m ruff check src examples

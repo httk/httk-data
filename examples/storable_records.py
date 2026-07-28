@@ -185,8 +185,7 @@ def show_round_trip(store: SqlStore, database: Database) -> int:
     print(f"  cell[0][1]:    {fetched.cell[0][1].to_fraction()}  (exact, not {float(Fraction(1, 3))!r})")
     print(f"  a float round-trip would instead have given: {Fraction(float(Fraction(1, 3)))}")
     print(
-        f"  whole tensors equal: cell {fetched.cell == PEROVSKITE.cell}, "
-        f"coords {fetched.coords == PEROVSKITE.coords}"
+        f"  whole tensors equal: cell {fetched.cell == PEROVSKITE.cell}, coords {fetched.coords == PEROVSKITE.coords}"
     )
     print()
     return sid
