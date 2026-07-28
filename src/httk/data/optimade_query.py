@@ -17,7 +17,7 @@ The translation is driven by three inputs:
 - ``handlers`` — a :data:`HandlerTable` mapping property names to the callables
   that build the actual search expressions (see
   :func:`simple_property_handlers` for the generic property-key-driven builder,
-  and :func:`relationship_id_handler` for ``<type>.id`` relationship entries);
+  and :func:`~httk.data.optimade_query.relationship_id_handler` for ``<type>.id`` relationship entries);
 - ``recognized_prefixes`` — property-name prefixes the serving side claims:
   an unknown property carrying such a prefix is an error
   (``"unrecognized-property"``), while any other unknown property silently
@@ -31,7 +31,7 @@ transport's error codes.
 supported for relationship types named in ``relationship_targets``:
 ``<type>.id HAS ...`` translates directly through the handler table, and any
 other depth-1 dotted filter is resolved by a two-phase semi-join through a
-supplied :data:`RelatedPropertyResolver` (see :func:`translate_filter_ast`).
+supplied :data:`RelatedPropertyResolver` (see :func:`~httk.data.optimade_query.translate_filter_ast`).
 Each dotted filter node is resolved *independently*: in ``references.doi
 CONTAINS "x" AND references.year >= 2000``, some related reference must match
 the doi condition and some (possibly different) related reference must match
@@ -91,7 +91,7 @@ search_variable, has_type)`` and returns a plain
 under a ``NOT`` and never reports a post-filter flag (both were removed —
 ``NOT`` is applied by the caller as ``~``).
 Dotted ``'<type>.id'`` entries provide relationship-id filtering (see
-:func:`relationship_id_handler`).
+:func:`~httk.data.optimade_query.relationship_id_handler`).
 """
 
 type RelatedPropertyResolver = Callable[[str, FilterAst], tuple[str, ...]]
@@ -275,7 +275,7 @@ def constant_comparison_handler(val1: Any, op: str, val2: Any, search_variable: 
 
     ``val1`` is the *value being compared* and ``val2`` the *filter constant*,
     the same left-to-right convention as :func:`constant_set_handler`;
-    :func:`translate_filter_ast` has already inverted ``op`` for
+    :func:`~httk.data.optimade_query.translate_filter_ast` has already inverted ``op`` for
     constant-on-the-left filters, so this ordering is the filter's own.
     """
     if getattr(operator, _python_opmap[op])(val1, val2):
@@ -715,7 +715,7 @@ def filter_searcher(
     ``property_keys`` is also None, from an identity map over
     ``property_fulltypes``). The
     remaining keyword arguments are passed through to
-    :func:`translate_filter_ast`.
+    :func:`~httk.data.optimade_query.translate_filter_ast`.
 
     Raises:
         FilterTranslationError: When the filter cannot be translated.

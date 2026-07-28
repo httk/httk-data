@@ -17,7 +17,7 @@ supplies *capabilities*:
 - the **generic OPTIMADE filter translation** (:mod:`httk.data.optimade_query`)
   — turning filter syntax trees parsed by
   :func:`httk.core.parse_optimade_filter` into search expressions over the
-  query protocols (:func:`translate_filter_ast`, :func:`filter_searcher`), with
+  query protocols (:func:`~httk.data.optimade_query.translate_filter_ast`, :func:`filter_searcher`), with
   neutral :class:`FilterTranslationError` categories; and
 - the **database storage layer** (:mod:`httk.data.db`, requiring the
   ``httk-data[db]`` extra) — relational storage and querying of plain frozen
