@@ -1,0 +1,74 @@
+name: Deploy docs-site
+
+on:
+  workflow_run:
+    workflows:
+      - "Deploy development docs"
+      - "Deploy release docs"
+      - "Repair release docs"
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # A superseded queued deploy is harmless: every later run deploys a strictly newer branch tree.
+  group: docs-site-deploy
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      has_site: ${{ steps.site-check.outputs.has_site }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          path: workflow
+
+      - name: Check for a published docs-site branch
+        id: site-check
+        working-directory: workflow
+        run: |
+          if git ls-remote --exit-code origin refs/heads/docs-site >/dev/null 2>&1; then
+            echo "has_site=true" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            if [ "$status" -eq 2 ]; then
+              echo "docs-site does not exist yet; skipping Pages deployment"
+              echo "has_site=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "unable to inspect docs-site: git transport failure" >&2
+              exit 1
+            fi
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.site-check.outputs.has_site == 'true'
+        with:
+          ref: docs-site
+          fetch-depth: 1
+          path: docs-site
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.site-check.outputs.has_site == 'true'
+        with:
+          path: docs-site
+
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && needs.upload.outputs.has_site == 'true'
+    needs: upload
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

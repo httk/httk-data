@@ -1,47 +1,122 @@
-name: Deploy docs
+name: Deploy development docs
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  # Superseding queued development builds is fine: the latest main wins.
+  group: docs-build-dev
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SITE_DIR: ${{ runner.temp }}/httk-data-docs-site
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install project + docs deps
+      - name: Install locked development docs environment
         run: |
-          pip install -e .[docs]
+          # Clone first so the shared stdlib-only docs CLI is available before
+          # any pip command, and so bootstrap resolution can see local internals.
+          for dependency in httk-core; do
+            git clone --depth 1 --branch main "https://github.com/httk/$dependency" "$RUNNER_TEMP/dep-$dependency"
+          done
+          if [ -f docs/requirements.lock ]; then
+            PYTHONPATH="$RUNNER_TEMP/dep-httk-core/src" python -m httk.core.docs filter-lock \
+              --lock docs/requirements.lock \
+              --out "$RUNNER_TEMP/dev-requirements.txt" \
+              --self-distribution httk-data
+            pip install -r "$RUNNER_TEMP/dev-requirements.txt"
+          else
+            # Bootstrap is intentionally dev-only: releases remain hard-gated
+            # on a committed lock while internal releases are unpublished.
+            echo "::warning::docs/requirements.lock not yet generatable (internal dependencies unpublished); dev build using fresh resolution"
+          fi
+          # Install local internal checkouts before the project so bootstrap
+          # resolution sees the checkouts satisfying their dependency floors.
+          for dependency in httk-core; do
+            pip install -e "$RUNNER_TEMP/dep-$dependency" --no-deps
+          done
+          if [ -f docs/requirements.lock ]; then
+            pip install -e . --no-deps
+          else
+            pip install -e ".[docs]"
+          fi
+          pip check
+          python - <<'PY'
+          import importlib
+          import os
+          from pathlib import Path
 
-      - name: Build docs
-        run: make docs
+          checks = {"httk.core":"httk-core"}
+          for module_name, dependency in checks.items():
+              module = importlib.import_module(module_name)
+              module_path = Path(module.__file__).resolve()
+              expected = Path(os.environ["RUNNER_TEMP"]) / f"dep-{dependency}"
+              if not module_path.is_relative_to(expected):
+                  raise SystemExit(
+                      f"{module_name} resolved from {module_path}, expected {expected}"
+                  )
+          PY
+      - name: Build development docs
+        run: HTTK_DOCS_VERSION=dev:main HTTK_DOCS_BASE_URL=https://docs.httk.org make docs
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/_build/html
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Compose and publish development docs-site
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          REMOTE_SITE_EXISTS=false
+          if git ls-remote --exit-code origin docs-site >/dev/null 2>&1; then
+            REMOTE_SITE_EXISTS=true
+            git fetch origin docs-site
+          else
+            ls_status=$?
+            if [ "$ls_status" -ne 2 ]; then
+              echo "unable to inspect origin/docs-site: git transport failure" >&2
+              exit 1
+            fi
+          fi
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if [ "$REMOTE_SITE_EXISTS" = true ]; then
+              LEASE_SHA=$(git rev-parse origin/docs-site 2>/dev/null || echo "")
+            else
+              LEASE_SHA=""
+            fi
+            rm -rf "$SITE_DIR"
+            mkdir -p "$SITE_DIR"
+            if git show-ref --verify --quiet refs/remotes/origin/docs-site; then
+              git archive origin/docs-site | tar -x -C "$SITE_DIR"
+            fi
+            python -m httk.core.docs compose \
+              --site "$SITE_DIR" --build docs/_build/html --dev \
+              --slug httk-data --url https://docs.httk.org/httk-data \
+              --source-commit "$SOURCE_COMMIT"
+            python -m httk.core.docs commit-site \
+              --site "$SITE_DIR" --repo "$GITHUB_WORKSPACE" \
+              --branch docs-site --message "dev: $SOURCE_COMMIT"
+            if git push --force-with-lease=refs/heads/docs-site:${LEASE_SHA} origin docs-site; then
+              break
+            fi
+            if [ "$attempt" -eq 8 ]; then
+              echo "docs-site push was rejected after 8 attempts" >&2
+              exit 1
+            fi
+            echo "docs-site changed while publishing; retrying attempt $((attempt + 1))" >&2
+            sleep $((RANDOM % 5 + attempt * 3))
+            git fetch origin docs-site
+            REMOTE_SITE_EXISTS=true
+          done

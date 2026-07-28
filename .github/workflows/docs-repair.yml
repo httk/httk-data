@@ -1,0 +1,129 @@
+name: Repair release docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to rebuild (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  # Repairs are explicit operations; keep their build attempts serialized.
+  group: docs-build-repair
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # The docs-repair environment must have GitHub approval configured.
+    environment: docs-repair
+    env:
+      SITE_DIR: ${{ runner.temp }}/httk-data-docs-site
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ inputs.version }}
+
+      - name: Verify the checked out tag
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          checked_out_tag=$(git describe --exact-match --tags HEAD 2>/dev/null || true)
+          if [ "$checked_out_tag" != "$RELEASE_TAG" ]; then
+            echo "checked out ${checked_out_tag:-no exact tag}, expected $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Preflight release inputs
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          with Path("pyproject.toml").open("rb") as stream:
+              version = tomllib.load(stream)["project"]["version"]
+          tag = os.environ["RELEASE_TAG"]
+          if tag != f"v{version}":
+              raise SystemExit(f"tag {tag!r} does not match project.version {version!r}")
+          lock = Path("docs/requirements.lock")
+          if not lock.is_file():
+              raise SystemExit(f"documentation lock is missing: {lock}")
+          lines = lock.read_text(encoding="utf-8").splitlines()
+          if not lines or lines[0] != "# httk-docs-lock-schema: 1":
+              raise SystemExit(f"documentation lock schema header is invalid: {lock}")
+          PY
+
+      # Defense-in-depth; full check-release still runs after the locked install.
+      - name: Install the locked documentation environment and validate the repair tag
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          pip install -r docs/requirements.lock
+          pip check
+          PYTHONPATH=src python -m httk.core.docs check-release --tag "$RELEASE_TAG"
+          pip install . --no-deps --no-build-isolation
+
+      - name: Build release docs
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: HTTK_DOCS_VERSION="$RELEASE_TAG" HTTK_DOCS_BASE_URL=https://docs.httk.org make docs
+
+      - name: Repair and publish release docs-site
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          REMOTE_SITE_EXISTS=false
+          if git ls-remote --exit-code origin docs-site >/dev/null 2>&1; then
+            REMOTE_SITE_EXISTS=true
+            git fetch origin docs-site
+          else
+            ls_status=$?
+            if [ "$ls_status" -ne 2 ]; then
+              echo "unable to inspect origin/docs-site: git transport failure" >&2
+              exit 1
+            fi
+          fi
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if [ "$REMOTE_SITE_EXISTS" = true ]; then
+              LEASE_SHA=$(git rev-parse origin/docs-site 2>/dev/null || echo "")
+            else
+              LEASE_SHA=""
+            fi
+            rm -rf "$SITE_DIR"
+            mkdir -p "$SITE_DIR"
+            if git show-ref --verify --quiet refs/remotes/origin/docs-site; then
+              git archive origin/docs-site | tar -x -C "$SITE_DIR"
+            fi
+            python -m httk.core.docs compose \
+              --site "$SITE_DIR" --build docs/_build/html --repair "$RELEASE_TAG" \
+              --slug httk-data --url https://docs.httk.org/httk-data \
+              --source-commit "$SOURCE_COMMIT"
+            python -m httk.core.docs commit-site \
+              --site "$SITE_DIR" --repo "$GITHUB_WORKSPACE" \
+              --branch docs-site --message "repair: $RELEASE_TAG"
+            if git push --force-with-lease=refs/heads/docs-site:${LEASE_SHA} origin docs-site; then
+              break
+            fi
+            if [ "$attempt" -eq 8 ]; then
+              echo "docs-site push was rejected after 8 attempts" >&2
+              exit 1
+            fi
+            echo "docs-site changed while publishing; retrying attempt $((attempt + 1))" >&2
+            sleep $((RANDOM % 5 + attempt * 3))
+            git fetch origin docs-site
+            REMOTE_SITE_EXISTS=true
+          done
