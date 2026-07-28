@@ -71,8 +71,8 @@ from httk.data.db.store import SqlStore, _as_fixed_tensor
 
 __all__ = [
     "StoreEntryProvider",
-    "served_specs",
     "auto_definition",
+    "served_specs",
 ]
 
 #: How a scalar column kind maps onto an OPTIMADE fulltype (bytes has none).

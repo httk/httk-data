@@ -8,13 +8,14 @@ layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can
 stand in for a real store in tests.
 """
 
-from typing import Any, Iterator, NamedTuple, Protocol
+from collections.abc import Iterator
+from typing import Any, NamedTuple, Protocol
 
 __all__ = [
     "SearchExpression",
     "SearchField",
-    "SearchVariable",
     "SearchResult",
+    "SearchVariable",
     "Searcher",
     "Store",
 ]

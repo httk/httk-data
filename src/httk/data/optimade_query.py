@@ -39,7 +39,8 @@ the year condition.
 """
 
 import operator
-from typing import Any, Callable, Literal, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any, Literal
 
 from httk.core import FilterAst, parse_optimade_filter
 
@@ -50,29 +51,29 @@ __all__ = [
     "FilterTranslationError",
     "HandlerTable",
     "RelatedPropertyResolver",
+    "constant_comparison_handler",
+    "constant_set_handler",
+    "constant_stringmatching_handler",
     "constant_types",
-    "invert_op",
-    "format_value",
-    "translate_filter_ast",
-    "simple_property_handlers",
-    "relationship_id_handler",
-    "filter_searcher",
-    "true_handler",
     "false_handler",
-    "unknown_unknown_handler",
+    "filter_searcher",
+    "format_value",
+    "invert_op",
     "known_unknown_handler",
-    "unknown_comparison_handler",
-    "unknown_stringmatching_handler",
-    "unknown_has_handler",
-    "unknown_length_handler",
+    "number_handler",
+    "relationship_id_handler",
+    "set_handler",
+    "simple_property_handlers",
     "string_handler",
     "stringmatching_handler",
-    "constant_comparison_handler",
-    "constant_stringmatching_handler",
-    "number_handler",
     "timestamp_handler",
-    "set_handler",
-    "constant_set_handler",
+    "translate_filter_ast",
+    "true_handler",
+    "unknown_comparison_handler",
+    "unknown_has_handler",
+    "unknown_length_handler",
+    "unknown_stringmatching_handler",
+    "unknown_unknown_handler",
 ]
 
 type FilterTranslationCategory = Literal["unrecognized-property", "not-implemented", "type-mismatch", "internal"]
@@ -186,10 +187,7 @@ def format_value(fulltype: str, val: tuple[Any, ...], allow_null: bool = False) 
     elif fulltype == 'float':
         if val[0] in ['Number']:
             return float(val[1])
-    elif fulltype == 'string':
-        if val[0] in ['String']:
-            return val[1]
-    elif fulltype == 'timestamp':
+    elif fulltype == 'string' or fulltype == 'timestamp':
         if val[0] in ['String']:
             return val[1]
     elif fulltype == 'dict':
@@ -320,14 +318,14 @@ def set_handler(entry: str, ops: Any, values: Any, has_type: str, search_variabl
     and the backend's ``~`` knows how to negate a set predicate.
     """
     if has_type == 'HAS_ALL':
-        search = getattr(getattr(search_variable, entry), 'has_any')(values[0])
+        search = getattr(search_variable, entry).has_any(values[0])
         for value in values[1:]:
-            search = search & (getattr(getattr(search_variable, entry), 'has_any')(value))
+            search = search & (getattr(search_variable, entry).has_any(value))
         return search
     elif has_type == 'HAS_ANY':
-        return getattr(getattr(search_variable, entry), 'has_any')(*values)
+        return getattr(search_variable, entry).has_any(*values)
     elif has_type == 'HAS_ONLY':
-        return getattr(getattr(search_variable, entry), 'has_only')(*values)
+        return getattr(search_variable, entry).has_only(*values)
     raise FilterTranslationError("Unexpected set operator type: " + str(has_type), "internal")
 
 

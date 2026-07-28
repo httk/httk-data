@@ -41,8 +41,8 @@ from httk.data.db.schema import (
 )
 
 __all__ = [
-    "SID_COLUMN",
     "CONTENT_ID_COLUMN",
+    "SID_COLUMN",
     "sqlalchemy_metadata",
     "table_for",
 ]

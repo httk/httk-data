@@ -17,8 +17,8 @@ declared via ``related_classes`` can be filtered relationally —
 child-of-storable fields.
 """
 
-from collections.abc import Mapping
-from typing import Any, Callable, cast
+from collections.abc import Callable, Mapping
+from typing import Any, cast
 
 from httk.core import EntryTypeDefinition, FilterAst, PropertyDefinition
 

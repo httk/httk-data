@@ -74,41 +74,41 @@ from .schema import (
 )
 
 __all__ = [
-    "ScalarKind",
-    "FieldRole",
-    "SchemaError",
-    "ColumnSpec",
-    "ChildTableSpec",
-    "FieldSpec",
-    "TableSchema",
-    "resolve_schema",
-    "register_schema_override",
-    "snake_case",
-    "ValueCodec",
-    "register_value_codec",
-    "known_value_codecs",
-    "codec_for",
-    "codec_named",
     "FRACTION_EXACT_FORMAT",
-    "SURD_EXACT_FORMAT",
     "FRACVECTOR_EXACT_FORMAT",
-    "encode_fraction_exact",
-    "decode_fraction_exact",
-    "encode_surdscalar_exact",
-    "decode_surdscalar_exact",
-    "encode_fracvector_exact",
-    "decode_fracvector_exact",
-    "encode_fracvector_floats",
-    "canonical_form",
-    "content_id",
+    "SURD_EXACT_FORMAT",
+    "ChildTableSpec",
+    "ColumnSpec",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "SqlSearcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "FieldRole",
+    "FieldSpec",
+    "ScalarKind",
+    "SchemaError",
     "SqlColumn",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlExpression",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "SqlSearcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "TableSchema",
+    "ValueCodec",
+    "canonical_form",
+    "codec_for",
+    "codec_named",
+    "content_id",
+    "decode_fraction_exact",
+    "decode_fracvector_exact",
+    "decode_surdscalar_exact",
+    "encode_fraction_exact",
+    "encode_fracvector_exact",
+    "encode_fracvector_floats",
+    "encode_surdscalar_exact",
+    "known_value_codecs",
     "optimade_filter_searcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "register_schema_override",
+    "register_value_codec",
+    "resolve_schema",
+    "snake_case",
 ]
 
 _SQL_EXPORTS = {

@@ -68,7 +68,8 @@ the exact set semantics of the reference in-memory store.
 """
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Iterator, NoReturn, cast
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import sqlalchemy
 
@@ -81,11 +82,11 @@ if TYPE_CHECKING:
     from httk.data.db.store import SqlStore
 
 __all__ = [
-    "SqlExpression",
     "SqlColumn",
+    "SqlExpression",
     "SqlReference",
-    "SqlVariable",
     "SqlSearcher",
+    "SqlVariable",
 ]
 
 
@@ -109,7 +110,7 @@ class SqlExpression:
     non-aggregated column its HAVING clauses mention.
     """
 
-    __slots__ = ("where_clause", "having_clause", "post", "set_derived", "group_columns")
+    __slots__ = ("group_columns", "having_clause", "post", "set_derived", "where_clause")
 
     def __init__(
         self,
@@ -490,7 +491,7 @@ class SqlVariable:
         self._cls = cls
         self._schema = schema
         self._alias = alias
-        self._joins: list[tuple[sqlalchemy.FromClause, sqlalchemy.ColumnElement[bool], "SqlVariable | None"]] = []
+        self._joins: list[tuple[sqlalchemy.FromClause, sqlalchemy.ColumnElement[bool], SqlVariable | None]] = []
         self._reference_variables: dict[str, SqlVariable] = {}
 
     def always_true(self) -> SqlExpression:

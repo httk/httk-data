@@ -42,8 +42,7 @@ Issues = "https://github.com/httk/httk-data/issues"
 dev = [
   "pytest>=8.0",
   "black",
-  "ruff",
-  "isort",
+  "ruff>=0.16,<0.17",
   "pyright",
   "mypy",
   "sqlalchemy>=2.0,<3"
@@ -79,12 +78,16 @@ namespaces = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-[tool.isort]
-profile = "black"
-
 [tool.ruff]
 target-version = "py312"
 src = ["src", "examples"]
+line-length = 120
+
+[tool.ruff.lint]
+# TRY002: raising plain Exception is accepted httk style.
+# TRY004: the ValueError/TypeError choice is public API; do not churn it.
+# BLE001: broad excepts deliberately isolate plugin/loader/handler failures.
+ignore = ["TRY002", "TRY004", "BLE001"]
 
 [tool.black]
 target-version = ["py312"]

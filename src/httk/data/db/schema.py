@@ -70,15 +70,15 @@ from httk.core import (
 from httk.data.db.codecs import ScalarKind, codec_for, codec_named
 
 __all__ = [
-    "ScalarKind",
-    "FieldRole",
-    "SchemaError",
-    "ColumnSpec",
     "ChildTableSpec",
+    "ColumnSpec",
+    "FieldRole",
     "FieldSpec",
+    "ScalarKind",
+    "SchemaError",
     "TableSchema",
-    "resolve_schema",
     "register_schema_override",
+    "resolve_schema",
     "snake_case",
 ]
 
@@ -275,7 +275,7 @@ def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSc
 
     if not isinstance(cls, type) or not dataclasses.is_dataclass(cls):
         raise SchemaError(f"{getattr(cls, '__name__', cls)!r} is not a dataclass; storable classes are dataclasses")
-    if not getattr(cls, "__dataclass_params__").frozen:
+    if not typing.cast(Any, cls).__dataclass_params__.frozen:
         raise SchemaError(
             f"{cls.__name__} is not a frozen dataclass; storable classes are immutable records "
             f"(declare it with @dataclass(frozen=True))"

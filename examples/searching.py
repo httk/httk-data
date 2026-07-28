@@ -177,7 +177,7 @@ def show_references(store: SqlStore) -> None:
     print("== Reference chains (an automatic join) ==")
     show(store, 'ref.doi == "10.1/alpha"', lambda v: v.ref.doi == "10.1/alpha")
     show(store, 'ref.title == "Beta"', lambda v: v.ref.title == "Beta")
-    show(store, "ref is NULL", lambda v: v.ref == None)  # noqa: E711  (== None builds IS NULL)
+    show(store, "ref is NULL", lambda v: v.ref == None)
     show(store, "ref == the stored ALPHA object", lambda v: v.ref == ALPHA)
     print("  Both conditions below are written through the same reference field,")
     print("  so they share a single join rather than joining the table twice:")

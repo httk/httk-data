@@ -49,12 +49,10 @@ clean: docs-clean dist-clean
 	find . -name "__pycache__" -print0 | xargs -0 rm -rf
 
 format:
-	$(PYTHON) -m ruff check src examples --select F401 --fix
-	$(PYTHON) -m isort src examples
+	$(PYTHON) -m ruff check src examples --fix
 	$(PYTHON) -m black src examples
 
 format-check: lint
-	$(PYTHON) -m isort --check-only src examples
 	$(PYTHON) -m black --check src examples
 
 lint:

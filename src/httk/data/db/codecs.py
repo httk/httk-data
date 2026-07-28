@@ -37,22 +37,22 @@ from typing import Any, Final, Literal
 from httk.core import FracScalar, FracVector, SurdScalar
 
 __all__ = [
+    "FRACTION_EXACT_FORMAT",
+    "FRACVECTOR_EXACT_FORMAT",
+    "SURD_EXACT_FORMAT",
     "ScalarKind",
     "ValueCodec",
-    "register_value_codec",
-    "known_value_codecs",
     "codec_for",
     "codec_named",
-    "FRACTION_EXACT_FORMAT",
-    "SURD_EXACT_FORMAT",
-    "FRACVECTOR_EXACT_FORMAT",
-    "encode_fraction_exact",
     "decode_fraction_exact",
-    "encode_surdscalar_exact",
-    "decode_surdscalar_exact",
-    "encode_fracvector_exact",
     "decode_fracvector_exact",
+    "decode_surdscalar_exact",
+    "encode_fraction_exact",
+    "encode_fracvector_exact",
     "encode_fracvector_floats",
+    "encode_surdscalar_exact",
+    "known_value_codecs",
+    "register_value_codec",
 ]
 
 type ScalarKind = Literal["int", "float", "str", "bool", "bytes"]
