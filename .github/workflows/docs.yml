@@ -16,10 +16,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      SITE_DIR: ${{ runner.temp }}/httk-data-docs-site
 
     steps:
+      - name: Resolve the site staging directory
+        run: echo "SITE_DIR=$RUNNER_TEMP/httk-data-docs-site" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
