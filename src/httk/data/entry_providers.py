@@ -17,6 +17,7 @@ property-definition validation. The database storage layer in
 dataclasses the same way.
 """
 
+import datetime
 from collections.abc import Iterable, Mapping
 from dataclasses import fields
 from typing import Any
@@ -64,6 +65,8 @@ def _json_value(value: Any) -> Any:
         return [_json_value(item) for item in value]
     if isinstance(value, Mapping):
         return {key: _json_value(item) for key, item in value.items()}
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
     return value
 
 

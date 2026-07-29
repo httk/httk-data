@@ -12,14 +12,46 @@ OPTIMADE property-definition *meta*-schema URI (which describes definitions, not
 values); it is removed before building the validator so ``jsonschema`` never
 attempts to resolve it, and the dialect is pinned explicitly to
 ``jsonschema.Draft202012Validator``. Validation is therefore fully offline.
+The local RFC 3339 ``date-time`` checker below supplies format validation
+without network access or additional dependencies.
 """
 
+import datetime
+import re
 from collections.abc import Mapping
 from typing import Any
 
 import jsonschema
 import jsonschema.exceptions
 from httk.core import EntryTypeDefinition, PropertyDefinition
+
+_RFC3339_DATETIME = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:[Zz]|[+-][0-9]{2}:[0-9]{2})$"
+)
+_FORMAT_CHECKER = jsonschema.FormatChecker()
+
+
+@_FORMAT_CHECKER.checks("date-time")
+def _is_rfc3339_datetime(value: Any) -> bool:
+    """Accept RFC 3339 date-times, not ISO date-only or naive values.
+
+    The accepted grammar is ``YYYY-MM-DD[Tt]HH:MM:SS[.fraction](Z|z|+HH:MM|-HH:MM)``.
+    ``fromisoformat`` validates the calendar, clock, and offset ranges after the
+    explicit grammar check; JSON Schema applies ``format`` only to strings, so
+    non-strings pass here and are rejected by the property's ``type`` keyword.
+    """
+    if not isinstance(value, str):
+        return True
+    if not _RFC3339_DATETIME.fullmatch(value):
+        return False
+    normalized = value.replace("t", "T", 1)
+    if normalized.endswith(("Z", "z")):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
 
 
 class PropertyValidationError(ValueError):
@@ -54,12 +86,12 @@ def validate_property(definition: PropertyDefinition, value: Any) -> None:
 
     Builds a ``jsonschema.Draft202012Validator`` directly from the
     definition's document (with the ``$schema`` meta-schema reference removed)
-    and validates ``value`` against it. Returns ``None`` on success; raises
-    :class:`PropertyValidationError` on failure, chaining the underlying
-    ``jsonschema.exceptions.ValidationError`` as the cause. No network
-    access or registry lookup ever happens.
+    and validates ``value`` against it using the local format checker. Returns
+    ``None`` on success; raises :class:`PropertyValidationError` on failure,
+    chaining the underlying ``jsonschema.exceptions.ValidationError`` as the
+    cause. No network access or registry lookup ever happens.
     """
-    validator = jsonschema.Draft202012Validator(_validator_schema(definition))
+    validator = jsonschema.Draft202012Validator(_validator_schema(definition), format_checker=_FORMAT_CHECKER)
     try:
         validator.validate(value)
     except jsonschema.exceptions.ValidationError as exc:

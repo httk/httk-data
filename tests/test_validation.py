@@ -2,8 +2,8 @@
 
 import jsonschema
 import pytest
-
 from httk.core import PropertyDefinition, standard_entry_type
+
 from httk.data import PropertyValidationError, validate_property, validate_record
 from httk.data.validation import _validator_schema
 
@@ -95,6 +95,16 @@ def test_record_requires_id_and_type() -> None:
 def test_record_bad_value_rejected() -> None:
     with pytest.raises(PropertyValidationError):
         validate_record(REFERENCES, {"id": "ref-1", "type": "references", "year": 2021})
+
+
+def test_record_datetime_requires_rfc3339_offset() -> None:
+    record = {"id": "ref-1", "type": "references", "last_modified": "2026-07-29T12:34:56+00:00"}
+    validate_record(REFERENCES, record)
+
+    for timestamp in ("2026-07-29T12:34:56", "2026-07-29"):
+        with pytest.raises(PropertyValidationError) as excinfo:
+            validate_record(REFERENCES, {**record, "last_modified": timestamp})
+        assert "last_modified" in str(excinfo.value)
 
 
 # --- error chaining & offline behavior ----------------------------------------

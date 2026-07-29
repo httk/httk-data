@@ -60,7 +60,7 @@ BOOK_1 = Book(
     price=Fraction(1, 3),
     in_print=True,
     cover=b"\x00\xff",
-    published=datetime.datetime(2026, 7, 24, 12, 30, 0),
+    published=datetime.datetime(2026, 7, 24, 12, 30, 0, tzinfo=datetime.UTC),
     metric=FracVector.create([[1, Fraction(1, 2)], [0, 1]]),
     samples=FracVector.create([[0, 0], [Fraction(1, 2), Fraction(1, 2)]]),
     keywords=["computing", "history"],
@@ -73,7 +73,7 @@ BOOK_2 = Book(
     price=Fraction(-7, 5),
     in_print=False,
     cover=b"",
-    published=datetime.datetime(2020, 1, 1, 0, 0, 0),
+    published=datetime.datetime(2020, 1, 1, 0, 0, 0, tzinfo=datetime.UTC),
     metric=FracVector.create([[1, 0], [0, 1]]),
     samples=FracVector.create([]),
     keywords=[],
@@ -255,7 +255,7 @@ def test_records_values(provider):
     assert row["_httk_pages"] == 350
     assert row["_httk_in_print"] is True
     assert row["_httk_price"] == pytest.approx(float(Fraction(1, 3)))  # rational -> nearest float
-    assert row["_httk_published"] == "2026-07-24T12:30:00"  # datetime -> ISO text
+    assert row["_httk_published"] == "2026-07-24T12:30:00+00:00"  # datetime -> ISO text
     assert row["_httk_metric"] == [[1.0, 0.5], [0.0, 1.0]]  # fixed tensor -> nested lists
     assert row["_httk_samples"] == [[0.0, 0.0], [0.5, 0.5]]  # variable rows -> list of lists
     assert row["_httk_keywords"] == ["computing", "history"]
@@ -472,9 +472,8 @@ def test_link_with_unserved_endpoint_raises():
 
 
 def test_link_class_without_links_raises():
-    with sqlite_store() as store:
-        with pytest.raises(ValueError, match="Person.*no relationship links"):
-            StoreEntryProvider(store, {"compounds": Compound}, link_classes=[Person])
+    with sqlite_store() as store, pytest.raises(ValueError, match="Person.*no relationship links"):
+        StoreEntryProvider(store, {"compounds": Compound}, link_classes=[Person])
 
 
 def test_custom_id_of_used_on_link_paths():

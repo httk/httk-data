@@ -1,5 +1,7 @@
 """Tests for httk-data's in-memory entry providers and their registration."""
 
+import datetime
+
 import pytest
 from httk.core import (
     Calculation,
@@ -132,3 +134,36 @@ def test_records_yield_json_arrays_for_tuple_fields():
 
     served = {key: value for key, value in record.items() if key != "__id"} | {"id": "r1"}
     validate_record(standard_entry_type("references"), served)  # must not raise
+
+
+def test_standard_provider_records_validate_against_served_definitions() -> None:
+    timestamp = datetime.datetime(2026, 7, 29, 12, 34, 56, 123456, tzinfo=datetime.UTC)
+    providers = (
+        ("references", ReferenceEntryProvider({"r1": Reference(title="T", last_modified=timestamp)})),
+        (
+            "files",
+            FileEntryProvider(
+                {
+                    "f1": File(
+                        url="https://example.test/file",
+                        name="file",
+                        last_modified=timestamp,
+                        url_stable_until=timestamp,
+                        modification_timestamp=timestamp,
+                        atime=timestamp,
+                        ctime=timestamp,
+                        mtime=timestamp,
+                    )
+                }
+            ),
+        ),
+        ("calculations", CalculationEntryProvider({"c1": Calculation(last_modified=timestamp)})),
+    )
+
+    for entry_type, provider in providers:
+        entry_definition = provider.entry_types()[entry_type]
+        property_keys = provider.property_keys(entry_type)
+        for row in provider.records(entry_type):
+            served = {name: row[key] for name, key in property_keys.items()}
+            validate_record(entry_definition, served)
+            assert served["last_modified"] == timestamp.isoformat()
