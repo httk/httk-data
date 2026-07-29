@@ -2,7 +2,7 @@
 slug = "httk-data"
 repository-url = "https://github.com/httk/httk-data"
 main-branch = "main"
-import-roots = ["httk/data", "httk/handlers"]
+import-roots = ["httk/data", "httk/registry"]
 
 [[internal-dependency]]
 distribution = "httk-core"

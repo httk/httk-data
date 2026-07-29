@@ -4,7 +4,7 @@ Imported during ``httk.core`` discovery, this package registers httk-data's
 in-memory providers for the standard entry types httk-core vendors
 (``references``, ``files``, ``calculations``) and the database-backed
 ``StoreEntryProvider`` as lazy factory references, mirroring the
-loader-registration pattern used by the other ``httk.handlers.*`` packages.
+loader-registration pattern used by the other ``httk.registry.*`` packages.
 """
 
 from httk.core.register import register_entry_provider

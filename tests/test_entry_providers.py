@@ -91,7 +91,7 @@ def test_relationships_keys_normalized_to_str() -> None:
 
 
 def test_data_providers_registered() -> None:
-    # With httk-data importable, importing httk.core discovers httk.handlers.data
+    # With httk-data importable, importing httk.core discovers httk.registry.data
     # and registers the three providers under their "data-*" names.
     import httk.core  # noqa: F401  (imported for its discovery side effect)
 
