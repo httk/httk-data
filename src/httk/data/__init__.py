@@ -25,7 +25,7 @@ supplies *capabilities*:
   served through the provider contract by
   :class:`~httk.data.db.entry_provider.StoreEntryProvider`.
 
-The providers self-register (under ``httk.registry.data``, as
+The providers self-register (under ``httk.registry.entries.data``, as
 ``data-references``/``data-files``/``data-calculations``/``data-db-store``)
 when ``httk.core`` discovers the module, so a serving module (such as
 *httk-optimade*) can find them through the registry.

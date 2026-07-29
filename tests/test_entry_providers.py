@@ -1,7 +1,6 @@
 """Tests for httk-data's in-memory entry providers and their registration."""
 
 import pytest
-
 from httk.core import (
     Calculation,
     EntryTypeDefinition,
@@ -13,6 +12,7 @@ from httk.core import (
 )
 from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
+
 from httk.data import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider, validate_record
 
 # --- provider round trips -----------------------------------------------------
@@ -40,7 +40,7 @@ def test_reference_provider_round_trip() -> None:
 
 def test_file_provider_records() -> None:
     provider = FileEntryProvider({"f-1": File(url="http://x/INCAR", name="INCAR", size=512)})
-    record = list(provider.records("files"))[0]
+    record = next(iter(provider.records("files")))
     assert record["url"] == "http://x/INCAR"
     assert record["size"] == 512
 
@@ -91,11 +91,16 @@ def test_relationships_keys_normalized_to_str() -> None:
 
 
 def test_data_providers_registered() -> None:
-    # With httk-data importable, importing httk.core discovers httk.registry.data
-    # and registers the three providers under their "data-*" names.
+    # With httk-data importable, importing httk.core discovers the entry tier
+    # and registers the four providers under their "data-*" names.
     import httk.core  # noqa: F401  (imported for its discovery side effect)
 
-    assert {"data-references", "data-files", "data-calculations"} <= set(known_entry_providers())
+    assert {
+        "data-references",
+        "data-files",
+        "data-calculations",
+        "data-db-store",
+    } <= set(known_entry_providers())
 
 
 def test_registered_factories_resolve_and_build() -> None:

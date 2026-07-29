@@ -73,7 +73,7 @@ namespaces = true
 
 [tool.setuptools.package-data]
 "httk.data" = ["py.typed"]
-"httk.registry.data" = ["py.typed"]
+"httk.registry.entries.data" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
