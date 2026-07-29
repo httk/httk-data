@@ -68,12 +68,13 @@ the exact set semantics of the reference in-memory store.
 """
 
 import dataclasses
+from array import array
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import sqlalchemy
 
-from httk.data.db.codecs import ValueCodec, codec_named
+from httk.data.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
 from httk.data.db.mapping import SID_COLUMN
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.query import SearchResult
@@ -215,12 +216,16 @@ class SqlColumn:
         searcher: "SqlSearcher",
         element: sqlalchemy.ColumnElement[Any],
         *,
+        variable: "SqlVariable | None" = None,
+        spec: FieldSpec | None = None,
         codec: ValueCodec | None = None,
         query_index: int = 0,
         from_child: bool = False,
     ) -> None:
         self._searcher = searcher
         self._element = element
+        self._variable = variable
+        self._spec = spec
         self._codec = codec
         self._query_index = query_index
         self._from_child = from_child
@@ -512,13 +517,15 @@ class SqlVariable:
         except SchemaError:
             raise AttributeError(f"{self._cls.__name__} has no stored field {name!r} to query") from None
         if spec.role == "scalar":
-            return SqlColumn(self._searcher, self._alias.c[spec.columns[0].name])
+            return SqlColumn(self._searcher, self._alias.c[spec.columns[0].name], variable=self, spec=spec)
         if spec.role == "encoded":
             assert spec.codec_name is not None
             codec = codec_named(spec.codec_name)
             return SqlColumn(
                 self._searcher,
                 self._alias.c[spec.field + codec.query_suffix],
+                variable=self,
+                spec=spec,
                 codec=codec,
                 query_index=_query_index(codec),
             )
@@ -552,6 +559,8 @@ class SqlVariable:
         return SqlColumn(
             self._searcher,
             alias.c[column_name],
+            variable=self,
+            spec=spec,
             codec=codec,
             query_index=_query_index(codec) if codec is not None else 0,
             from_child=True,
@@ -578,12 +587,17 @@ class SqlVariable:
 
 @dataclasses.dataclass(frozen=True)
 class _Output:
-    """One declared output: a column to select and, for objects, the class to reconstruct."""
+    """One declared output and its exact reconstruction projection."""
 
     name: str
     element: sqlalchemy.ColumnElement[Any]
     target: type | None
     from_child: bool
+    variable: SqlVariable | None = None
+    spec: FieldSpec | None = None
+    exact_element: sqlalchemy.ColumnElement[Any] | None = None
+    codec: ValueCodec | None = None
+    decoder: Any = None
 
 
 class SqlSearcher:
@@ -594,9 +608,8 @@ class SqlSearcher:
     :meth:`set_limit` (``-1`` clears the limit) and :meth:`add_offset` (the
     public :attr:`offset` attribute is readable and writable). Iterating
     yields one :class:`~httk.data.query.SearchResult` per match, whose
-    ``values`` holds one entry per declared output — the reconstructed instance for variable
-    outputs (via :meth:`~httk.data.db.store.SqlStore.fetch`, so the identity
-    cache applies), the raw column value for column outputs. :meth:`count`
+    ``values`` holds one entry per declared output — a lazy row for variable
+    outputs (bypassing the identity cache), the raw column value for column outputs. :meth:`count`
     returns the number of matches, disregarding any limit and offset.
     """
 
@@ -630,7 +643,32 @@ class SqlSearcher:
         if isinstance(variable, SqlVariable):
             self._outputs.append(_Output(name, variable._alias.c[SID_COLUMN], variable._cls, False))
         elif isinstance(variable, SqlColumn):
-            self._outputs.append(_Output(name, variable._element, None, variable._from_child))
+            exact_element = None
+            decoder: Any = None
+            if variable._spec is not None:
+                spec = variable._spec
+                if spec.role == "fixed_array":
+                    exact_element = variable._variable._alias.c[f"{spec.field}_exact"] if variable._variable else None
+                    decoder = decode_fracvector_exact
+                elif spec.role == "encoded":
+                    exact_element = next(
+                        (variable._variable._alias.c[column.name] for column in spec.columns if column.kind == "str"),
+                        None,
+                    ) if variable._variable else None
+                    decoder = variable._codec.decode if variable._codec is not None else None
+            self._outputs.append(
+                _Output(
+                    name,
+                    variable._element,
+                    None,
+                    variable._from_child,
+                    variable._variable,
+                    variable._spec,
+                    exact_element,
+                    variable._codec,
+                    decoder,
+                )
+            )
         else:
             raise TypeError(f"output() takes a search variable or a search column, got {type(variable).__name__}")
 
@@ -658,6 +696,12 @@ class SqlSearcher:
     def add_offset(self, offset: int) -> None:
         """Add to the row :attr:`offset` applied when iterating."""
         self.offset += offset
+
+    def results(self, **outputs: Any) -> Any:
+        """Freeze this search into a lazy :class:`~httk.data.db.results.SqlResultSet`."""
+        from httk.data.db.results import SqlResultSet
+
+        return SqlResultSet(self, outputs or None)
 
     # ------------------------------------------------------------------ execution
 
@@ -743,25 +787,47 @@ class SqlSearcher:
         if self.offset > 0:
             statement = statement.offset(self.offset)
         names = tuple(output.name for output in self._outputs)
-        results: list[SearchResult] = []
         with self._store._read_connection() as connection:
             # Materialize the match rows before reconstructing any object output:
             # reconstruction issues nested queries on this same connection, and a
             # DuckDB connection carries only one active result set, so streaming
             # the outer cursor across a nested fetch silently truncates it after
             # the first row. (Under SQLite it merely worked by accident.)
-            for row in connection.execute(statement).fetchall():
+            rows = connection.execute(statement).fetchall()
+        from httk.data.db.rows import RowHydrator
+
+        object_indices = [index for index, output in enumerate(self._outputs) if output.target is not None]
+        if len(object_indices) == 1:
+            object_index = object_indices[0]
+            match_index: array | list[tuple[Any, ...]] = array(
+                "q", (int(row[object_index]) for row in rows if row[object_index] is not None)
+            )
+            sid_inputs: dict[int, Any] = {object_index: match_index}
+        else:
+            match_index = [tuple(row[index] for index in object_indices) for row in rows]
+            sid_inputs = {
+                index: [row[position] for row in match_index if row[position] is not None]
+                for position, index in enumerate(object_indices)
+            }
+        hydrators = {
+            index: RowHydrator(self._store, cast(type, self._outputs[index].target), sid_inputs[index])
+            for index in object_indices
+            if self._outputs[index].target is not None
+        }
+
+        def results() -> Iterator[SearchResult]:
+            for row in rows:
                 values: list[Any] = []
-                for output, value in zip(self._outputs, row, strict=True):
+                for index, (output, value) in enumerate(zip(self._outputs, row, strict=True)):
                     if output.target is None:
                         values.append(value)
                     elif value is None:
-                        break  # An object output with no row (outer-joined away); skip the match.
+                        values.append(None)
                     else:
-                        values.append(self._store._fetch(connection, output.target, int(value)))
-                else:
-                    results.append(SearchResult(tuple(values), names))
-        return iter(results)
+                        values.append(hydrators[index].row(int(value)))
+                yield SearchResult(tuple(values), names)
+
+        return results()
 
 
 def _query_index(codec: ValueCodec) -> int:

@@ -8,6 +8,7 @@ from fractions import Fraction
 from typing import Annotated, ClassVar
 
 import pytest
+import sqlalchemy
 from httk.core import (
     EntryTypeDefinition,
     FracVector,
@@ -228,6 +229,23 @@ def test_records_is_a_generator_of_json_able_rows(provider):
     rows = list(records)
     assert len(rows) == 2
     json.dumps(rows)  # every value must be JSON-able
+
+
+def test_records_batches_child_field_reads(provider):
+    statements: list[str] = []
+
+    def count_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = provider._store._database.engine
+    sqlalchemy.event.listen(engine, "before_cursor_execute", count_select)
+    try:
+        list(provider.records("books"))
+    finally:
+        sqlalchemy.event.remove(engine, "before_cursor_execute", count_select)
+    # One outer match query, one parent chunk, and one batch per touched child field.
+    assert len(statements) <= 1 + 1 + 2
 
 
 def test_records_values(provider):

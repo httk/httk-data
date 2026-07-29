@@ -90,12 +90,12 @@ very same object. Join-objects pointing at a stored instance are found with
 ## Searching
 
 `store.searcher()` opens a query through the backend-agnostic protocols in
-`httk.data.query`: bind classes to variables, add conditions, declare outputs,
-iterate. Variables of the same class self-join; reference fields chain
-(`v.reference.name`); variable-length fields support the set operations
-(`has_any`, `has_only`), and `~` negates them as sets. String matching
-(`contains`, `startswith`, `endswith`) always takes **literal** text — `%` and
-`_` match themselves:
+`httk.data.query`: bind classes to variables and add conditions. Freeze the
+query into the user-facing lazy result set with `results()`. Variables of the
+same class self-join; reference fields chain (`v.reference.name`),
+variable-length fields support the set operations (`has_any`, `has_only`), and
+`~` negates them as sets. String matching (`contains`, `startswith`,
+`endswith`) always takes **literal** text — `%` and `_` match themselves:
 
 ```python
 search = store.searcher()
@@ -104,10 +104,58 @@ search.add(s.spacegroup == 225)
 search.add(s.reference.name == "Ada")            # auto-joins the author table
 search.add(s.symbols.has_only("O", "Ca", "Ti"))  # for-all over the child rows
 search.add(~s.symbols.has_any("Fe"))             # no child row is iron
-search.output(s, "structure")
-for values, _names in search:                    # one SearchResult per match
-    print(values[0].formula)                     # a fully reconstructed instance
+results = search.results(structure=s, energy=s.energy)
+for row in results:                               # lazy ResultRow values
+    print(row.structure.formula, row.energy)      # exact rational energy
 ```
+
+`ResultRow` supports names, attributes, and positions. `scalars()` is the
+short form for a one-column result (or takes a column name), and `first()` and
+`one()` return one row; `one()` raises `NoResultError` or
+`MultipleResultsError` unless there is exactly one. Results are reusable:
+`len(results)`, `results[1:3]`, and re-iteration are all supported. A slice is
+a view over its own positions: iteration, `len()`, indexing, `first()`,
+`one()`, and `column()` are all scoped to that slice without re-querying.
+
+Scalar columns stay exact by default. `column()` returns a `ResultColumn` with
+an explicit approximate view through `.floats()` and an exact rational tensor
+through `.to_fracvector()` for integer, fraction, and fracscalar columns:
+
+```python
+energies = results.column("energy")
+exact = list(energies)
+approximate = list(energies.floats())
+as_vector = energies.to_fracvector()
+```
+
+`.to_fracvector()` rejects floats, surds, strings, datetimes, and other
+non-rational projections. Variable-length CHILD-role projections are rejected
+when `results()` is declared; reference-path projections are supported.
+
+`cursor()` bounds the number of hydrated record/proxy objects held by a
+row-by-row consumer, but not the raw values pinned by the result set. The
+object value in each cursor `ResultRow` is an instance of the record class, so
+views can be built on it. Each object output uses an explicitly unhashable,
+reused proxy that expires when the cursor advances. Equality on an expired
+cursor row raises; copying and pickling cursor rows are rejected even before
+expiry. Components already filled into a view before advancing remain
+readable on that view, but later component fills raise
+`ExpiredCursorRowError`.
+
+### Low-level portable protocol
+
+The backend-neutral protocol form remains useful for code that must run on
+any `Searcher` implementation. Declare outputs and iterate its plain
+`SearchResult` values directly:
+
+```python
+search.output(s, "structure")
+for (structure,), names in search:
+    print(names, structure.formula)
+```
+
+This is the low-level/portable layer; SQL consumers should generally use
+`results()`.
 
 A plain comparison on a child field is existential un-negated and set-negating
 under `~`: `s.symbols == "O"` means "some symbol is O", `~(s.symbols == "O")`
@@ -124,10 +172,42 @@ obvious alternative, a `field == field` probe, is not NULL-safe — it yields
 NULL rather than true for a row whose field is NULL, and so silently drops
 rows.
 
-Iteration yields a `SearchResult`: a named 2-tuple of `values` (one entry per
-`output()` call, in declaration order) and `names`. It supports tuple unpacking
-and indexing, including `for (structure,), _names in search:` and
-`result[0][0]`.
+### Result and identity semantics
+
+Search rows are lazy subclasses of the storable class, so `isinstance(row,
+StructureRecord)` is true. The parent row is loaded when the row is first
+used, and fields decode independently as they are accessed. They provide the
+dataclass-generated compare/hash/repr behavior, honoring each field's
+`compare`, `hash`, and `repr` flags, plus the same content-id and `save()`
+behavior as the eager record. Classes with custom `__eq__` or `__hash__` are
+rejected for lazy rows. Each row also exposes its database `sid`.
+
+`dataclasses.replace(row, ...)` creates a new ordinary dataclass instance of
+the lazy row class and runs validation. Lazy rows intentionally reject
+`copy.copy`, `copy.deepcopy`, and pickling. Search rows bypass the store's
+identity cache: two result rows for one sid are not an identity guarantee.
+`fetch()` retains identity-while-alive, so repeated fetches of a sid return
+the same live object.
+
+An object output from an outer join can be `None`; the result row is retained,
+not dropped. If a matched sid is deleted before an object output's lazy row is
+hydrated, hydration raises `StaleResultError`; exact scalar projections cannot
+become stale because their values and `_exact` companion texts came from the
+outer SELECT.
+
+### Memory and statement cost
+
+The result set materializes a match index that pins the matched sids, raw
+scalar-output values, and, for exact projections, their `_exact` companion
+texts. All of those arrive in the one outer SELECT; there is no second
+per-chunk exact-value fetch. Hydrated records live in a weak chunk cache of
+500 parent sids; live rows pin their own chunk, while re-iteration may
+rehydrate chunks that are no longer pinned. `cursor()` limits hydrated
+record/proxy objects, not this pinned raw result data. A typical full-object
+pass costs one outer match query plus about one parent query per 500 rows and
+one batch per touched child-field group per 500 rows — not one SELECT per row.
+The public store API is append-only, so rows do not disappear during normal
+use; direct database edits can produce `StaleResultError` for object outputs.
 
 ## Exact rationals, approximate comparisons
 

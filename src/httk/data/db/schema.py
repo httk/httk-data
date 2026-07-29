@@ -267,6 +267,9 @@ def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSc
         SchemaError: If the class is not a frozen dataclass or any field cannot
             be resolved; the message names the class and field.
     """
+    row_base = getattr(cls, "__httk_row_base__", None)
+    if row_base is not None:
+        return resolve_schema(row_base, override=override)
     effective = override if override is not None else _schema_overrides.get(cls)
     key = (cls, effective)
     cached = _schema_cache.get(key)

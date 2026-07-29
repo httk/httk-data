@@ -80,15 +80,22 @@ __all__ = [
     "ChildTableSpec",
     "ColumnSpec",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "FieldRole",
     "FieldSpec",
+    "MultipleResultsError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "NoResultError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
+    "ResultRow",  # pyright: ignore[reportUnsupportedDunderAll]
     "ScalarKind",
     "SchemaError",
     "SqlColumn",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlExpression",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "SqlResultSet",  # pyright: ignore[reportUnsupportedDunderAll]
     "SqlSearcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "TableSchema",
     "ValueCodec",
@@ -120,6 +127,13 @@ _SQL_EXPORTS = {
     "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
     "optimade_filter_searcher": ".optimade",
+    "StaleResultError": ".rows",
+    "ExpiredCursorRowError": ".results",
+    "MultipleResultsError": ".results",
+    "NoResultError": ".results",
+    "ResultColumn": ".results",
+    "ResultRow": ".results",
+    "SqlResultSet": ".results",
 }
 
 

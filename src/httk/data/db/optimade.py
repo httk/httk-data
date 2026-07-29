@@ -207,9 +207,9 @@ def optimade_filter_searcher(
             assert isinstance(nested, SqlSearcher)
             sid_column = nested._variables[0].sid
             assert isinstance(sid_column, SqlColumn)
+            nested._outputs.clear()
             nested.output(sid_column, "sid")
-            # Output 0 is the matched instance (declared by filter_searcher), output 1 the sid.
-            return tuple(f"{related_type}-{int(values[1])}" for values, _names in nested)
+            return tuple(f"{related_type}-{int(values[0])}" for values, _names in nested)
 
         resolver = resolve_related
 

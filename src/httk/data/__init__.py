@@ -49,6 +49,9 @@ from .optimade_query import (
     translate_filter_ast,
 )
 from .query import (
+    ResultRow,
+    ResultRowLike,
+    ResultSetLike,
     Searcher,
     SearchExpression,
     SearchField,
@@ -67,6 +70,9 @@ __all__ = [
     "PropertyValidationError",
     "ReferenceEntryProvider",
     "RelatedPropertyResolver",
+    "ResultRow",
+    "ResultRowLike",
+    "ResultSetLike",
     "SearchExpression",
     "SearchField",
     "SearchResult",

@@ -133,6 +133,10 @@ nitpick_ignore = [
     # separate distribution sharing the "httk" namespace), so it cannot resolve
     # here. Qualified httk.core.FilterAst references resolve via intersphinx.
     ("py:class", "FilterAst"),
+    # RowHydrator's constructor takes the module-private hydration context; the
+    # private class is deliberately undocumented, so the annotation xref cannot
+    # resolve.
+    ("py:class", "_Context"),
 ]
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True

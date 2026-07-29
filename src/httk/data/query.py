@@ -12,6 +12,9 @@ from collections.abc import Iterator
 from typing import Any, NamedTuple, Protocol
 
 __all__ = [
+    "ResultRow",
+    "ResultRowLike",
+    "ResultSetLike",
     "SearchExpression",
     "SearchField",
     "SearchResult",
@@ -19,6 +22,115 @@ __all__ = [
     "Searcher",
     "Store",
 ]
+
+
+class ResultRow:
+    """One named result row, usable by position, name, or attribute."""
+
+    __slots__ = ("_guard", "_names", "_resolver", "_values")
+
+    def __init__(
+        self,
+        values: tuple[Any, ...],
+        names: tuple[str, ...],
+        resolver: Any = None,
+        guard: Any = None,
+    ) -> None:
+        self._values = values
+        self._names = names
+        self._resolver = resolver
+        self._guard = guard
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        self._check()
+        return self._names
+
+    @property
+    def values(self) -> tuple[Any, ...]:
+        self._check()
+        return tuple(self[index] for index in range(len(self._values)))
+
+    def _check(self) -> None:
+        if self._guard is not None:
+            self._guard()
+
+    def _value(self, index: int) -> Any:
+        if self._guard is not None:
+            self._guard()
+        value = self._resolver(index, self._values[index]) if self._resolver is not None else self._values[index]
+        activate = getattr(value, "_activate", None)
+        if activate is not None:
+            activate()
+        return value
+
+    def __getitem__(self, key: int | str) -> Any:
+        if isinstance(key, str):
+            try:
+                key = self._names.index(key)
+            except ValueError:
+                raise KeyError(key) from None
+        if not isinstance(key, int):
+            raise TypeError(f"result row indices must be integers or strings, got {type(key).__name__}")
+        return self._value(key)
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self.values)
+
+    def __len__(self) -> int:
+        self._check()
+        return len(self._values)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ResultRow):
+            return NotImplemented
+        return self.values == other.values
+
+    def __repr__(self) -> str:
+        return f"ResultRow({dict(zip(self.names, self.values, strict=True))!r})"
+
+    def __copy__(self) -> "ResultRow":
+        if self._guard is not None:
+            raise TypeError("expired cursor rows cannot be copied")
+        return type(self)(self._values, self._names, self._resolver, self._guard)
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "ResultRow":
+        if self._guard is not None:
+            raise TypeError("expired cursor rows cannot be copied")
+        return type(self)(self._values, self._names, self._resolver, self._guard)
+
+    def __reduce_ex__(self, protocol: Any) -> Any:
+        if self._guard is not None:
+            raise TypeError("expired cursor rows cannot be pickled")
+        return type(self), (self._values, self._names, self._resolver, self._guard)
+
+
+class ResultRowLike(Protocol):
+    @property
+    def names(self) -> tuple[str, ...]: ...
+
+    def __getitem__(self, key: int | str) -> Any: ...
+
+
+class ResultSetLike(Protocol):
+    def __iter__(self) -> Iterator[ResultRowLike]: ...
+
+    def __len__(self) -> int: ...
+
+    def first(self) -> ResultRowLike | None: ...
+
+    def one(self) -> ResultRowLike: ...
+
+    def scalars(self, name: str | None = None) -> Iterator[Any]: ...
+    # column() is an optional backend capability; SQL stores expose it.
 
 
 class SearchExpression(Protocol):
@@ -136,6 +248,8 @@ class Searcher(Protocol):
     def add_sort(self, field: Any, descending: bool) -> None: ...
 
     def __iter__(self) -> Iterator[SearchResult]: ...
+
+    def results(self, **outputs: Any) -> ResultSetLike: ...
 
 
 class Store(Protocol):

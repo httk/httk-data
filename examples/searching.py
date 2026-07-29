@@ -55,11 +55,11 @@ access to a child field mints an independent join.
 
 ## Results
 
-Iteration yields `SearchResult`, a named 2-tuple of `values` (one per
-`output()`, in declaration order) and `names`. It supports tuple unpacking and
-indexing, including `for (structure,), _names in search:` and `result[0][0]`.
-Object outputs come back as fully reconstructed instances — and while a saved
-instance is still alive, you get that very object back rather than a copy.
+The low-level protocol yields `SearchResult`, a named 2-tuple of `values` (one
+per `output()`, in declaration order) and `names`. The canonical `results()`
+API yields named lazy rows; use the portable protocol form
+`for (structure,), _names in search:` when needed. Result rows bypass the
+identity cache; `fetch()` retains the same-object-while-alive guarantee.
 
 Sorting on a rational field runs on its float companion column, so it is
 documented-approximate; the values themselves are still exact.
@@ -143,7 +143,7 @@ def structure_search(store: SqlStore) -> tuple[Searcher, SearchVariable]:
 
 def matched(searcher: Searcher) -> list[str]:
     """The formulas of the matched structures, in the order the search yields them."""
-    return [result[0][0].formula for result in searcher]
+    return [structure.formula for structure in searcher.results().scalars()]
 
 
 def show(store: SqlStore, label: str, build: Any) -> None:
@@ -252,27 +252,34 @@ def show_ordering_and_paging(store: SqlStore) -> None:
 
 
 def show_results(store: SqlStore) -> None:
-    print("== What iteration yields ==")
+    print("== Lazy ResultSet rows ==")
     searcher = store.searcher()
     v = searcher.variable(Structure)
-    searcher.output(v, "structure")  # the whole object
-    searcher.output(v.formula, "formula")  # a single field
-    searcher.output(v.spacegroup, "spacegroup")
     searcher.add(v.symbols.has_any("Ti"))
     searcher.add_sort(v.formula, False)
+    results = searcher.results(structure=v, formula=v.formula, energy=v.energy)
 
-    for result in searcher:
-        print(f"  names  = {result.names}")
-        print(f"  values = ({type(result.values[0]).__name__} instance, {result.values[1]!r}, {result.values[2]!r})")
-        structure = result[0][0]  # the plain-tuple indexing still works
-        print(f"    reconstructed: energy {structure.energy} (exact), symbols {structure.symbols}")
+    print(f"  names = {results.names}; matches = {len(results)}")
+    for row in results:
+        print(f"  {row.structure.formula}: energy {row.energy} (exact), symbols {row.structure.symbols}")
+    print(f"  scalars: {[structure.formula for structure in results.scalars('structure')]}")
+    energies = results.column("energy")
+    print(f"  exact energies = {list(energies)}")
+    print(f"  float energies = {list(energies.floats())}")
+    print(f"  as FracVector = {energies.to_fracvector()}")
 
-    print("  Unpacking works too, since a SearchResult *is* a 2-tuple:")
+    cursor = results.cursor()
+    current = next(cursor)
+    print(f"  cursor row = {current.structure.formula}")
+    # Cursor rows are valid until the cursor advances; copy the value if needed.
+    next(cursor)
+
+    print("  Low-level portable protocol form:")
     searcher, v = structure_search(store)
     searcher.add(v.formula == "MgO")
     for (structure,), names in searcher:
         print(f"    {names} -> {structure.formula}")
-        print(f"    identical to the saved instance: {structure is STRUCTURES[2]}")
+        print(f"    equal to the saved instance: {structure == STRUCTURES[2]}")
 
 
 def main() -> None:

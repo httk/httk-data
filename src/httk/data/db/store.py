@@ -37,7 +37,6 @@ guarantee, never storage correctness.
 
 import contextlib
 import threading
-import typing
 import weakref
 from collections.abc import Iterable, Iterator
 from typing import Any, cast
@@ -47,13 +46,13 @@ from httk.core import FracVector, Shape
 
 from httk.data.db.codecs import (
     codec_named,
-    decode_fracvector_exact,
     encode_fracvector_exact,
     encode_fracvector_floats,
 )
 from httk.data.db.engine import Database
 from httk.data.db.identity import content_id
 from httk.data.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, table_for
+from httk.data.db.rows import RowHydrator, StaleResultError, is_lazy_row, lazy_row_identity
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlSearcher
 
@@ -180,6 +179,8 @@ class SqlStore:
         first; when deduplication finds an existing row, that row's sid is
         returned and no children are re-inserted.
         """
+        if getattr(obj, "__httk_cursor_proxy__", False):
+            raise TypeError("cursor rows cannot be saved; materialize the record first")
         with self._write_connection() as connection:
             return self._save(connection, obj)
 
@@ -330,6 +331,9 @@ class SqlStore:
         identity instead, so they resolve too; only instances that cannot be
         weak-referenced at all go untracked.
         """
+        lazy_identity = lazy_row_identity(obj)
+        if is_lazy_row(obj):
+            return lazy_identity[1] if lazy_identity is not None and lazy_identity[0] is self else None
         try:
             cached = self._sids.get(obj)
         except TypeError:
@@ -381,86 +385,14 @@ class SqlStore:
         cached = self._instances.get((cls, sid))
         if cached is not None:
             return cached
-        schema = resolve_schema(cls)
-        self._ensure_tables(connection, (cls,))
-        table = self._table(schema.table_name)
-        row = connection.execute(sqlalchemy.select(table).where(table.c[SID_COLUMN] == sid)).mappings().first()
-        if row is None:
-            raise KeyError(cls, sid)
-        values: dict[str, Any] = {}
-        for spec in schema.fields:
-            if spec.derived:
-                continue
-            values[spec.field] = self._decode_field(connection, schema, spec, sid, row)
-        instance = cls(**values)
+        # The hydrator owns exact decoding and child/reference batching; this
+        # path still materializes and validates the real base dataclass.
+        try:
+            instance = RowHydrator(self, cls, (sid,)).materialize(sid)
+        except StaleResultError:
+            raise KeyError(cls, sid) from None
         self._remember(cls, sid, instance)
         return instance
-
-    def _decode_field(
-        self,
-        connection: sqlalchemy.Connection,
-        schema: TableSchema,
-        spec: FieldSpec,
-        sid: int,
-        row: sqlalchemy.RowMapping,
-    ) -> Any:
-        if spec.role == "scalar":
-            return row[spec.columns[0].name]
-        if spec.role == "encoded":
-            assert spec.codec_name is not None
-            parts = tuple(row[column.name] for column in spec.columns)
-            if all(part is None for part in parts):
-                return None
-            return codec_named(spec.codec_name).decode(parts)
-        if spec.role == "fixed_array":
-            assert spec.shape is not None
-            exact = row[f"{spec.field}_exact"]
-            if exact is None:
-                return None
-            # The float companion columns exist for querying only; the exact
-            # text is the round-trip source of truth.
-            return decode_fracvector_exact(exact, spec.shape.rows, spec.shape.cols)
-        if spec.role == "reference":
-            target_sid = row[spec.columns[0].name]
-            if target_sid is None:
-                return None
-            assert spec.target is not None
-            return self._fetch(connection, spec.target, int(target_sid))
-        return self._fetch_child(connection, schema, spec, sid)
-
-    def _fetch_child(self, connection: sqlalchemy.Connection, schema: TableSchema, spec: FieldSpec, sid: int) -> Any:
-        assert spec.child is not None
-        table = self._table(spec.child.table_name)
-        parent_column = f"{schema.table_name}_sid"
-        index_column = f"{spec.field}_index"
-        result = (
-            connection.execute(
-                sqlalchemy.select(table).where(table.c[parent_column] == sid).order_by(table.c[index_column])
-            )
-            .mappings()
-            .all()
-        )
-        if spec.shape is not None:
-            fractions_rows = [
-                decode_fracvector_exact(entry[f"{spec.field}_exact"], 1, spec.shape.cols).to_fractions()[0]
-                for entry in result
-            ]
-            return FracVector.create(fractions_rows)
-        elements: list[Any]
-        if spec.target is not None:
-            elements = [
-                self._fetch(connection, spec.target, int(entry[spec.child.element_columns[0].name])) for entry in result
-            ]
-        elif spec.codec_name is not None:
-            codec = codec_named(spec.codec_name)
-            elements = [
-                codec.decode(tuple(entry[column.name] for column in spec.child.element_columns)) for entry in result
-            ]
-        else:
-            elements = [entry[spec.child.element_columns[0].name] for entry in result]
-        if typing.get_origin(spec.python_type) is tuple:
-            return tuple(elements)
-        return elements
 
     # ------------------------------------------------------------------ identity caches
 

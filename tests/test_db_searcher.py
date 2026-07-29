@@ -229,13 +229,13 @@ def test_reference_chain_shares_one_join(store):
 
 def test_reference_equals_none(store):
     searcher, v = rec_searcher(store)
-    searcher.add(v.ref == None)  # noqa: E711  (the DSL builds IS NULL from == None)
+    searcher.add(v.ref == None)
     assert formulas(searcher) == {"CaO", "X"}
 
 
 def test_reference_not_equals_none(store):
     searcher, v = rec_searcher(store)
-    searcher.add(v.ref != None)  # noqa: E711
+    searcher.add(v.ref != None)
     assert formulas(searcher) == ALL_FORMULAS - {"CaO", "X"}
 
 
@@ -503,7 +503,7 @@ def test_true_handler_filter_matches_rows_with_a_null_scalar(store):
 # --------------------------------------------------------------------- outputs and iteration shape
 
 
-def test_iteration_shape_and_object_identity(store):
+def test_iteration_shape_and_lazy_object_equality(store):
     searcher = store.searcher()
     v = searcher.variable(Rec)
     searcher.output(v, "rec")
@@ -513,9 +513,22 @@ def test_iteration_shape_and_object_identity(store):
     assert len(items) == 1
     values, names = items[0]
     assert names == ("rec", "formula")
-    assert values[0] is RECORDS[1]  # identity cache: the saved instance itself
+    assert values[0] == RECORDS[1]  # search rows bypass the identity cache
     assert values[1] == "NaCl"
     assert items[0][0][0] is values[0]  # item[0][0] is the matched object
+
+
+def test_field_output_carries_exact_projection_ir(store):
+    searcher = store.searcher()
+    variable = searcher.variable(Rec)
+    searcher.output(variable.energy, "energy")
+    projection = searcher._outputs[0]
+    assert projection.variable is variable
+    assert projection.spec is variable._schema.field("energy")
+    assert projection.exact_element is not None
+    assert projection.exact_element.name == "energy_exact"
+    assert projection.codec is not None
+    assert projection.decoder is projection.codec.decode
 
 
 def test_search_result_is_a_named_two_tuple(store):
