@@ -41,6 +41,7 @@ Issues = "https://github.com/httk/httk-data/issues"
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "pytest-xdist>=3.6",
   "ruff>=0.16,<0.17",
   "pyright",
   "mypy",
@@ -76,6 +77,10 @@ namespaces = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-n 16 -m 'not extended'"
+markers = [
+  "extended: full-depth test case; selected only by the extended test profile",
+]
 
 [tool.ruff]
 target-version = "py312"
