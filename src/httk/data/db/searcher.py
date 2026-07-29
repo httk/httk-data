@@ -29,8 +29,8 @@ searchers onto SQLAlchemy Core:
   always applies, and the HAVING rendering additionally applies when the
   expression is flagged :attr:`SqlExpression.post` (the for-all forms
   ``has_only`` and child-field ``is_in``, and any ``~`` over a set-derived
-  subtree — see :class:`SqlExpression`'s ``__invert__``, which lets ``~`` say
-  "no joined row matches" and so replaces the removed ``has_inv_*`` methods).
+  subtree — see :class:`SqlExpression`'s ``__invert__``, which lets ``~``
+  express "no joined row matches").
   Alongside the two renderings each expression carries the **non-aggregated
   columns its HAVING rendering references** (:attr:`SqlExpression.group_columns`), unioned
   by ``&``/``|`` and preserved by ``~``. A grouped query GROUP BYs those
@@ -174,10 +174,8 @@ class SqlExpression:
         For a set-derived subtree the WHERE rendering is dropped to constant
         true and only the (fully aggregated) HAVING rendering is negated: "no
         joined row matches" is not expressible per row. This deliberately gives
-        up a potentially index-assisted WHERE prefilter — the same trade the
-        removed ``has_inv_*`` methods made — so do not "optimize" the narrowing
-        back in: negating a per-row restriction would drop exactly the rows the
-        aggregate must count.
+        up a potentially index-assisted WHERE prefilter; narrowing in WHERE
+        would drop exactly the rows the aggregate must count.
         """
         if self.set_derived:
             return SqlExpression(

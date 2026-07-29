@@ -1,12 +1,11 @@
 # Data management
 
-*httk-data* is the **data-management capability layer** of *httk₂*. The guiding
-principle of the workspace is *contracts and models in httk-core; capabilities
-in modules*: httk-core defines the neutral `httk.core.EntryProvider` contract,
-the OPTIMADE property/entry-type definition model, and the stdlib-only record
-dataclasses (`Reference`, `File`, `Calculation`) — but ships no concrete
-providers and no third-party dependencies. httk-data builds the capabilities on
-top of those models:
+*httk-data* is the **data-management capability layer** of *httk₂*. httk-core
+defines the neutral `httk.core.EntryProvider` contract, the OPTIMADE
+property/entry-type definition model, and the stdlib-only record dataclasses
+(`Reference`, `File`, `Calculation`) — but ships no concrete providers and no
+third-party dependencies. httk-data provides capabilities built on those
+models:
 
 - **entry providers** that serve the record models through the provider
   contract,

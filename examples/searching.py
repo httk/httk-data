@@ -56,11 +56,10 @@ access to a child field mints an independent join.
 ## Results
 
 Iteration yields `SearchResult`, a named 2-tuple of `values` (one per
-`output()`, in declaration order) and `names`. It still unpacks and indexes as
-the plain tuple it always was, so `for (structure,), _names in search:` and
-`result[0][0]` both work. Object outputs come back as fully reconstructed
-instances — and while a saved instance is still alive, you get that very object
-back rather than a copy.
+`output()`, in declaration order) and `names`. It supports tuple unpacking and
+indexing, including `for (structure,), _names in search:` and `result[0][0]`.
+Object outputs come back as fully reconstructed instances — and while a saved
+instance is still alive, you get that very object back rather than a copy.
 
 Sorting on a rational field runs on its float companion column, so it is
 documented-approximate; the values themselves are still exact.

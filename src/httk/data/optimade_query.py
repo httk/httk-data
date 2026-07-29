@@ -88,9 +88,8 @@ The inner mapping's keys name the filter-operation families: ``'comparison'``
 ``'length'`` (``LENGTH``), and ``'unknown'`` (``IS KNOWN``/``IS UNKNOWN``).
 A ``'HAS'`` handler is called as ``handler(property, ops, values,
 search_variable, has_type)`` and returns a plain
-:class:`~httk.data.query.SearchExpression`: it is never told whether it sits
-under a ``NOT`` and never reports a post-filter flag (both were removed —
-``NOT`` is applied by the caller as ``~``).
+:class:`~httk.data.query.SearchExpression`. The caller applies ``NOT`` as
+``~``; handlers do not receive negation state or report post-filter placement.
 Dotted ``'<type>.id'`` entries provide relationship-id filtering (see
 :func:`~httk.data.optimade_query.relationship_id_handler`).
 """

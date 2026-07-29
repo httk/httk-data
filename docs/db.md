@@ -125,9 +125,9 @@ NULL rather than true for a row whose field is NULL, and so silently drops
 rows.
 
 Iteration yields a `SearchResult`: a named 2-tuple of `values` (one entry per
-`output()` call, in declaration order) and `names`. It unpacks and indexes like
-the plain tuple it always was, so `for (structure,), _names in search:` and
-`result[0][0]` keep working.
+`output()` call, in declaration order) and `names`. It supports tuple unpacking
+and indexing, including `for (structure,), _names in search:` and
+`result[0][0]`.
 
 ## Exact rationals, approximate comparisons
 

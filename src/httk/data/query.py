@@ -81,8 +81,8 @@ class SearchVariable(Protocol):
     ``always_true``/``always_false`` are reserved names: they are real methods
     of the variable, never stored fields resolved through ``__getattr__``.
     They exist so a translation layer can express a constant truth value
-    without inventing a probe field — the old ``field == field`` trick was
-    also NULL-unsound, since it yields NULL (not true) for a NULL field.
+    without inventing a probe field. A ``field == field`` probe is NULL-unsound,
+    since it yields NULL (not true) for a NULL field.
     """
 
     def always_true(self) -> SearchExpression:
