@@ -74,6 +74,15 @@ result set caches that successful total, and `len(result)` applies the frozen
 plan's global offset and limit to it; slices share the same exact-count cache.
 Counting never crawls result pages or returns a partial total.
 
+Python's `list()` and `tuple()` constructors may call `__len__()` as an
+optional allocation hint before they start iterating, so `list(result)` or
+`tuple(result)` can attempt exact child counts even when an early global limit
+would otherwise avoid later sources. If a child reports that its exact count
+is unavailable, the constructor ignores that optional hint and continues with
+normal streaming. Use a comprehension or generator expression, such as
+`[row for row in result]` or `tuple(row for row in result)`, when it is
+important not to issue count requests before iteration.
+
 ## Failures and boundaries
 
 Each child is executed sequentially with a fresh child searcher. A child

@@ -56,8 +56,8 @@ class _FederatedUnsupportedQueryError(FederatedSourceError, UnsupportedQueryErro
     """Add source context without losing the neutral unsupported category."""
 
 
-class _FederatedCountUnavailableError(FederatedSourceError, CountUnavailableError):
-    """Add source context without losing the neutral exact-count category."""
+class _FederatedCountUnavailableError(FederatedSourceError, CountUnavailableError, TypeError):
+    """Retain count/source categories while allowing optional length hints to fail."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,9 +159,48 @@ def _replay_ast(ast: _FederatedAst, variable: SearchVariable) -> SearchExpressio
 
 
 def _source_error(source: str, operation: str, exc: Exception) -> FederatedSourceError:
-    if isinstance(exc, UnsupportedQueryError):
+    if isinstance(exc, (UnsupportedQueryError, AttributeError)):
         return _FederatedUnsupportedQueryError(source, operation)
     return FederatedSourceError(source, operation)
+
+
+_SEARCH_FIELD_SURFACE = (
+    "__getattr__",
+    "__eq__",
+    "__ne__",
+    "__lt__",
+    "__le__",
+    "__gt__",
+    "__ge__",
+    "contains",
+    "startswith",
+    "endswith",
+    "has",
+    "has_any",
+    "has_only",
+    "is_in",
+)
+
+
+def _type_declares_callable(cls: type, name: str) -> bool:
+    """Inspect a class hierarchy without invoking an instance's dynamic lookup."""
+
+    for base in type.__getattribute__(cls, "__mro__"):
+        namespace = type.__getattribute__(base, "__dict__")
+        if name not in namespace:
+            continue
+        member = namespace[name]
+        if isinstance(member, classmethod | staticmethod):
+            member = member.__func__
+        return callable(member)
+    return False
+
+
+def _is_search_field_object(value: object) -> bool:
+    """Whether ``value`` structurally implements the complete neutral field API."""
+
+    cls = type(value)
+    return all(_type_declares_callable(cls, name) for name in _SEARCH_FIELD_SURFACE)
 
 
 def _count_plan(store: "FederatedStore", plan: _FederatedPlan) -> int:
@@ -319,7 +358,7 @@ class FederatedResultSet:
     def __getitem__(self, item: slice) -> "FederatedResultSet":
         if not isinstance(item, slice):
             raise TypeError("federated result sets support slicing only")
-        if item.step not in (None, 1):
+        if item.step is not None and (not isinstance(item.step, int) or isinstance(item.step, bool) or item.step != 1):
             raise ValueError("federated result slices require a unit step")
         start = 0 if item.start is None else item.start
         stop = item.stop
@@ -390,6 +429,21 @@ class FederatedTarget:
     targets: Mapping[str, object]
     _owner: object = field(repr=False, compare=False)
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("federated target names must be nonempty strings")
+        if not isinstance(self.targets, Mapping):
+            raise TypeError("federated targets must be a mapping")
+        if not isinstance(self._owner, FederatedStore):
+            raise TypeError("a federated target owner must be a FederatedStore")
+        if not self.targets:
+            raise ValueError("a federated target requires at least one source target")
+        unknown = tuple(source for source in self.targets if source not in self._owner._sources)
+        if unknown:
+            raise ValueError(f"unknown federation source in target {self.name!r}: {unknown[0]!r}")
+        ordered = {source: self.targets[source] for source in self._owner.source_names if source in self.targets}
+        object.__setattr__(self, "targets", MappingProxyType(ordered))
+
 
 class FederatedStore:
     """A read-only ordered collection of borrowed child stores."""
@@ -416,17 +470,7 @@ class FederatedStore:
     def target(self, name: str, targets: Mapping[str, object]) -> FederatedTarget:
         """Create an immutable target mapping for an intentional source subset."""
 
-        if not isinstance(name, str) or not name:
-            raise ValueError("federated target names must be nonempty strings")
-        if not isinstance(targets, Mapping):
-            raise TypeError("federated targets must be a mapping")
-        if not targets:
-            raise ValueError("a federated target requires at least one source target")
-        unknown = tuple(source for source in targets if source not in self._sources)
-        if unknown:
-            raise ValueError(f"unknown federation source in target {name!r}: {unknown[0]!r}")
-        ordered = {source: targets[source] for source in self._source_names if source in targets}
-        return FederatedTarget(name, MappingProxyType(ordered), self)
+        return FederatedTarget(name, targets, self)
 
     def searcher(self) -> "FederatedSearcher":
         """Create an unbound federated searcher without touching child stores."""
@@ -471,7 +515,10 @@ class FederatedField:
         self._path = path
 
     def _predicate(self, operation: str, *arguments: object) -> "FederatedExpression":
-        if any(isinstance(argument, (FederatedField, FederatedExpression)) for argument in arguments):
+        if any(
+            isinstance(argument, (FederatedField, FederatedExpression)) or _is_search_field_object(argument)
+            for argument in arguments
+        ):
             raise UnsupportedQueryError("federated queries do not support field-to-field comparisons")
         return self._variable._searcher._expression(_Predicate(self._path, operation, arguments), operation)
 
@@ -599,8 +646,8 @@ class FederatedSearcher:
                 child_searcher = self._store._sources[source].searcher()
                 variables[source] = cast(SearchVariable, child_searcher.variable(source_targets[source]))
                 prototypes[source] = child_searcher
-            except (UnsupportedQueryError, AttributeError) as exc:
-                raise _FederatedUnsupportedQueryError(source, "target binding") from exc
+            except Exception as exc:
+                raise _source_error(source, "target binding", exc) from exc
         self._prototypes = MappingProxyType(prototypes)
         self._variable = FederatedVariable(self, variables, source_targets)
         return self._variable
@@ -622,8 +669,8 @@ class FederatedSearcher:
         for source, child_variable in variable._variables.items():
             try:
                 self._replay(ast, child_variable)
-            except (UnsupportedQueryError, AttributeError) as exc:
-                raise _FederatedUnsupportedQueryError(source, operation) from exc
+            except Exception as exc:
+                raise _source_error(source, operation, exc) from exc
 
     def _expression(self, ast: _FederatedAst, operation: str) -> FederatedExpression:
         self._validate(ast, operation)
@@ -638,8 +685,8 @@ class FederatedSearcher:
         for source, child_variable in variable._variables.items():
             try:
                 self._prototypes[source].add(self._replay(expression._ast, child_variable))
-            except (UnsupportedQueryError, AttributeError) as exc:
-                raise _FederatedUnsupportedQueryError(source, "add") from exc
+            except Exception as exc:
+                raise _source_error(source, "add", exc) from exc
         self._expressions.append(expression._ast)
         # Existing result plans retain their old cache; the mutable searcher is
         # now a different unpaged query and must obtain a fresh exact total.
@@ -677,8 +724,8 @@ class FederatedSearcher:
                     else self._field(cast(SearchVariable, child_variable), field_path)
                 )
                 child_searcher.output(child_value, name)
-            except (UnsupportedQueryError, AttributeError) as exc:
-                raise _FederatedUnsupportedQueryError(source, "output") from exc
+            except Exception as exc:
+                raise _source_error(source, "output", exc) from exc
         return output
 
     def output(self, value: object, name: str) -> None:

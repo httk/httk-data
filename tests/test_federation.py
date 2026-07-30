@@ -12,6 +12,7 @@ from httk.data import (
     CountUnavailableError,
     FederatedSourceError,
     FederatedStore,
+    FederatedTarget,
     MultipleResultsError,
     NoResultError,
     SearchResult,
@@ -86,6 +87,45 @@ def test_targets_are_ordered_frozen_and_retain_exact_objects() -> None:
         target.name = "other"  # type: ignore[misc]
 
 
+def test_direct_target_construction_copies_freezes_and_orders_its_mapping() -> None:
+    store = FederatedStore({"first": ProbeStore(), "second": ProbeStore(), "third": ProbeStore()})
+    first_target = object()
+    second_target = object()
+    targets = {"second": second_target, "first": first_target}
+
+    target = FederatedTarget("records", targets, store)
+    targets["third"] = object()
+
+    assert tuple(target.targets) == ("first", "second")
+    assert target.targets["first"] is first_target
+    assert target.targets["second"] is second_target
+    with pytest.raises(TypeError):
+        target.targets["third"] = object()  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("name", "targets", "owner"),
+    (
+        ("", {"first": object()}, None),
+        ("records", {}, None),
+        ("records", {"other": object()}, None),
+        ("records", {"first": object()}, object()),
+        ("records", (), None),
+    ),
+)
+def test_direct_target_construction_rejects_invalid_invariants(
+    name: str,
+    targets: object,
+    owner: object,
+) -> None:
+    store = FederatedStore({"first": ProbeStore(), "second": ProbeStore()})
+    if owner is None:
+        owner = store
+
+    with pytest.raises((TypeError, ValueError)):
+        FederatedTarget(name, targets, owner)  # type: ignore[arg-type]
+
+
 def test_invalid_targets_fail_deterministically() -> None:
     store = FederatedStore({"first": ProbeStore(), "second": ProbeStore()})
     for name, targets in (("", {"first": object()}), ("records", {}), ("records", {"other": object()})):
@@ -147,6 +187,28 @@ def test_source_unsupported_target_binding_keeps_neutral_category_and_context() 
     assert isinstance(excinfo.value, FederatedSourceError)
     assert excinfo.value.source == "second"
     assert excinfo.value.operation == "target binding"
+
+
+def test_child_type_error_during_target_binding_has_source_context_and_cause() -> None:
+    failure = TypeError("child rejected target construction")
+
+    class FailingSearcher:
+        def variable(self, target: object) -> object:
+            raise failure
+
+    class FailingStore:
+        def searcher(self) -> FailingSearcher:
+            return FailingSearcher()
+
+    store = FederatedStore({"first": ProbeStore(), "second": FailingStore()})
+
+    with pytest.raises(FederatedSourceError, match="second") as excinfo:
+        store.searcher().variable(object())
+
+    assert not isinstance(excinfo.value, UnsupportedQueryError)
+    assert excinfo.value.source == "second"
+    assert excinfo.value.operation == "target binding"
+    assert excinfo.value.__cause__ is failure
 
 
 def test_federation_never_propagates_close_to_borrowed_sources() -> None:
@@ -413,6 +475,18 @@ def test_fields_expressions_and_outputs_cannot_cross_federated_searchers() -> No
             first_searcher.output(value, "foreign")
         with pytest.raises(UnsupportedQueryError, match="this federated searcher"):
             first_searcher._plan({"foreign": value})
+
+
+def test_concrete_child_field_is_rejected_without_dynamic_instance_lookup() -> None:
+    searcher, _first, _second = _query_searcher()
+    variable = searcher.variable("records")
+    raw_searcher = QueryProbeSearcher(set())
+    raw_field = raw_searcher.variable("raw-records").name
+
+    with pytest.raises(UnsupportedQueryError, match="field-to-field"):
+        assert variable.name == raw_field
+
+    assert raw_searcher.calls == [("variable", "raw-records")]
 
 
 def test_output_and_results_planning_record_scalars_and_origin_without_execution() -> None:
@@ -708,6 +782,16 @@ def test_limit_and_offset_validate_like_neutral_backends(value: object) -> None:
         searcher.results(origin=searcher.origin)[True:]
 
 
+@pytest.mark.parametrize("step", (True, False, -1, 0, 2, 1.0, "1"))
+def test_result_slices_reject_non_unit_integer_steps(step: object) -> None:
+    searcher, _first, _second = _execution_searcher()
+    searcher.variable("records")
+    result = searcher.results(origin=searcher.origin)
+
+    with pytest.raises(ValueError, match="unit step"):
+        result[slice(None, None, step)]  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     "failure",
     ("searcher construction", "expression replay", "output declaration", "limit pushdown", "iteration"),
@@ -802,6 +886,31 @@ def test_count_unavailable_has_source_context_and_preserves_cause_without_partia
         assert excinfo.value.operation == "count"
         assert excinfo.value.__cause__ is unavailable
     assert first.count_calls == second.count_calls == 2
+
+
+def test_list_ignores_unavailable_length_hint_and_streams_until_early_limit() -> None:
+    unavailable = CountUnavailableError("later child cannot count exactly")
+    first = ExecutionStore([{"id": "1", "value": "first"}])
+    second = ExecutionStore(
+        [{"id": "2", "value": "second"}],
+        failure="count unavailable",
+        error=unavailable,
+    )
+    searcher = FederatedStore({"first": first, "second": second}).searcher()
+    variable = searcher.variable("records")
+    searcher.set_limit(1)
+    result = searcher.results(value=variable.value)
+
+    assert [row.value for row in list(result)] == ["first"]
+    assert first.count_calls == second.count_calls == 1
+    assert first.execution_calls == 1
+    assert second.execution_calls == 0
+
+    with pytest.raises(CountUnavailableError, match="second") as excinfo:
+        len(result)
+    assert isinstance(excinfo.value, FederatedSourceError)
+    assert isinstance(excinfo.value, TypeError)
+    assert excinfo.value.__cause__ is unavailable
 
 
 @pytest.mark.parametrize("error", (RuntimeError("child count failed"), UnsupportedQueryError("late unsupported count")))
