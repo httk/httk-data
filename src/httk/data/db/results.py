@@ -3,17 +3,32 @@
 import copy
 import dataclasses
 from array import array
-from collections.abc import Iterator
-from typing import Any, cast
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from typing import Any, Final, Literal, cast
 
 import sqlalchemy
 from httk.core import FracScalar, FracVector
 
 from httk.data.db.mapping import SID_COLUMN
+from httk.data.db.paging import (
+    _decode_continuation,
+    _DecodedContinuation,
+    _encode_continuation,
+    _plan_fingerprint,
+)
 from httk.data.db.rows import RowHydrator
-from httk.data.db.schema import FieldSpec
+from httk.data.db.schema import FieldSpec, resolve_schema
 from httk.data.db.searcher import SqlSearcher, _Output
-from httk.data.query import MultipleResultsError, NoResultError, ResultRow
+from httk.data.query import (
+    ContinuationToken,
+    MultipleResultsError,
+    NoResultError,
+    PageOrder,
+    ResultPage,
+    ResultRow,
+    UnsupportedQueryError,
+)
 
 __all__ = [
     "ExpiredCursorRowError",
@@ -25,6 +40,16 @@ __all__ = [
 ]
 
 _CHUNK = 500
+_PAGE_SIZE_MAX: Final = 10_000
+_PAGE_ORDER_MAX: Final = 32
+
+
+@dataclass(frozen=True, slots=True)
+class _PageKey:
+    """A validated root scalar projection and its continuation ordering."""
+
+    order: PageOrder
+    output: _Output
 
 
 class ExpiredCursorRowError(RuntimeError):
@@ -384,6 +409,332 @@ class SqlResultSet:
         if self._plan._outputs[index].target is not None:
             raise TypeError(f"column {name!r} is an object output; declared scalar projections: {scalar_names}")
         return ResultColumn(self, index)
+
+    def page(
+        self,
+        *,
+        size: int,
+        order_by: Iterable[PageOrder],
+        cursor: ContinuationToken | None = None,
+        include_total: bool = False,
+    ) -> ResultPage:
+        """Fetch one bounded, live keyset page of this frozen SQL result plan.
+
+        Paging is intentionally separate from :meth:`cursor`: this method
+        returns independent rows whose page-local hydration state remains alive
+        through their result-row resolvers, while ``cursor()`` returns reusable
+        proxies that expire on advance.  It performs one ``LIMIT size + 1``
+        match query and never materializes this result set's ordinary match
+        cache.  A total is deliberately opt-in because it requires the normal
+        exact count query.
+        """
+        self._validate_page_size(size)
+        if not isinstance(include_total, bool):
+            raise TypeError("include_total must be bool")
+        keys = self._page_keys(order_by)
+        fingerprint = self._page_fingerprint(keys)
+        decoded: _DecodedContinuation | None = None
+        if cursor is not None:
+            decoded = _decode_continuation(cursor, fingerprint=fingerprint, anchors=len(keys))
+
+        statement, raw_width = self._page_statement(keys, decoded, size)
+        with self._plan._store._read_connection() as connection:
+            fetched = tuple(tuple(row) for row in connection.execute(statement).fetchall())
+
+        more_in_fetch_direction = len(fetched) > size
+        visible = fetched[:size]
+        if decoded is not None and decoded.direction == "backward":
+            visible = tuple(reversed(visible))
+        rows = self._page_rows(visible, raw_width)
+        next_token, previous_token = self._page_tokens(
+            visible,
+            raw_width,
+            keys,
+            fingerprint,
+            decoded,
+            more_in_fetch_direction,
+        )
+        total = self._plan.count() if include_total else None
+        return ResultPage(rows, next_token, previous_token, total)
+
+    @staticmethod
+    def _validate_page_size(size: int) -> None:
+        if isinstance(size, bool) or not isinstance(size, int):
+            raise TypeError("page size must be an integer (bool is not accepted)")
+        if not 1 <= size <= _PAGE_SIZE_MAX:
+            raise ValueError(f"page size must be between 1 and {_PAGE_SIZE_MAX}")
+
+    def _page_keys(self, order_by: Iterable[PageOrder]) -> tuple[_PageKey, ...]:
+        """Validate the intentionally small SQL seek-pagination profile."""
+        if len(self._plan._variables) != 1:
+            raise UnsupportedQueryError("paging requires exactly one root query variable")
+        if self._plan._sorts:
+            raise UnsupportedQueryError("paging does not compose with add_sort(); pass PageOrder values instead")
+        if self._plan.offset != 0:
+            raise UnsupportedQueryError("paging does not compose with a nonzero query offset")
+        if self._plan._limit is not None:
+            raise UnsupportedQueryError("paging does not compose with a query limit")
+        if not self._plan._outputs:
+            raise ValueError("this search has no outputs; declare outputs or pass them to results()")
+        if isinstance(order_by, (str, bytes)):
+            raise TypeError("order_by must be an iterable of PageOrder values")
+        try:
+            iterator = iter(order_by)
+        except TypeError as error:
+            raise TypeError("order_by must be an iterable of PageOrder values") from error
+        requested: list[PageOrder] = []
+        for order in iterator:
+            if len(requested) >= _PAGE_ORDER_MAX:
+                raise UnsupportedQueryError(f"paging supports at most {_PAGE_ORDER_MAX} order keys")
+            requested.append(order)
+        root = self._plan._variables[0]
+        keys: list[_PageKey] = []
+        seen: set[str] = set()
+        for order in requested:
+            if not isinstance(order, PageOrder):
+                raise TypeError(f"order_by entries must be PageOrder values, got {type(order).__name__}")
+            if order.name in seen:
+                raise UnsupportedQueryError(f"duplicate paging order name {order.name!r}")
+            seen.add(order.name)
+            matching = [
+                (index, output) for index, output in enumerate(self._plan._outputs) if output.name == order.name
+            ]
+            if not matching:
+                raise UnsupportedQueryError(f"paging order {order.name!r} is not a declared result projection")
+            if len(matching) > 1:
+                raise UnsupportedQueryError(f"paging order {order.name!r} names duplicate result projections")
+            _index, output = matching[0]
+            if output.target is not None:
+                raise UnsupportedQueryError(f"paging order {order.name!r} is an object projection, not a scalar")
+            if output.from_child or output.variable is not root:
+                raise UnsupportedQueryError(
+                    f"paging order {order.name!r} must be a scalar projection of the root query variable"
+                )
+            if output.spec is not None and output.spec.role not in {"scalar", "encoded"}:
+                raise UnsupportedQueryError(f"paging order {order.name!r} has an unsupported stored representation")
+            keys.append(_PageKey(order, output))
+        return tuple(keys)
+
+    def _page_inner(self, keys: tuple[_PageKey, ...]) -> tuple[sqlalchemy.Subquery, tuple[str, ...], tuple[str, ...]]:
+        """Build the grouped one-match-per-root inner relation.
+
+        Child-list filters make the searcher grouped.  The inner query retains
+        that grouping/HAVING logic and exposes one root row with all requested
+        reconstruction columns, normalized order columns, and the root sid.
+        The outer query can then seek safely without changing child-filter
+        semantics or multiplying a root into several page rows.
+        """
+        root = self._plan._variables[0]
+        root_sid = cast(sqlalchemy.ColumnElement[Any], root._alias.c[SID_COLUMN])
+        columns: list[sqlalchemy.ColumnElement[Any]] = []
+        raw_names: list[str] = []
+        for index, output in enumerate(self._plan._outputs):
+            name = f"_httk_page_value_{index}"
+            columns.append(output.element.label(name))
+            raw_names.append(name)
+        for index, extras in enumerate(self._projection_extras):
+            for extra_index, extra in enumerate(extras):
+                name = f"_httk_page_extra_{index}_{extra_index}"
+                columns.append(extra.label(name))
+                raw_names.append(name)
+        sid_name = "_httk_page_sid"
+        columns.append(root_sid.label(sid_name))
+        raw_names.append(sid_name)
+        key_names: list[str] = []
+        for index, key in enumerate(keys):
+            name = f"_httk_page_key_{index}"
+            columns.append(key.output.element.label(name))
+            key_names.append(name)
+
+        group_columns = [root_sid]
+        group_columns += [
+            output.element for output in self._plan._outputs if output.target is None and not output.from_child
+        ]
+        group_columns += [extra for extras in self._projection_extras for extra in extras]
+        group_columns += [key.output.element for key in keys]
+        return (
+            self._plan._base_select(columns, group_columns).subquery("_httk_page_matches"),
+            tuple(raw_names),
+            tuple(key_names),
+        )
+
+    def _page_statement(
+        self,
+        keys: tuple[_PageKey, ...],
+        cursor: _DecodedContinuation | None,
+        size: int,
+    ) -> tuple[sqlalchemy.Select[Any], int]:
+        inner, raw_names, key_names = self._page_inner(keys)
+        raw_columns = [cast(sqlalchemy.ColumnElement[Any], inner.c[name]) for name in raw_names]
+        key_columns = [cast(sqlalchemy.ColumnElement[Any], inner.c[name]) for name in key_names]
+        sid = raw_columns[-1]
+        statement = sqlalchemy.select(*raw_columns, *key_columns).select_from(inner)
+        backward = cursor is not None and cursor.direction == "backward"
+        if cursor is not None:
+            statement = statement.where(self._page_seek_predicate(key_columns, sid, keys, cursor, before=backward))
+        for key, column in zip(keys, key_columns, strict=True):
+            rank = self._page_null_rank(column, key.order)
+            statement = statement.order_by(rank.desc() if backward else rank.asc())
+            descending = key.order.descending != backward
+            statement = statement.order_by(column.desc() if descending else column.asc())
+        statement = statement.order_by(sid.desc() if backward else sid.asc()).limit(size + 1)
+        return statement, len(raw_columns)
+
+    @staticmethod
+    def _page_null_rank(column: sqlalchemy.ColumnElement[Any], order: PageOrder) -> sqlalchemy.ColumnElement[Any]:
+        null_rank = 0 if order.nulls == "first" else 1
+        value_rank = 1 - null_rank
+        return sqlalchemy.case((column.is_(None), null_rank), else_=value_rank)
+
+    def _page_seek_predicate(
+        self,
+        columns: list[sqlalchemy.ColumnElement[Any]],
+        sid: sqlalchemy.ColumnElement[Any],
+        keys: tuple[_PageKey, ...],
+        cursor: _DecodedContinuation,
+        *,
+        before: bool,
+    ) -> sqlalchemy.ColumnElement[bool]:
+        """Return the lexicographic strict-before/after predicate for an anchor."""
+        prefix: list[sqlalchemy.ColumnElement[bool]] = []
+        choices: list[sqlalchemy.ColumnElement[bool]] = []
+        for key, column, anchor in zip(keys, columns, cursor.anchors, strict=True):
+            rank = self._page_null_rank(column, key.order)
+            anchor_rank = 0 if (anchor is None) == (key.order.nulls == "first") else 1
+            rank_compare = rank < anchor_rank if before else rank > anchor_rank
+            comparisons: list[sqlalchemy.ColumnElement[bool]] = [rank_compare]
+            if anchor is not None:
+                # The null-rank is always ascending in public order, while
+                # the value component follows PageOrder.descending.  Moving
+                # before/after the anchor therefore reverses a descending
+                # value comparison but never its null-rank comparison.
+                value_compare = column > anchor if key.order.descending == before else column < anchor
+                comparisons.append(sqlalchemy.and_(rank == anchor_rank, value_compare))
+            choices.append(sqlalchemy.and_(*prefix, sqlalchemy.or_(*comparisons)))
+            prefix.append(rank == anchor_rank)
+            prefix.append(column.is_(None) if anchor is None else column == anchor)
+        sid_compare = sid < cursor.sid if before else sid > cursor.sid
+        choices.append(sqlalchemy.and_(*prefix, sid_compare))
+        return sqlalchemy.or_(*choices)
+
+    def _page_rows(self, raw_rows: tuple[tuple[Any, ...], ...], raw_width: int) -> tuple[ResultRow, ...]:
+        """Attach page-scoped hydrators without touching this result's cache."""
+        if not raw_rows:
+            return ()
+        result = SqlResultSet(self._plan)
+        result._prepare(tuple(row[:raw_width] for row in raw_rows))
+        return tuple(result._row_at(index) for index in range(len(raw_rows)))
+
+    def _page_tokens(
+        self,
+        rows: tuple[tuple[Any, ...], ...],
+        raw_width: int,
+        keys: tuple[_PageKey, ...],
+        fingerprint: str,
+        cursor: _DecodedContinuation | None,
+        more_in_fetch_direction: bool,
+    ) -> tuple[ContinuationToken | None, ContinuationToken | None]:
+        if not rows:
+            return None, None
+
+        def token(row: tuple[Any, ...], direction: "Literal['forward', 'backward']") -> ContinuationToken:
+            try:
+                return _encode_continuation(
+                    direction=direction,
+                    anchors=tuple(row[raw_width : raw_width + len(keys)]),
+                    sid=int(row[self._hidden_start]),
+                    fingerprint=fingerprint,
+                )
+            except (TypeError, ValueError) as error:
+                raise UnsupportedQueryError(
+                    "paging order values cannot be represented in a continuation cursor"
+                ) from error
+
+        first, last = rows[0], rows[-1]
+        if cursor is None:
+            return (token(last, "forward") if more_in_fetch_direction else None, None)
+        if cursor.direction == "forward":
+            return (
+                token(last, "forward") if more_in_fetch_direction else None,
+                token(first, "backward"),
+            )
+        return (
+            token(last, "forward"),
+            token(first, "backward") if more_in_fetch_direction else None,
+        )
+
+    def _page_fingerprint(self, keys: tuple[_PageKey, ...]) -> str:
+        """Hash a stable description of query structure without exposing SQL in a token."""
+        inner, _raw_names, _key_names = self._page_inner(keys)
+        dialect = self._plan._store._database.engine.dialect
+        compiled = sqlalchemy.select(inner).compile(dialect=dialect)
+        root = self._plan._variables[0]
+        payload = {
+            "version": 1,
+            "dialect": {
+                "name": dialect.name,
+                "driver": dialect.driver,
+                "class": f"{type(dialect).__module__}.{type(dialect).__qualname__}",
+            },
+            "schema": self._page_schema(root._schema),
+            "outputs": [
+                {
+                    "name": output.name,
+                    "target": None
+                    if output.target is None
+                    else f"{output.target.__module__}.{output.target.__qualname__}",
+                    "root": output.variable is root,
+                    "child": output.from_child,
+                    "field": None if output.spec is None else output.spec.field,
+                    "role": None if output.spec is None else output.spec.role,
+                }
+                for output in self._plan._outputs
+            ],
+            "order": [
+                {"name": key.order.name, "descending": key.order.descending, "nulls": key.order.nulls} for key in keys
+            ],
+            "statement": compiled.string,
+            "parameters": compiled.params,
+        }
+        return _plan_fingerprint(payload)
+
+    @staticmethod
+    def _page_schema(schema: Any, seen: set[type] | None = None) -> dict[str, Any]:
+        """A structural schema description, including reachable reference schemas."""
+        seen = set() if seen is None else seen
+        cls = schema.cls
+        identity = f"{cls.__module__}.{cls.__qualname__}"
+        if cls in seen:
+            return {"class": identity, "cycle": True}
+        seen.add(cls)
+        return {
+            "class": identity,
+            "table": schema.table_name,
+            "dedup": schema.dedup,
+            "indexes": schema.composite_indexes,
+            "fields": [
+                {
+                    "field": field.field,
+                    "role": field.role,
+                    "columns": [
+                        {
+                            "name": column.name,
+                            "kind": column.kind,
+                            "nullable": column.nullable,
+                            "indexed": column.indexed,
+                            "unique": column.unique,
+                        }
+                        for column in field.columns
+                    ],
+                    "codec": field.codec_name,
+                    "shape": None if field.shape is None else (field.shape.rows, field.shape.cols),
+                    "target": None
+                    if field.target is None
+                    else SqlResultSet._page_schema(resolve_schema(field.target), seen),
+                }
+                for field in schema.fields
+            ],
+        }
 
     def cursor(self) -> Iterator[ResultRow]:
         self._ensure()

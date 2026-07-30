@@ -64,9 +64,14 @@ from .optimade_query import (
 )
 from .portable_query import PortableQueryCapabilities, portable_query_capabilities, portable_query_fields
 from .query import (
+    ContinuationToken,
     CountUnavailableError,
     MultipleResultsError,
     NoResultError,
+    PageableResultSetLike,
+    PageOrder,
+    PaginationCursorError,
+    ResultPage,
     ResultRow,
     ResultRowLike,
     ResultSetLike,
@@ -82,6 +87,7 @@ from .validation import PropertyValidationError, validate_property, validate_rec
 
 __all__ = [
     "CalculationEntryProvider",
+    "ContinuationToken",
     "CountUnavailableError",
     "FederatedExpression",
     "FederatedField",
@@ -99,10 +105,14 @@ __all__ = [
     "HandlerTable",
     "MultipleResultsError",
     "NoResultError",
+    "PageOrder",
+    "PageableResultSetLike",
+    "PaginationCursorError",
     "PortableQueryCapabilities",
     "PropertyValidationError",
     "ReferenceEntryProvider",
     "RelatedPropertyResolver",
+    "ResultPage",
     "ResultRow",
     "ResultRowLike",
     "ResultSetLike",

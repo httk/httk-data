@@ -132,6 +132,61 @@ as_vector = energies.to_fracvector()
 non-rational projections. Variable-length CHILD-role projections are rejected
 when `results()` is declared; reference-path projections are supported.
 
+### Continuation pages
+
+`SqlResultSet.page()` is an optional capability (described neutrally by
+`httk.data.PageableResultSetLike`), separate from the required `ResultSetLike`
+contract. It uses a stable keyset/seek order over named **root scalar result
+projections** and returns an immutable `ResultPage`:
+
+```python
+from httk.data import PageOrder
+
+page = results.page(
+    size=100,
+    order_by=(PageOrder("spacegroup"), PageOrder("energy", descending=True)),
+)
+for row in page.rows:
+    print(row.structure.formula, row.energy)
+
+if page.next is not None:
+    later = results.page(
+        size=100,
+        order_by=(PageOrder("spacegroup"), PageOrder("energy", descending=True)),
+        cursor=page.next,
+    )
+```
+
+`PageOrder.name` refers to the output name (`"energy"` above), not a
+SQLAlchemy column. Ordering accepts root scalar and encoded-scalar projections;
+object outputs, child/reference-derived keys, duplicate names, an existing
+`add_sort()`, a nonzero query offset, and a query limit are rejected. The SQL
+implementation always appends the root `sid` as an internal ascending
+tie-breaker, so duplicate user-order values do not duplicate or skip rows.
+`nulls="first"`/`"last"` is explicit and portable across SQLite and DuckDB.
+An empty order tuple is valid when storage order by root `sid` is sufficient.
+
+The opaque URL-safe `ContinuationToken` contains only a version, tagged anchor
+values, root sid, direction, and a digest binding the frozen query/output/order
+schema and dialect. It contains no SQL and decoded values are always bound
+parameters. It is deliberately not authenticated: a web boundary can wrap its
+string value in an HMAC or another authenticated envelope. Corrupt, oversized,
+non-canonical, or mismatched tokens raise `PaginationCursorError`; do not
+construct application tokens yourself.
+
+Pages are **live**: every call uses a fresh read connection and does not keep a
+driver cursor or transaction open. On an unchanged store, following `next` and
+then `previous` recovers the original page. Concurrent direct database changes
+can move, insert, or remove matches between calls, so continuation paging does
+not promise snapshot consistency.
+
+A page fetches at most `size + 1` root match rows and uses a lexicographic seek
+predicate rather than a query offset; the library hard-caps `size` at 10,000.
+`include_total=False` (the default) does not count. `include_total=True` runs
+the normal exact SQL count separately. This bounds application memory and match
+row transfer, not database CPU for arbitrary filters or sorts; indexed root
+order fields benefit from the indexes declared in the schema.
+
 `cursor()` bounds the number of hydrated record/proxy objects held by a
 row-by-row consumer, but not the raw values pinned by the result set. The
 object value in each cursor `ResultRow` is an instance of the record class, so
@@ -178,7 +233,7 @@ The following are SQL-specific extensions, not portable Store requirements:
 persisting/fetching frozen dataclasses with `save()` and `fetch()`, schema and
 transaction management, recursive reference storage, lazy SQL rows,
 `ResultColumn.floats()`/`to_fracvector()`, cursor rows, child/reference joins,
-and SQL's approximate comparisons for exact rationals. Do not assume those
+continuation pages, and SQL's approximate comparisons for exact rationals. Do not assume those
 operations exist on a remote or in-memory Store.
 
 A plain comparison on a child field is existential un-negated and set-negating

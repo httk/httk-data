@@ -83,6 +83,13 @@ normal streaming. Use a comprehension or generator expression, such as
 `[row for row in result]` or `tuple(row for row in result)`, when it is
 important not to issue count requests before iteration.
 
+`FederatedResultSet` deliberately does **not** implement the optional
+`PageableResultSetLike` continuation contract. A seek token needs one stable
+root ordering and one backend-local identity tie-breaker; federation is a
+source-major union and has neither a neutral global sort nor a cross-store
+identity. Callers that need continuation pages must page a concrete child store
+or define an application-level merged ordering and consistency policy.
+
 ## Failures and boundaries
 
 Each child is executed sequentially with a fresh child searcher. A child

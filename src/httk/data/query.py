@@ -8,13 +8,19 @@ layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can
 stand in for a real store in tests.
 """
 
-from collections.abc import Iterator
-from typing import Any, NamedTuple, Protocol
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from typing import Any, Literal, NamedTuple, Protocol, Self
 
 __all__ = [
+    "ContinuationToken",
     "CountUnavailableError",
     "MultipleResultsError",
     "NoResultError",
+    "PageOrder",
+    "PageableResultSetLike",
+    "PaginationCursorError",
+    "ResultPage",
     "ResultRow",
     "ResultRowLike",
     "ResultSetLike",
@@ -42,6 +48,89 @@ class NoResultError(LookupError):
 
 class MultipleResultsError(LookupError):
     """A result-set :meth:`one` operation found more than one matching result."""
+
+
+class PaginationCursorError(ValueError):
+    """A continuation cursor is malformed, expired, or belongs to another result plan."""
+
+
+@dataclass(frozen=True, slots=True)
+class PageOrder:
+    """One named scalar result projection used to order a continuation page.
+
+    ``name`` identifies the name supplied to ``results()`` (or
+    :meth:`Searcher.output`), never a backend column object.  The result-set
+    implementation validates that it is a root scalar projection before it
+    generates SQL.
+    """
+
+    name: str
+    descending: bool = False
+    nulls: Literal["first", "last"] = "last"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("PageOrder.name must be a non-empty string")
+        if not isinstance(self.descending, bool):
+            raise TypeError("PageOrder.descending must be bool")
+        if self.nulls not in {"first", "last"}:
+            raise ValueError("PageOrder.nulls must be 'first' or 'last'")
+
+
+class ContinuationToken(str):
+    """An opaque URL-safe continuation value.
+
+    It is a ``str`` subclass so normal JSON serializers preserve it as a
+    scalar value.  Applications should pass a token returned by a page back
+    unchanged; data backends validate its version, structure, and result-plan
+    fingerprint before using any decoded value as a bound parameter.
+    """
+
+    def __new__(cls, value: str) -> Self:
+        if not isinstance(value, str):
+            raise TypeError(f"ContinuationToken requires str, got {type(value).__name__}")
+        return str.__new__(cls, value)
+
+
+@dataclass(frozen=True, slots=True)
+class ResultPage:
+    """An immutable continuation-page result.
+
+    ``rows`` is always a tuple.  Returned rows are ordinary persistent result
+    rows, not the expiring proxies produced by ``SqlResultSet.cursor()``.
+    ``total`` is populated only when the caller explicitly asks for it.
+    """
+
+    rows: tuple["ResultRowLike", ...]
+    next: ContinuationToken | None
+    previous: ContinuationToken | None
+    total: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.rows, tuple):
+            object.__setattr__(self, "rows", tuple(self.rows))
+        if self.total is not None and (
+            isinstance(self.total, bool) or not isinstance(self.total, int) or self.total < 0
+        ):
+            raise ValueError("ResultPage.total must be a non-negative integer or None")
+
+
+class PageableResultSetLike(Protocol):
+    """Optional continuation-page capability of a frozen result set.
+
+    This deliberately extends neither :class:`ResultSetLike` nor
+    :class:`Searcher`: stores that do not support seek pagination remain fully
+    conforming to the required portable contracts.
+    """
+
+    def page(
+        self,
+        *,
+        size: int,
+        order_by: Iterable[PageOrder],
+        cursor: ContinuationToken | None = None,
+        include_total: bool = False,
+    ) -> ResultPage: ...
 
 
 class ResultRow:
