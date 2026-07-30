@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from typing import Any, NamedTuple, Protocol
 
 __all__ = [
+    "CountUnavailableError",
     "MultipleResultsError",
     "NoResultError",
     "ResultRow",
@@ -29,6 +30,10 @@ __all__ = [
 
 class UnsupportedQueryError(ValueError):
     """A valid query operation is outside a store's supported query profile."""
+
+
+class CountUnavailableError(RuntimeError):
+    """A store cannot provide the exact count required by a query operation."""
 
 
 class NoResultError(LookupError):

@@ -14,6 +14,9 @@ supplies *capabilities*:
 - the **store/searcher query protocols** (:mod:`httk.data.query`) — the
   backend-agnostic query contract implemented by httk data stores and consumed
   by serving modules; and
+- the **federated store shell** (:mod:`httk.data.federation`) — ordered,
+  immutable source and target bindings for future federated query execution;
+  and
 - the **generic OPTIMADE filter translation** (:mod:`httk.data.optimade_query`)
   — turning filter syntax trees parsed by
   :func:`httk.core.parse_optimade_filter` into search expressions over the
@@ -36,6 +39,7 @@ from .entry_providers import (
     FileEntryProvider,
     ReferenceEntryProvider,
 )
+from .federation import FederatedSourceError, FederatedStore, FederatedStoreError, FederatedTarget
 from .optimade_query import (
     FilterTranslationCategory,
     FilterTranslationError,
@@ -50,6 +54,7 @@ from .optimade_query import (
 )
 from .portable_query import PortableQueryCapabilities, portable_query_capabilities, portable_query_fields
 from .query import (
+    CountUnavailableError,
     MultipleResultsError,
     NoResultError,
     ResultRow,
@@ -67,6 +72,11 @@ from .validation import PropertyValidationError, validate_property, validate_rec
 
 __all__ = [
     "CalculationEntryProvider",
+    "CountUnavailableError",
+    "FederatedSourceError",
+    "FederatedStore",
+    "FederatedStoreError",
+    "FederatedTarget",
     "FileEntryProvider",
     "FilterTranslationCategory",
     "FilterTranslationError",

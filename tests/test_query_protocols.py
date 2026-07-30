@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from httk.data import (
+    CountUnavailableError,
     MultipleResultsError,
     NoResultError,
     Searcher,
@@ -156,3 +157,4 @@ def test_query_errors_are_neutral_and_sql_compatibility_exports_are_identical():
     assert db.NoResultError is NoResultError
     assert db.MultipleResultsError is MultipleResultsError
     assert issubclass(UnsupportedQueryError, ValueError)
+    assert issubclass(CountUnavailableError, RuntimeError)
