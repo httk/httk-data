@@ -38,7 +38,18 @@ from .entry_providers import (
     FileEntryProvider,
     ReferenceEntryProvider,
 )
-from .federation import FederatedResultSet, FederatedSourceError, FederatedStore, FederatedStoreError, FederatedTarget
+from .federation import (
+    FederatedExpression,
+    FederatedField,
+    FederatedResultColumn,
+    FederatedResultSet,
+    FederatedSearcher,
+    FederatedSourceError,
+    FederatedStore,
+    FederatedStoreError,
+    FederatedTarget,
+    FederatedVariable,
+)
 from .optimade_query import (
     FilterTranslationCategory,
     FilterTranslationError,
@@ -72,11 +83,16 @@ from .validation import PropertyValidationError, validate_property, validate_rec
 __all__ = [
     "CalculationEntryProvider",
     "CountUnavailableError",
+    "FederatedExpression",
+    "FederatedField",
+    "FederatedResultColumn",
     "FederatedResultSet",
+    "FederatedSearcher",
     "FederatedSourceError",
     "FederatedStore",
     "FederatedStoreError",
     "FederatedTarget",
+    "FederatedVariable",
     "FileEntryProvider",
     "FilterTranslationCategory",
     "FilterTranslationError",

@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from httk.data import (
+    CountUnavailableError,
     FederatedSourceError,
     FederatedStore,
     MultipleResultsError,
@@ -481,6 +482,7 @@ class ExecutionSearcher(QueryProbeSearcher):
         self._execution_store = store
         self._runtime_failure = runtime_failure
         self.limit: int | None = None
+        self.counted = False
         self.executed = False
 
     def add(self, expression: object) -> None:
@@ -497,6 +499,17 @@ class ExecutionSearcher(QueryProbeSearcher):
         if self._runtime_failure and self._execution_store.failure == "limit pushdown":
             raise self._execution_store.error
         self.limit = limit
+
+    def count(self) -> int:
+        self.counted = True
+        self._execution_store.count_calls += 1
+        if self._runtime_failure and self._execution_store.failure == "count unavailable":
+            raise self._execution_store.error
+        if self._runtime_failure and self._execution_store.failure == "count":
+            raise self._execution_store.error
+        return sum(
+            all(self._matches(expression, row) for expression in self.added) for row in self._execution_store.rows
+        )
 
     @staticmethod
     def _value(row: dict[str, object], path: tuple[str, ...]) -> object:
@@ -568,6 +581,7 @@ class ExecutionStore(QueryProbeStore):
         self.rows = rows
         self.failure = failure
         self.error = error or RuntimeError("test child failure")
+        self.count_calls = 0
 
     def searcher(self) -> ExecutionSearcher:
         runtime_failure = len(self.searchers) >= 2
@@ -673,8 +687,7 @@ def test_result_plans_are_frozen_reiterable_and_support_direct_iteration_helpers
     assert list(result.column("value")) == ["0", "1", "2", "3"]
     with pytest.raises(NotImplementedError):
         result.cursor()
-    with pytest.raises(TypeError, match="exact counts are unavailable"):
-        len(result)
+    assert len(result) == 4
     with pytest.raises(NoResultError):
         result[4:].one()
     fresh = searcher.results(value=variable.value)
@@ -731,3 +744,97 @@ def test_later_iteration_failure_is_not_silent_after_a_yielded_prefix() -> None:
     assert next(iterator).value == "second"
     with pytest.raises(FederatedSourceError, match="second"):
         next(iterator)
+
+
+# ------------------------------------------------------------------ phase four
+
+
+def test_exact_counts_sum_filters_cache_and_are_unpaged() -> None:
+    searcher, first, second = _execution_searcher(
+        [{"id": "1", "value": "kept"}, {"id": "2", "value": "discarded"}],
+        [{"id": "3", "value": "kept"}, {"id": "4", "value": "kept"}],
+    )
+    variable = searcher.variable("records")
+    searcher.add(variable.value == "kept")
+    searcher.add_offset(1)
+    searcher.set_limit(1)
+    result = searcher.results(value=variable.value)
+
+    assert searcher.count() == 3
+    assert len(result) == 1
+    assert len(result[1:]) == 0
+    assert searcher.count() == 3
+    assert first.count_calls == second.count_calls == 1
+    counted = [child for store in (first, second) for child in store.searchers if child.counted]
+    assert len(counted) == 2
+    assert all(not child.outputs for child in counted)
+
+
+def test_count_cache_detaches_after_mutation_without_changing_frozen_result_plan() -> None:
+    searcher, first, second = _execution_searcher(
+        [{"id": "1", "value": "kept"}, {"id": "2", "value": "discarded"}],
+        [{"id": "3", "value": "kept"}],
+    )
+    variable = searcher.variable("records")
+    frozen = searcher.results(value=variable.value)
+
+    assert len(frozen) == 3
+    searcher.add(variable.value == "kept")
+    assert len(frozen) == 3
+    assert searcher.count() == 2
+    assert [row.value for row in searcher.results(value=variable.value)] == ["kept", "kept"]
+    assert first.count_calls == second.count_calls == 2
+
+
+def test_count_unavailable_has_source_context_and_preserves_cause_without_partial_cache() -> None:
+    unavailable = CountUnavailableError("child cannot count exactly")
+    first = ExecutionStore([{"id": "1", "value": "first"}])
+    second = ExecutionStore([], failure="count unavailable", error=unavailable)
+    searcher = FederatedStore({"first": first, "second": second}).searcher()
+    variable = searcher.variable("records")
+    result = searcher.results(value=variable.value)
+
+    for _ in range(2):
+        with pytest.raises(CountUnavailableError, match="second") as excinfo:
+            len(result)
+        assert isinstance(excinfo.value, FederatedSourceError)
+        assert excinfo.value.source == "second"
+        assert excinfo.value.operation == "count"
+        assert excinfo.value.__cause__ is unavailable
+    assert first.count_calls == second.count_calls == 2
+
+
+@pytest.mark.parametrize("error", (RuntimeError("child count failed"), UnsupportedQueryError("late unsupported count")))
+def test_count_failures_are_source_attributed_and_keep_neutral_categories(error: Exception) -> None:
+    first = ExecutionStore([])
+    second = ExecutionStore([], failure="count", error=error)
+    searcher = FederatedStore({"first": first, "second": second}).searcher()
+    variable = searcher.variable("records")
+    searcher.results(value=variable.value)
+
+    with pytest.raises(FederatedSourceError, match="second") as excinfo:
+        searcher.count()
+    assert excinfo.value.source == "second"
+    assert excinfo.value.operation == "count"
+    assert excinfo.value.__cause__ is error
+    assert isinstance(excinfo.value, UnsupportedQueryError) is isinstance(error, UnsupportedQueryError)
+
+
+def test_result_len_applies_global_offset_limit_and_zero_limit_skips_counts() -> None:
+    rows = [{"id": str(index), "value": str(index)} for index in range(2)]
+    searcher, first, second = _execution_searcher(rows, rows)
+    variable = searcher.variable("records")
+    searcher.add_offset(1)
+    searcher.set_limit(2)
+    result = searcher.results(value=variable.value)
+
+    assert len(result) == 2
+    assert len(result[1:]) == 1
+    assert len(result[5:]) == 0
+    assert first.count_calls == second.count_calls == 1
+
+    zero, first_zero, second_zero = _execution_searcher(rows, rows)
+    zero_variable = zero.variable("records")
+    zero.set_limit(0)
+    assert len(zero.results(value=zero_variable.value)) == 0
+    assert first_zero.count_calls == second_zero.count_calls == 0

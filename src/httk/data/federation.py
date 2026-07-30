@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import cast
 
 from .query import (
+    CountUnavailableError,
     MultipleResultsError,
     NoResultError,
     ResultRow,
@@ -25,11 +26,16 @@ from .query import (
 )
 
 __all__ = [
+    "FederatedExpression",
+    "FederatedField",
+    "FederatedResultColumn",
     "FederatedResultSet",
+    "FederatedSearcher",
     "FederatedSourceError",
     "FederatedStore",
     "FederatedStoreError",
     "FederatedTarget",
+    "FederatedVariable",
 ]
 
 
@@ -48,6 +54,10 @@ class FederatedSourceError(FederatedStoreError):
 
 class _FederatedUnsupportedQueryError(FederatedSourceError, UnsupportedQueryError):
     """Add source context without losing the neutral unsupported category."""
+
+
+class _FederatedCountUnavailableError(FederatedSourceError, CountUnavailableError):
+    """Add source context without losing the neutral exact-count category."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +117,13 @@ class _FederatedSourcePlan:
     target: object
 
 
+@dataclass(slots=True)
+class _FederatedCountCache:
+    """One successful exact total shared by equivalent frozen plans."""
+
+    total: int | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class _FederatedPlan:
     """The immutable query description executed by a federated result plan."""
@@ -116,6 +133,7 @@ class _FederatedPlan:
     outputs: tuple[_FederatedOutput, ...]
     offset: int
     limit: int | None
+    count_cache: _FederatedCountCache
 
 
 def _child_field(variable: SearchVariable, path: tuple[str, ...]) -> SearchField:
@@ -144,6 +162,40 @@ def _source_error(source: str, operation: str, exc: Exception) -> FederatedSourc
     if isinstance(exc, UnsupportedQueryError):
         return _FederatedUnsupportedQueryError(source, operation)
     return FederatedSourceError(source, operation)
+
+
+def _count_plan(store: "FederatedStore", plan: _FederatedPlan) -> int:
+    """Return an exact unpaged total, requesting only child exact counts.
+
+    The cache is populated only once every source succeeds, so a failed count
+    can never turn a prefix total into an apparently exact result.
+    """
+
+    if plan.count_cache.total is not None:
+        return plan.count_cache.total
+
+    total = 0
+    for source_plan in plan.sources:
+        source = source_plan.source
+        try:
+            child_searcher = store._sources[source].searcher()
+            child_variable = cast(SearchVariable, child_searcher.variable(source_plan.target))
+        except Exception as exc:
+            raise _source_error(source, "count searcher construction", exc) from exc
+        try:
+            for ast in plan.expressions:
+                child_searcher.add(_replay_ast(ast, child_variable))
+        except Exception as exc:
+            raise _source_error(source, "count expression replay", exc) from exc
+        try:
+            total += child_searcher.count()
+        except CountUnavailableError as exc:
+            raise _FederatedCountUnavailableError(source, "count") from exc
+        except Exception as exc:
+            raise _source_error(source, "count", exc) from exc
+
+    plan.count_cache.total = total
+    return total
 
 
 def _execute_plan(
@@ -231,7 +283,7 @@ def _execute_plan(
                 raise _source_error(source, "iteration", exc) from exc
 
 
-class _FederatedResultColumn:
+class FederatedResultColumn:
     """A lightweight lazy scalar projection from a federated result set."""
 
     def __init__(self, result: "FederatedResultSet", index: int) -> None:
@@ -246,10 +298,10 @@ class _FederatedResultColumn:
 class FederatedResultSet:
     """A frozen, lazy, re-iterable federated result plan."""
 
-    def __init__(self, store: "FederatedStore", plan: _FederatedPlan) -> None:
+    def __init__(self, store: "FederatedStore", plan: object) -> None:
         self._store = store
-        self._plan = plan
-        self._names = tuple(output.name for output in plan.outputs)
+        self._plan = cast(_FederatedPlan, plan)
+        self._names = tuple(output.name for output in self._plan.outputs)
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -259,7 +311,10 @@ class FederatedResultSet:
         return (ResultRow(result.values, result.names) for result in _execute_plan(self._store, self._plan))
 
     def __len__(self) -> int:
-        raise TypeError("federated exact counts are unavailable until phase four")
+        if self._plan.limit == 0:
+            return 0
+        available = max(_count_plan(self._store, self._plan) - self._plan.offset, 0)
+        return available if self._plan.limit is None else min(available, self._plan.limit)
 
     def __getitem__(self, item: slice) -> "FederatedResultSet":
         if not isinstance(item, slice):
@@ -287,6 +342,7 @@ class FederatedResultSet:
                 self._plan.outputs,
                 self._plan.offset + start,
                 remaining,
+                self._plan.count_cache,
             ),
         )
 
@@ -313,14 +369,14 @@ class FederatedResultSet:
         index = self.names.index(name)
         return (row[index] for row in self)
 
-    def column(self, name: str) -> _FederatedResultColumn:
+    def column(self, name: str) -> FederatedResultColumn:
         scalar_names = tuple(output.name for output in self._plan.outputs if not isinstance(output, _RecordOutput))
         if name not in self.names:
             raise KeyError(f"unknown column {name!r}; declared scalar projections: {scalar_names}")
         index = self.names.index(name)
         if isinstance(self._plan.outputs[index], _RecordOutput):
             raise TypeError(f"column {name!r} is an object output; declared scalar projections: {scalar_names}")
-        return _FederatedResultColumn(self, index)
+        return FederatedResultColumn(self, index)
 
     def cursor(self) -> Iterator[ResultRow]:
         raise NotImplementedError("federated cursors are not implemented")
@@ -469,9 +525,9 @@ class FederatedExpression:
 
     __slots__ = ("_ast", "_searcher")
 
-    def __init__(self, searcher: "FederatedSearcher", ast: _FederatedAst) -> None:
+    def __init__(self, searcher: "FederatedSearcher", ast: object) -> None:
         self._searcher = searcher
-        self._ast = ast
+        self._ast = cast(_FederatedAst, ast)
 
     def _other(self, other: object) -> "FederatedExpression":
         if not isinstance(other, FederatedExpression) or other._searcher is not self._searcher:
@@ -499,7 +555,17 @@ class _FederatedOrigin:
 class FederatedSearcher:
     """Build and validate one portable, single-root federated query."""
 
-    __slots__ = ("_expressions", "_limit", "_outputs", "_prototypes", "_store", "_variable", "offset", "origin")
+    __slots__ = (
+        "_count_cache",
+        "_expressions",
+        "_limit",
+        "_outputs",
+        "_prototypes",
+        "_store",
+        "_variable",
+        "offset",
+        "origin",
+    )
 
     def __init__(self, store: FederatedStore) -> None:
         self._store = store
@@ -507,6 +573,7 @@ class FederatedSearcher:
         self._prototypes: Mapping[str, Searcher] = MappingProxyType({})
         self._expressions: list[_FederatedAst] = []
         self._outputs: list[_FederatedOutput] = []
+        self._count_cache = _FederatedCountCache()
         self._limit: int | None = None
         self.offset = 0
         self.origin = _FederatedOrigin()
@@ -574,6 +641,9 @@ class FederatedSearcher:
             except (UnsupportedQueryError, AttributeError) as exc:
                 raise _FederatedUnsupportedQueryError(source, "add") from exc
         self._expressions.append(expression._ast)
+        # Existing result plans retain their old cache; the mutable searcher is
+        # now a different unpaged query and must obtain a fresh exact total.
+        self._count_cache = _FederatedCountCache()
 
     def _output(self, value: object, name: str, *, retain: bool) -> _FederatedOutput:
         variable = self._require_variable()
@@ -621,7 +691,7 @@ class FederatedSearcher:
 
         raise UnsupportedQueryError("federated queries do not support ordinary add_sort()")
 
-    def _plan(self, outputs: Mapping[str, object] | None = None) -> _FederatedPlan:
+    def _plan(self, outputs: Mapping[str, object] | None = None, *, require_outputs: bool = True) -> _FederatedPlan:
         """Freeze validated declarations into the private phase-three input."""
 
         variable = self._require_variable()
@@ -630,10 +700,22 @@ class FederatedSearcher:
             if outputs
             else tuple(self._outputs)
         )
-        if not planned_outputs:
+        if require_outputs and not planned_outputs:
             raise ValueError("this federated result plan has no outputs; call output() or pass results() projections")
         sources = tuple(_FederatedSourcePlan(source, target) for source, target in variable._targets.items())
-        return _FederatedPlan(sources, tuple(self._expressions), planned_outputs, self.offset, self._limit)
+        return _FederatedPlan(
+            sources,
+            tuple(self._expressions),
+            planned_outputs,
+            self.offset,
+            self._limit,
+            self._count_cache,
+        )
+
+    def count(self) -> int:
+        """Return the exact unpaged count of the current filtered union."""
+
+        return _count_plan(self._store, self._plan(require_outputs=False))
 
     def set_limit(self, limit: int) -> None:
         """Set the global output limit; a negative value clears it."""
