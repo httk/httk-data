@@ -4,7 +4,7 @@
 frozen dataclasses** in a relational database, makes them queryable through a
 backend-agnostic search DSL, and serves them through the neutral
 `httk.core.EntryProvider` contract (e.g. as an OPTIMADE API via
-*httk-optimade*). SQL generation and dialect handling run on SQLAlchemy Core
+*httk-serve*). SQL generation and dialect handling run on SQLAlchemy Core
 internally; the public API exposes no SQLAlchemy types.
 
 ## Installing
@@ -312,8 +312,10 @@ from httk.data.db import StoreEntryProvider
 provider = StoreEntryProvider(store, {"structures": StructureRecord, "authors": Author})
 ```
 
-Handing the provider to *httk-optimade*'s `adapter_from_providers` serves the
-database as an OPTIMADE API; neither module imports the other. Fields with no
-OPTIMADE value representation (`bytes`, custom codecs) are not served, and
-rationals are served as their nearest floats. The provider is also registered
-(as `data-db-store`) for discovery through the `httk.core` registry.
+Handing the provider to *httk-serve*'s `adapter_from_providers` serves the
+database as an OPTIMADE API. *httk-data* does not depend on *httk-serve*: the
+provider handoff uses the httk-core contract, while *httk-serve* also consumes
+*httk-data*'s neutral query and store APIs. Fields with no OPTIMADE value
+representation (`bytes`, custom codecs) are not served, and rationals are
+served as their nearest floats. The provider is also registered (as
+`data-db-store`) for discovery through the `httk.core` registry.

@@ -509,10 +509,10 @@ def test_every_record_validates_against_served_definition(provider):
 
 
 def test_optimade_adapter_end_to_end(provider):
-    pytest.importorskip("httk.optimade")
-    from httk.optimade import adapter_from_providers
-    from httk.optimade.backend import execute_query
-    from httk.optimade.filter import parse_optimade_filter
+    pytest.importorskip("httk.serve.optimade")
+    from httk.serve.optimade import adapter_from_providers
+    from httk.serve.optimade.backend import execute_query
+    from httk.serve.optimade.filter import parse_optimade_filter
 
     adapter = adapter_from_providers([provider])
     assert set(adapter.schema.all_entries) == {"books", "writers"}

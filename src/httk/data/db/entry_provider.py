@@ -3,7 +3,7 @@
 :class:`StoreEntryProvider` bridges the SQL storage layer to the neutral
 :class:`~httk.core.EntryProvider` contract: it serves the rows of one or more
 storable classes in a :class:`~httk.data.db.store.SqlStore` as described,
-JSON-able entry-type records, so a serving module (such as *httk-optimade*)
+JSON-able entry-type records, so a serving module (such as *httk-serve*)
 can expose a database as an OPTIMADE API without either side depending on the
 other.
 

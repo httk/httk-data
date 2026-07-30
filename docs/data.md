@@ -54,7 +54,7 @@ assert records[0]["type"] == "references"
 The three providers self-register when `httk.core` discovers the module, under
 the names `data-references`, `data-files`, and `data-calculations` (the
 database-backed provider of {doc}`db` registers alongside them as
-`data-db-store`). A serving module (such as *httk-optimade*) can therefore
+`data-db-store`). A serving module (such as *httk-serve*) can therefore
 find them through the registry without importing httk-data directly:
 
 ```python
@@ -73,8 +73,10 @@ assert list(provider.entry_types()) == ["references"]
 ```
 
 To actually serve these providers over HTTP as an OPTIMADE API, hand them to
-*httk-optimade*'s `adapter_from_providers` (see that module's documentation);
-neither module imports the other — the httk-core contract is the only coupling.
+*httk-serve*'s `adapter_from_providers` (see that module's documentation).
+*httk-data* does not depend on *httk-serve*: the provider handoff uses the
+httk-core contract, while *httk-serve* also consumes *httk-data*'s neutral
+query and store APIs.
 
 ## Validation
 

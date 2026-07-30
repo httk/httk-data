@@ -29,7 +29,7 @@ on them and requires the ``httk-data[db]`` extra (sqlalchemy):
   :class:`~httk.data.db.searcher.SqlExpression`;
 - :class:`~httk.data.db.entry_provider.StoreEntryProvider` — the bridge that
   serves stored classes through the neutral :class:`~httk.core.EntryProvider`
-  contract (e.g. as an OPTIMADE API via *httk-optimade*);
+  contract (e.g. as an OPTIMADE API via *httk-serve*);
 - :func:`~httk.data.db.optimade.optimade_filter_searcher` — OPTIMADE-filter
   querying over storable classes, tying the generic filter translation in
   :mod:`httk.data.optimade_query` to the SQL layer.

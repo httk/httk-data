@@ -748,8 +748,8 @@ PARITY_PROGRAMS = [
 
 
 def test_parity_with_in_memory_store(store):
-    pytest.importorskip("httk.optimade")
-    from httk.optimade.backend.memory_store import InMemoryStore
+    pytest.importorskip("httk.serve.optimade")
+    from httk.serve.optimade.backend.memory_store import InMemoryStore
 
     memory_rows = [
         {
@@ -780,8 +780,8 @@ def test_parity_with_in_memory_store(store):
 
 
 def test_literal_string_matching_parity_with_in_memory_store(store):
-    pytest.importorskip("httk.optimade")
-    from httk.optimade.backend.memory_store import InMemoryStore
+    pytest.importorskip("httk.serve.optimade")
+    from httk.serve.optimade.backend.memory_store import InMemoryStore
 
     memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
 
@@ -801,8 +801,8 @@ def test_literal_string_matching_parity_with_in_memory_store(store):
 
 
 def test_constant_expression_parity_with_in_memory_store(store):
-    pytest.importorskip("httk.optimade")
-    from httk.optimade.backend.memory_store import InMemoryStore
+    pytest.importorskip("httk.serve.optimade")
+    from httk.serve.optimade.backend.memory_store import InMemoryStore
 
     memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
     for build, expected in [
@@ -823,8 +823,8 @@ def test_constant_expression_parity_with_in_memory_store(store):
 def test_search_result_names_parity_with_in_memory_store(store):
     # The reference store used to swallow output() entirely, so `values, names =
     # result` raised there while working over SQL. Both now agree on the shape.
-    pytest.importorskip("httk.optimade")
-    from httk.optimade.backend.memory_store import InMemoryStore
+    pytest.importorskip("httk.serve.optimade")
+    from httk.serve.optimade.backend.memory_store import InMemoryStore
 
     memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
     memory_searcher = memory_store.searcher()

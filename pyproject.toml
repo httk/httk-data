@@ -101,12 +101,12 @@ quote-style = "preserve"
 pythonVersion = "3.12"
 include = ["src", "examples"]
 # The examples import httk as an installed package would, so point pyright at
-# the in-tree sources; ../httk-optimade/src resolves the cross-repo serving
-# example (httk-optimade is a consumer of this package, never a dependency of
+# the in-tree sources; ../httk-serve/src resolves the cross-repo serving
+# example (httk-serve is a consumer of this package, never a dependency of
 # it) against its workspace checkout, and is harmless where that path does not
 # exist. Listing extraPaths explicitly disables pyright's implicit use of ./src,
 # so "src" is listed too.
-extraPaths = ["src", "../httk-optimade/src"]
+extraPaths = ["src", "../httk-serve/src"]
 # Resolve the httk-core runtime dependency (and jsonschema) against the shared
 # workspace venv, where httk-core is installed editable; pyright falls back to
 # default resolution where that venv does not exist (e.g. CI, where the deps are

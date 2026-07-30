@@ -1,11 +1,11 @@
 """Serving a database as an OPTIMADE API
 
 The last step of the chain: a store full of frozen dataclasses becomes an
-OPTIMADE API without either module knowing about the other. `StoreEntryProvider`
-implements httk-core's neutral `httk.core.EntryProvider` contract over an
-`SqlStore`; *httk-optimade*'s `adapter_from_providers` consumes that contract.
-*httk-data* never imports *httk-optimade*, and *httk-optimade* never imports
-*httk-data* — they meet only at the contract that httk-core owns.
+OPTIMADE API. `StoreEntryProvider` implements httk-core's neutral
+`httk.core.EntryProvider` contract over an `SqlStore`; *httk-serve*'s
+`adapter_from_providers` consumes that contract. *httk-data* does not depend on
+*httk-serve*. The provider handoff uses the httk-core contract, while
+*httk-serve* also consumes *httk-data*'s neutral query and store APIs.
 
 ## What the provider derives from the schema
 
@@ -60,7 +60,7 @@ from httk.core import Related, parse_optimade_filter, stored_property
 
 from httk.data.db import Database, SqlStore, StoreEntryProvider
 
-HTTK_EXAMPLE_REQUIRES = ["sqlalchemy", "httk.optimade"]
+HTTK_EXAMPLE_REQUIRES = ["sqlalchemy", "httk.serve.optimade"]
 
 
 @dataclass(frozen=True)

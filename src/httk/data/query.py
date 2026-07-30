@@ -2,7 +2,7 @@
 
 These protocols define the backend-agnostic query interface shared by httk
 data stores: the database layer in httk-data implements them over SQL, and
-serving modules (such as *httk-optimade*, whose in-memory store also conforms)
+serving modules (such as *httk-serve*, whose in-memory store also conforms)
 program against them. They mirror the query interface of the httk v1 database
 layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can
 stand in for a real store in tests.

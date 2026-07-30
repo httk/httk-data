@@ -2,7 +2,7 @@
 
 `FederatedStore` presents two or more existing `httk.data.Store` instances as
 one read-only, source-major union. It is a data-management capability in
-*httk-data*: it has no dependency on a serving protocol or on *httk-optimade*.
+*httk-data*: it has no dependency on a serving protocol or on *httk-serve*.
 
 ```python
 from contextlib import ExitStack

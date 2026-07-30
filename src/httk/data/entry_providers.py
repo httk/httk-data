@@ -3,7 +3,7 @@
 These providers map ``{id: record}`` mappings of the stdlib-only record models
 defined in *httk-core* (:class:`~httk.core.Reference`, :class:`~httk.core.File`,
 :class:`~httk.core.Calculation`) onto the neutral httk-core entry-provider
-contract, so a serving module (such as *httk-optimade*) can expose them as
+contract, so a serving module (such as *httk-serve*) can expose them as
 OPTIMADE ``references``/``files``/``calculations`` endpoints without either side
 depending on the other. Each provider describes its entry type with the vendored
 OPTIMADE standard definition loaded from httk-core via
