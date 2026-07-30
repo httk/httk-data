@@ -76,6 +76,9 @@ class FakeField:
     def endswith(self, suffix: str) -> FakeExpression:
         return self._binary("endswith", suffix)
 
+    def has(self, value: Any) -> FakeExpression:
+        return FakeExpression(("has", ("field", self.name), value))
+
     def has_any(self, *values: Any) -> FakeExpression:
         return FakeExpression(("has_any", ("field", self.name), values))
 

@@ -137,6 +137,11 @@ nitpick_ignore = [
     # private class is deliberately undocumented, so the annotation xref cannot
     # resolve.
     ("py:class", "_Context"),
+    # AutoAPI renders ResultSetLike.one as a bare method reference in the
+    # protocol and implementing result-set summaries.  There is no module-level
+    # ``one`` method for Sphinx to resolve; the qualified class members remain
+    # indexed normally.
+    ("py:meth", "one"),
 ]
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True

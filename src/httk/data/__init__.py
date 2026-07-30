@@ -48,7 +48,10 @@ from .optimade_query import (
     simple_property_handlers,
     translate_filter_ast,
 )
+from .portable_query import PortableQueryCapabilities, portable_query_capabilities, portable_query_fields
 from .query import (
+    MultipleResultsError,
+    NoResultError,
     ResultRow,
     ResultRowLike,
     ResultSetLike,
@@ -58,6 +61,7 @@ from .query import (
     SearchResult,
     SearchVariable,
     Store,
+    UnsupportedQueryError,
 )
 from .validation import PropertyValidationError, validate_property, validate_record
 
@@ -67,6 +71,9 @@ __all__ = [
     "FilterTranslationCategory",
     "FilterTranslationError",
     "HandlerTable",
+    "MultipleResultsError",
+    "NoResultError",
+    "PortableQueryCapabilities",
     "PropertyValidationError",
     "ReferenceEntryProvider",
     "RelatedPropertyResolver",
@@ -79,9 +86,12 @@ __all__ = [
     "SearchVariable",
     "Searcher",
     "Store",
+    "UnsupportedQueryError",
     "filter_searcher",
     "format_value",
     "invert_op",
+    "portable_query_capabilities",
+    "portable_query_fields",
     "relationship_id_handler",
     "simple_property_handlers",
     "translate_filter_ast",

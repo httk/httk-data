@@ -13,7 +13,7 @@ from httk.data.db.mapping import SID_COLUMN
 from httk.data.db.rows import RowHydrator
 from httk.data.db.schema import FieldSpec
 from httk.data.db.searcher import SqlSearcher, _Output
-from httk.data.query import ResultRow
+from httk.data.query import MultipleResultsError, NoResultError, ResultRow
 
 __all__ = [
     "ExpiredCursorRowError",
@@ -25,14 +25,6 @@ __all__ = [
 ]
 
 _CHUNK = 500
-
-
-class NoResultError(LookupError):
-    """Raised by :meth:`SqlResultSet.one` when there are no matches."""
-
-
-class MultipleResultsError(LookupError):
-    """Raised by :meth:`SqlResultSet.one` when there is more than one match."""
 
 
 class ExpiredCursorRowError(RuntimeError):
@@ -149,7 +141,9 @@ class ResultColumn:
     def to_fracvector(self) -> FracVector:
         output = self._result._plan._outputs[self._index]
         rational = output.codec is not None and output.codec.name in {"fraction", "fracscalar"}
-        rational = rational or (output.spec is not None and output.spec.role == "scalar" and output.spec.python_type is int)
+        rational = rational or (
+            output.spec is not None and output.spec.role == "scalar" and output.spec.python_type is int
+        )
         if not rational:
             raise TypeError(f"column {self.name!r} is not rational-valued; surds and other codecs are unsupported")
         values = [value.to_fraction() if isinstance(value, FracScalar) else value for value in self]
@@ -204,7 +198,9 @@ class SqlResultSet:
         for extras in self._projection_extras:
             columns.extend(extras)
         hidden = len(columns)
-        columns.extend(cast(sqlalchemy.ColumnElement[Any], variable._alias.c[SID_COLUMN]) for variable in plan._variables)
+        columns.extend(
+            cast(sqlalchemy.ColumnElement[Any], variable._alias.c[SID_COLUMN]) for variable in plan._variables
+        )
         return columns, hidden
 
     @staticmethod
@@ -224,7 +220,9 @@ class SqlResultSet:
     def _statement(self, *, limit: int | None = None) -> sqlalchemy.Select[Any]:
         columns, _hidden = self._columns()
         group_columns = [cast(sqlalchemy.ColumnElement[Any], v._alias.c[SID_COLUMN]) for v in self._plan._variables]
-        group_columns += [output.element for output in self._plan._outputs if output.target is None and not output.from_child]
+        group_columns += [
+            output.element for output in self._plan._outputs if output.target is None and not output.from_child
+        ]
         group_columns += [extra for extras in self._projection_extras for extra in extras]
         statement = self._plan._base_select(columns, group_columns)
         for column, descending in self._plan._sorts:
@@ -297,7 +295,9 @@ class SqlResultSet:
         state = self._state()
         assert state._rows is not None
         raw = state._rows[position] if values is None else values
-        return ResultRow(raw[: len(state._names)], state._names, lambda index, _value: state._value_at(position, index), guard)
+        return ResultRow(
+            raw[: len(state._names)], state._names, lambda index, _value: state._value_at(position, index), guard
+        )
 
     def _value_at(self, position: int, index: int) -> Any:
         state = self._state()
@@ -321,7 +321,9 @@ class SqlResultSet:
         )
         parts: list[Any] = [None] * len(output.codec.columns)
         parts[query_index] = value
-        extra_by_name = {extra.name: state._rows[position][offset + extra_index] for extra_index, extra in enumerate(extras)}
+        extra_by_name = {
+            extra.name: state._rows[position][offset + extra_index] for extra_index, extra in enumerate(extras)
+        }
         for codec_index, (suffix, _kind) in enumerate(output.codec.columns):
             if codec_index == query_index:
                 continue
@@ -375,9 +377,7 @@ class SqlResultSet:
         return (row[index] for row in self)
 
     def column(self, name: str) -> ResultColumn:
-        scalar_names = tuple(
-            output.name for output in self._plan._outputs if output.target is None
-        )
+        scalar_names = tuple(output.name for output in self._plan._outputs if output.target is None)
         if name not in self.names:
             raise KeyError(f"unknown column {name!r}; declared scalar projections: {scalar_names}")
         index = self.names.index(name)
@@ -391,9 +391,7 @@ class SqlResultSet:
         generation = _Generation()
         proxy_indices = [index for index, output in enumerate(state._plan._outputs) if output.target is not None]
         proxies = {
-            index: _proxy_class(cast(type, state._plan._outputs[index].target))(
-                state._hydrators[index], generation
-            )
+            index: _proxy_class(cast(type, state._plan._outputs[index].target))(state._hydrators[index], generation)
             for index in proxy_indices
         }
 

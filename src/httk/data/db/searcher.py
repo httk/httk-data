@@ -340,7 +340,26 @@ class SqlColumn:
         row-wise, so negating it aggregate-style would switch the query into
         grouped mode for no gain.
         """
-        member = self._element.in_([self._encode(value) for value in values])
+        encoded = [self._encode(value) for value in values]
+        non_null = [value for value in encoded if value is not None]
+        includes_null = len(non_null) != len(encoded)
+        if self._from_child:
+            # The outer join's synthetic NULL represents no child row and must
+            # remain SQL-unknown: the universal HAVING form then correctly
+            # treats the empty child set as a subset of every value set.
+            member: sqlalchemy.ColumnElement[bool] = self._element.in_(non_null)
+            if includes_null:
+                member = sqlalchemy.or_(self._element.is_(None), member)
+        elif non_null:
+            member = self._element.in_(non_null)
+            if includes_null:
+                member = sqlalchemy.or_(self._element.is_(None), member)
+            else:
+                member = sqlalchemy.and_(self._element.is_not(None), member)
+        elif includes_null:
+            member = self._element.is_(None)
+        else:
+            member = sqlalchemy.false()
         where: sqlalchemy.ColumnElement[bool] = sqlalchemy.true() if self._from_child else _bool_clause(member)
         return SqlExpression(
             where,
@@ -348,6 +367,10 @@ class SqlColumn:
             post=self._from_child,
             set_derived=self._from_child,
         )
+
+    def has(self, value: Any) -> SqlExpression:
+        """Match a child collection containing ``value``."""
+        return self.has_any(value)
 
     def has_any(self, *values: Any) -> SqlExpression:
         """Some child value is in ``values``: WHERE ``IN``; HAVING a positive match count.
@@ -456,6 +479,10 @@ class SqlReference:
 
     def _sid_value(self, value: Any) -> int:
         return value if isinstance(value, int) else self._target_sid(value)
+
+    def has(self, value: Any) -> SqlExpression:
+        """The referent equals ``value`` (stored instance or raw sid)."""
+        return self._fk_column().has(self._sid_value(value))
 
     def has_any(self, *values: Any) -> SqlExpression:
         """The referent is among ``values`` (stored instances or raw sids): FK ``IN``."""
@@ -651,10 +678,18 @@ class SqlSearcher:
                     exact_element = variable._variable._alias.c[f"{spec.field}_exact"] if variable._variable else None
                     decoder = decode_fracvector_exact
                 elif spec.role == "encoded":
-                    exact_element = next(
-                        (variable._variable._alias.c[column.name] for column in spec.columns if column.kind == "str"),
-                        None,
-                    ) if variable._variable else None
+                    exact_element = (
+                        next(
+                            (
+                                variable._variable._alias.c[column.name]
+                                for column in spec.columns
+                                if column.kind == "str"
+                            ),
+                            None,
+                        )
+                        if variable._variable
+                        else None
+                    )
                     decoder = variable._codec.decode if variable._codec is not None else None
             self._outputs.append(
                 _Output(

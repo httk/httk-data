@@ -489,9 +489,6 @@ def _resolve_unwrapped_field(
     if origin is list or origin is tuple:
         return _resolve_sequence_field(cls, table_name, name, base, origin, optional, derived)
 
-    if _is_mapping_type(base, origin):
-        raise SchemaError(f"{cls.__name__}.{name}: mapping-typed fields are not storable (yet)")
-
     if isinstance(base, type) and issubclass(base, FracVector):
         raise SchemaError(
             f"{cls.__name__}.{name}: a FracVector field needs a Shape marker, e.g. Annotated[FracVector, Shape(3, 3)]"
@@ -509,6 +506,13 @@ def _resolve_unwrapped_field(
             derived=derived,
             optional=optional,
         )
+
+    # A source-model dataclass may also expose a Mapping interface (for
+    # example OptimadeResource).  Its concrete frozen-dataclass storage shape
+    # is still the authoritative one; only non-dataclass mappings remain
+    # unsupported values.
+    if _is_mapping_type(base, origin):
+        raise SchemaError(f"{cls.__name__}.{name}: mapping-typed fields are not storable (yet)")
 
     raise SchemaError(
         f"{cls.__name__}.{name}: type {base!r} is not storable; expected a scalar "

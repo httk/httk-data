@@ -42,6 +42,7 @@ without sqlalchemy installed raises :class:`ImportError` naming the extra.
 import importlib
 from typing import Any
 
+from ..query import MultipleResultsError, NoResultError
 from .codecs import (
     FRACTION_EXACT_FORMAT,
     FRACVECTOR_EXACT_FORMAT,
@@ -83,8 +84,8 @@ __all__ = [
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "FieldRole",
     "FieldSpec",
-    "MultipleResultsError",  # pyright: ignore[reportUnsupportedDunderAll]
-    "NoResultError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "MultipleResultsError",
+    "NoResultError",
     "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
     "ResultRow",  # pyright: ignore[reportUnsupportedDunderAll]
     "ScalarKind",
@@ -129,8 +130,6 @@ _SQL_EXPORTS = {
     "optimade_filter_searcher": ".optimade",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",
-    "MultipleResultsError": ".results",
-    "NoResultError": ".results",
     "ResultColumn": ".results",
     "ResultRow": ".results",
     "SqlResultSet": ".results",

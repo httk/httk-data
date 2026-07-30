@@ -39,7 +39,9 @@ class _Context:
         self.in_progress: set[tuple[type, int]] = set()
 
     def find(self, cls: type, sid: int) -> "RowHydrator | None":
-        return next((hydrator for hydrator in self.hydrators if hydrator._cls is cls and sid in hydrator._positions), None)
+        return next(
+            (hydrator for hydrator in self.hydrators if hydrator._cls is cls and sid in hydrator._positions), None
+        )
 
 
 class _Chunk:
@@ -58,9 +60,7 @@ class _Chunk:
         store._ensure_tables(None, (hydrator._cls,))
         table = store._table(schema.table_name)
         with store._read_connection() as connection:
-            result = connection.execute(
-                sqlalchemy.select(table).where(table.c[SID_COLUMN].in_(sids))
-            ).fetchall()
+            result = connection.execute(sqlalchemy.select(table).where(table.c[SID_COLUMN].in_(sids))).fetchall()
         self.columns = {column.name: index for index, column in enumerate(table.columns)}
         for row in result:
             self.parent_rows[int(row[self.columns[SID_COLUMN]])] = tuple(row)
@@ -124,7 +124,9 @@ class _Chunk:
         return self._child_value(sid, spec, eager=eager)
 
     def _target_map(self, cls: type, sids: Sequence[int]) -> dict[int, "RowHydrator"]:
-        missing = [sid for sid in dict.fromkeys(int(sid) for sid in sids) if self.hydrator._context.find(cls, sid) is None]
+        missing = [
+            sid for sid in dict.fromkeys(int(sid) for sid in sids) if self.hydrator._context.find(cls, sid) is None
+        ]
         if missing:
             RowHydrator(self.hydrator._store, cls, missing, context=self.hydrator._context)
         result = {int(sid): self.hydrator._context.find(cls, int(sid)) for sid in dict.fromkeys(sids)}
@@ -155,7 +157,10 @@ class _Chunk:
             ]
         elif spec.codec_name is not None:
             codec = codec_named(spec.codec_name)
-            elements = [codec.decode(tuple(entry[columns[column.name]] for column in spec.child.element_columns)) for entry in entries]
+            elements = [
+                codec.decode(tuple(entry[columns[column.name]] for column in spec.child.element_columns))
+                for entry in entries
+            ]
         else:
             elements = [entry[columns[spec.child.element_columns[0].name]] for entry in entries]
         return tuple(elements) if typing.get_origin(spec.python_type) is tuple else elements
@@ -222,7 +227,9 @@ class RowHydrator:
         row = self.row(sid)
         self._context.in_progress.add(key)
         try:
-            values = {spec.field: row._httk_decode(spec, eager=True) for spec in self._schema.fields if not spec.derived}
+            values = {
+                spec.field: row._httk_decode(spec, eager=True) for spec in self._schema.fields if not spec.derived
+            }
             instance = self._cls(**values)
             self._context.rows[key] = instance
             self._store._remember(self._cls, sid, instance)

@@ -459,6 +459,7 @@ def test_reference_comparison_under_grouped_mode(store):
 
 # ------------------------------------------------------------- constant expressions
 
+
 def test_always_true_and_always_false_are_constants(store):
     searcher, v = label_searcher(store)
     searcher.add(v.always_true())
@@ -482,6 +483,25 @@ def test_always_true_is_null_safe_where_column_self_comparison_was_not(store):
     searcher, v = label_searcher(store)
     searcher.add(v.note == v.note)
     assert texts(searcher) == set()
+
+
+def test_scalar_membership_handles_nulls_without_sql_three_valued_leaks(store):
+    """``is_in`` treats NULL as an explicit member, including under ``~``."""
+    searcher, v = label_searcher(store)
+    searcher.add(v.note.is_in(None, "present"))
+    assert texts(searcher) == ALL_LABELS
+
+    searcher, v = label_searcher(store)
+    searcher.add(~v.note.is_in(None, "present"))
+    assert texts(searcher) == set()
+
+    searcher, v = label_searcher(store)
+    searcher.add(v.note.is_in("present"))
+    assert texts(searcher) == set()
+
+    searcher, v = label_searcher(store)
+    searcher.add(~v.note.is_in("present"))
+    assert texts(searcher) == ALL_LABELS
 
 
 def test_true_handler_filter_matches_rows_with_a_null_scalar(store):
@@ -763,9 +783,7 @@ def test_literal_string_matching_parity_with_in_memory_store(store):
     pytest.importorskip("httk.optimade")
     from httk.optimade.backend.memory_store import InMemoryStore
 
-    memory_store = InMemoryStore(
-        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
-    )
+    memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
 
     for build, expected in LITERAL_MATCH_CASES:
         memory_searcher = memory_store.searcher()
@@ -786,9 +804,7 @@ def test_constant_expression_parity_with_in_memory_store(store):
     pytest.importorskip("httk.optimade")
     from httk.optimade.backend.memory_store import InMemoryStore
 
-    memory_store = InMemoryStore(
-        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
-    )
+    memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
     for build, expected in [
         (lambda v: v.always_true(), ALL_LABELS),
         (lambda v: v.always_false(), set()),
@@ -810,9 +826,7 @@ def test_search_result_names_parity_with_in_memory_store(store):
     pytest.importorskip("httk.optimade")
     from httk.optimade.backend.memory_store import InMemoryStore
 
-    memory_store = InMemoryStore(
-        {"labels": [{"text": label.text, "note": label.note} for label in LABELS]}
-    )
+    memory_store = InMemoryStore({"labels": [{"text": label.text, "note": label.note} for label in LABELS]})
     memory_searcher = memory_store.searcher()
     memory_variable = memory_searcher.variable("labels")
     memory_searcher.output(memory_variable, "label")

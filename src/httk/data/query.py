@@ -12,6 +12,8 @@ from collections.abc import Iterator
 from typing import Any, NamedTuple, Protocol
 
 __all__ = [
+    "MultipleResultsError",
+    "NoResultError",
     "ResultRow",
     "ResultRowLike",
     "ResultSetLike",
@@ -21,7 +23,20 @@ __all__ = [
     "SearchVariable",
     "Searcher",
     "Store",
+    "UnsupportedQueryError",
 ]
+
+
+class UnsupportedQueryError(ValueError):
+    """A valid query operation is outside a store's supported query profile."""
+
+
+class NoResultError(LookupError):
+    """A result-set :meth:`one` operation found no matching result."""
+
+
+class MultipleResultsError(LookupError):
+    """A result-set :meth:`one` operation found more than one matching result."""
 
 
 class ResultRow:
@@ -130,6 +145,7 @@ class ResultSetLike(Protocol):
     def one(self) -> ResultRowLike: ...
 
     def scalars(self, name: str | None = None) -> Iterator[Any]: ...
+
     # column() is an optional backend capability; SQL stores expose it.
 
 
@@ -157,9 +173,26 @@ class SearchField(Protocol):
     expression, or with a full-text index — the choice is invisible here.
     """
 
+    def has(self, value: Any) -> SearchExpression:
+        """Match a list field containing ``value``."""
+        ...
+
     def has_any(self, *values: Any) -> SearchExpression: ...
 
     def has_only(self, *values: Any) -> SearchExpression: ...
+
+    def is_in(self, *values: Any) -> SearchExpression:
+        """Match a root scalar field whose value is one of ``values``.
+
+        ``None`` is an explicit member: it matches a null field value, and its
+        negation excludes nulls rather than inheriting SQL's three-valued
+        ``NOT IN (..., NULL)`` behavior.
+
+        Backends define the corresponding semantics for child or set fields;
+        for example, a backend may use the existing ``has_only``-style
+        all-values reading for a child field.
+        """
+        ...
 
     def contains(self, text: str) -> SearchExpression:
         """Match values containing ``text`` as a literal substring."""

@@ -1,8 +1,19 @@
 """Structural-conformance tests for the store/searcher query protocols (httk.data.query)."""
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
-from httk.data import Searcher, SearchExpression, SearchField, SearchResult, SearchVariable, Store
+from httk.data import (
+    MultipleResultsError,
+    NoResultError,
+    Searcher,
+    SearchExpression,
+    SearchField,
+    SearchResult,
+    SearchVariable,
+    Store,
+    UnsupportedQueryError,
+)
 
 
 class FakeExpression:
@@ -17,6 +28,12 @@ class FakeExpression:
 
 
 class FakeField:
+    def is_in(self, *values: Any) -> FakeExpression:
+        return FakeExpression()
+
+    def has(self, value: Any) -> FakeExpression:
+        return FakeExpression()
+
     def has_any(self, *values: Any) -> FakeExpression:
         return FakeExpression()
 
@@ -93,11 +110,13 @@ def test_fakes_conform_to_the_protocols():
     searcher: Searcher = store.searcher()
     variable: SearchVariable = searcher.variable(object)
     field: SearchField = variable.anything
-    expression: SearchExpression = field.has_any(1, 2)
+    expression: SearchExpression = field.has(1)
     combined = (expression & expression) | ~expression
     searcher.add(combined)
+    searcher.add(field.has_any(1, 2))
     searcher.add(field.has_only("a"))
     searcher.add(~field.has_only("a"))
+    searcher.add(field.is_in("a", "b"))
     searcher.add(field.contains("a"))
     searcher.add(field.startswith("a"))
     searcher.add(field.endswith("a"))
@@ -127,5 +146,13 @@ def test_comparison_operators_reachable_by_getattr_convention():
     # Handlers invoke comparisons via getattr(field, '__eq__')(value); the
     # convention must at least be callable on a conforming field object.
     field = FakeField()
-    result = getattr(field, "__eq__")(42)
+    result = field.__eq__(42)
     assert result is NotImplemented or isinstance(result, bool)
+
+
+def test_query_errors_are_neutral_and_sql_compatibility_exports_are_identical():
+    from httk.data import db
+
+    assert db.NoResultError is NoResultError
+    assert db.MultipleResultsError is MultipleResultsError
+    assert issubclass(UnsupportedQueryError, ValueError)

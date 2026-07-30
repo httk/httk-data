@@ -157,6 +157,30 @@ for (structure,), names in search:
 This is the low-level/portable layer; SQL consumers should generally use
 `results()`.
 
+### Neutral portable Store profile
+
+`httk.data.Store` is intentionally a small, backend-neutral contract:
+`store.searcher()` returns a one-query `Searcher`, which binds one or more
+backend-defined targets with `variable()`, receives expressions through
+`add()`, and exposes `count()`, limit/offset, sorting, iteration, and
+`results()`. A portable result supports iteration, `len()`, `first()`, `one()`,
+and `scalars()`; `one()` uses the shared `NoResultError` and
+`MultipleResultsError` exceptions. `UnsupportedQueryError` means that a
+requested expression is outside a particular backend's portable subset.
+
+This profile is deliberately what a remote, read-only OPTIMADE store can
+implement too: it supports a single root endpoint, portable scalar/flat-list
+filters, named outputs, and result cardinality without making the caller
+depend on SQLAlchemy or a database dialect. Query code that only needs this
+profile should depend on `httk.data.Store`, not `SqlStore`.
+
+The following are SQL-specific extensions, not portable Store requirements:
+persisting/fetching frozen dataclasses with `save()` and `fetch()`, schema and
+transaction management, recursive reference storage, lazy SQL rows,
+`ResultColumn.floats()`/`to_fracvector()`, cursor rows, child/reference joins,
+and SQL's approximate comparisons for exact rationals. Do not assume those
+operations exist on a remote or in-memory Store.
+
 A plain comparison on a child field is existential un-negated and set-negating
 under `~`: `s.symbols == "O"` means "some symbol is O", `~(s.symbols == "O")`
 means "no symbol is O" (not "some symbol is not O"), agreeing with
