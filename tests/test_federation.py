@@ -8,7 +8,14 @@ from typing import Any
 
 import pytest
 
-from httk.data import FederatedSourceError, FederatedStore, UnsupportedQueryError
+from httk.data import (
+    FederatedSourceError,
+    FederatedStore,
+    MultipleResultsError,
+    NoResultError,
+    SearchResult,
+    UnsupportedQueryError,
+)
 
 
 class ProbeSearcher:
@@ -426,8 +433,8 @@ def test_output_and_results_planning_record_scalars_and_origin_without_execution
     for store in (first, second):
         names = [name for child in store.searchers for _value, name in child.outputs]
         assert names == ["record", "identifier"]
-    with pytest.raises(NotImplementedError, match="phase three"):
-        searcher.results(record=variable, identifier=variable.ref.identifier, origin=searcher.origin)
+    result = searcher.results(record=variable, identifier=variable.ref.identifier, origin=searcher.origin)
+    assert result.names == ("record", "identifier", "origin")
 
 
 def test_results_projection_validation_is_idempotent_and_replaces_retained_outputs() -> None:
@@ -436,8 +443,7 @@ def test_results_projection_validation_is_idempotent_and_replaces_retained_outpu
     searcher.output(variable.name, "retained")
 
     for _ in range(2):
-        with pytest.raises(NotImplementedError, match="phase three"):
-            searcher.results(record=variable, origin=searcher.origin)
+        assert searcher.results(record=variable, origin=searcher.origin).names == ("record", "origin")
 
     for store in (first, second):
         assert all(len({name for _value, name in child.outputs}) == len(child.outputs) for child in store.searchers)
@@ -464,3 +470,264 @@ def test_duplicate_output_names_foreign_results_and_global_sort_are_rejected() -
     other = other_searcher.variable("records")
     with pytest.raises(UnsupportedQueryError, match="this federated searcher"):
         searcher.results(record=other)
+
+
+# ----------------------------------------------------------------- phase three
+
+
+class ExecutionSearcher(QueryProbeSearcher):
+    def __init__(self, store: "ExecutionStore", *, runtime_failure: bool) -> None:
+        super().__init__(store.unsupported)
+        self._execution_store = store
+        self._runtime_failure = runtime_failure
+        self.limit: int | None = None
+        self.executed = False
+
+    def add(self, expression: object) -> None:
+        if self._runtime_failure and self._execution_store.failure == "expression replay":
+            raise self._execution_store.error
+        super().add(expression)
+
+    def output(self, value: object, name: str) -> None:
+        if self._runtime_failure and self._execution_store.failure == "output declaration":
+            raise self._execution_store.error
+        super().output(value, name)
+
+    def set_limit(self, limit: int) -> None:
+        if self._runtime_failure and self._execution_store.failure == "limit pushdown":
+            raise self._execution_store.error
+        self.limit = limit
+
+    @staticmethod
+    def _value(row: dict[str, object], path: tuple[str, ...]) -> object:
+        value: object = row
+        for name in path:
+            assert isinstance(value, dict)
+            value = value[name]
+        return value
+
+    def _matches(self, expression: QueryProbeExpression, row: dict[str, object]) -> bool:
+        tree = expression.tree
+        if tree[0] == "constant":
+            return tree[1]
+        if tree[0] == "AND":
+            return self._matches(QueryProbeExpression(self, tree[1]), row) and self._matches(
+                QueryProbeExpression(self, tree[2]), row
+            )
+        if tree[0] == "OR":
+            return self._matches(QueryProbeExpression(self, tree[1]), row) or self._matches(
+                QueryProbeExpression(self, tree[2]), row
+            )
+        if tree[0] == "NOT":
+            return not self._matches(QueryProbeExpression(self, tree[1]), row)
+        operation, path, arguments = tree
+        value = self._value(row, path)
+        if operation == "__eq__":
+            return value == arguments[0]
+        raise AssertionError(f"test fake does not evaluate {operation}")
+
+    def __iter__(self) -> Any:
+        self.executed = True
+        self._execution_store.execution_calls += 1
+        if self._runtime_failure and self._execution_store.failure == "iteration":
+            raise self._execution_store.error
+        rows = [
+            row
+            for row in self._execution_store.rows
+            if all(self._matches(expression, row) for expression in self.added)
+        ]
+        if self.limit is not None:
+            rows = rows[: self.limit]
+        names = tuple(name for _value, name in self.outputs)
+
+        def results() -> Any:
+            for index, row in enumerate(rows):
+                if self._runtime_failure and self._execution_store.failure == "iteration-after-prefix" and index == 1:
+                    raise self._execution_store.error
+                values: list[object] = []
+                for output, _name in self.outputs:
+                    if isinstance(output, QueryProbeVariable):
+                        values.append(row)
+                    else:
+                        assert isinstance(output, QueryProbeField)
+                        values.append(self._value(row, output.path))
+                yield SearchResult(tuple(values), names)
+
+        return results()
+
+
+class ExecutionStore(QueryProbeStore):
+    def __init__(
+        self,
+        rows: list[dict[str, object]],
+        *,
+        failure: str | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        super().__init__()
+        self.rows = rows
+        self.failure = failure
+        self.error = error or RuntimeError("test child failure")
+
+    def searcher(self) -> ExecutionSearcher:
+        runtime_failure = len(self.searchers) >= 2
+        if runtime_failure and self.failure == "searcher construction":
+            raise self.error
+        searcher = ExecutionSearcher(self, runtime_failure=runtime_failure)
+        self.searchers.append(searcher)
+        return searcher
+
+
+def _execution_searcher(
+    first_rows: list[dict[str, object]] | None = None,
+    second_rows: list[dict[str, object]] | None = None,
+) -> tuple[Any, ExecutionStore, ExecutionStore]:
+    first = ExecutionStore(first_rows or [])
+    second = ExecutionStore(second_rows or [])
+    return FederatedStore({"first": first, "second": second}).searcher(), first, second
+
+
+def test_execution_is_source_major_preserves_records_and_replays_fresh_filters() -> None:
+    first_record = {"id": "same", "value": "first"}
+    second_record = {"id": "same", "value": "second"}
+    searcher, first, second = _execution_searcher([first_record], [second_record])
+    variable = searcher.variable("records")
+    searcher.add(variable.id == "same")
+    result = searcher.results(record=variable, value=variable.value, origin=searcher.origin)
+
+    rows = list(result)
+
+    assert [(row.origin, row.value) for row in rows] == [("first", "first"), ("second", "second")]
+    assert rows[0].record is first_record
+    assert rows[1].record is second_record
+    for store in (first, second):
+        executed = [child for child in store.searchers if child.executed]
+        assert len(executed) == 1
+        assert executed[0].added[0].searcher is executed[0]
+        assert executed[0].calls[0] == ("variable", "records")
+
+
+def test_global_offset_limit_and_early_stop_are_owned_by_the_coordinator() -> None:
+    first_rows = [{"id": str(index), "value": f"first-{index}"} for index in range(2)]
+    second_rows = [{"id": str(index), "value": f"second-{index}"} for index in range(2)]
+    searcher, first, second = _execution_searcher(first_rows, second_rows)
+    variable = searcher.variable("records")
+    searcher.add_offset(1)
+    searcher.set_limit(2)
+
+    assert [result.values for result in searcher.results(value=variable.value, origin=searcher.origin)] == [
+        ("first-1", "first"),
+        ("second-0", "second"),
+    ]
+    assert [child.limit for child in first.searchers if child.executed] == [3]
+    assert [child.limit for child in second.searchers if child.executed] == [3]
+
+    stopped, first_stopped, second_stopped = _execution_searcher(first_rows, second_rows)
+    stopped_variable = stopped.variable("records")
+    stopped.set_limit(1)
+    assert [row.value for row in stopped.results(value=stopped_variable.value)] == ["first-0"]
+    assert first_stopped.execution_calls == 1
+    assert second_stopped.execution_calls == 0
+
+
+def test_limit_zero_contacts_no_child_and_origin_only_uses_hidden_record_output() -> None:
+    searcher, first, second = _execution_searcher([{"id": "1", "value": "a"}], [{"id": "2", "value": "b"}])
+    searcher.variable("records")
+    searcher.set_limit(0)
+    assert [row for row in searcher.results(origin=searcher.origin)] == []
+    assert first.execution_calls == second.execution_calls == 0
+
+    unbounded, first, second = _execution_searcher([{"id": "1", "value": "a"}], [{"id": "2", "value": "b"}])
+    unbounded.variable("records")
+    assert list(unbounded.results(origin=unbounded.origin).scalars()) == ["first", "second"]
+    for store in (first, second):
+        child = next(child for child in store.searchers if child.executed)
+        assert [name for _value, name in child.outputs] == ["__httk_federated_hidden_record__"]
+
+
+def test_direct_searcher_iteration_yields_search_results() -> None:
+    searcher, _first, _second = _execution_searcher([{"id": "1", "value": "a"}], [{"id": "2", "value": "b"}])
+    variable = searcher.variable("records")
+    searcher.output(variable.value, "value")
+
+    results = list(searcher)
+
+    assert all(isinstance(result, SearchResult) for result in results)
+    assert [result.values for result in results] == [("a",), ("b",)]
+
+
+def test_result_plans_are_frozen_reiterable_and_support_direct_iteration_helpers_and_slices() -> None:
+    rows = [{"id": str(index), "value": str(index)} for index in range(3)]
+    searcher, _first, _second = _execution_searcher(rows, [{"id": "3", "value": "3"}])
+    variable = searcher.variable("records")
+    result = searcher.results(value=variable.value)
+    searcher.add(variable.value == "not-in-frozen-plan")
+
+    assert [row.value for row in result] == ["0", "1", "2", "3"]
+    assert [row.value for row in result] == ["0", "1", "2", "3"]
+    assert [row.value for row in result[1:3]] == ["1", "2"]
+    assert result.first().value == "0"
+    with pytest.raises(MultipleResultsError):
+        result.one()
+    assert list(result.scalars()) == ["0", "1", "2", "3"]
+    assert list(result.column("value")) == ["0", "1", "2", "3"]
+    with pytest.raises(NotImplementedError):
+        result.cursor()
+    with pytest.raises(TypeError, match="exact counts are unavailable"):
+        len(result)
+    with pytest.raises(NoResultError):
+        result[4:].one()
+    fresh = searcher.results(value=variable.value)
+    assert [row.values for row in fresh] == []
+
+
+@pytest.mark.parametrize("value", (True, 1.5, "1"))
+def test_limit_and_offset_validate_like_neutral_backends(value: object) -> None:
+    searcher, _first, _second = _execution_searcher()
+    searcher.variable("records")
+    with pytest.raises(TypeError):
+        searcher.set_limit(value)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        searcher.add_offset(value)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        searcher.add_offset(-1)
+    with pytest.raises(ValueError):
+        searcher.results(origin=searcher.origin)[True:]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ("searcher construction", "expression replay", "output declaration", "limit pushdown", "iteration"),
+)
+def test_execution_failures_are_source_attributed_and_keep_unsupported_category(failure: str) -> None:
+    error: Exception = (
+        UnsupportedQueryError("late unsupported") if failure == "iteration" else RuntimeError("late failure")
+    )
+    first = ExecutionStore([])
+    second = ExecutionStore([], failure=failure, error=error)
+    searcher = FederatedStore({"first": first, "second": second}).searcher()
+    variable = searcher.variable("records")
+    if failure == "expression replay":
+        searcher.add(variable.id == "x")
+    searcher.set_limit(1)
+    with pytest.raises(FederatedSourceError, match="second") as excinfo:
+        [row for row in searcher.results(value=variable.value)]
+    assert excinfo.value.source == "second"
+    assert excinfo.value.operation == failure
+    if failure == "iteration":
+        assert isinstance(excinfo.value, UnsupportedQueryError)
+
+
+def test_later_iteration_failure_is_not_silent_after_a_yielded_prefix() -> None:
+    first = ExecutionStore([{"id": "1", "value": "first"}])
+    second = ExecutionStore(
+        [{"id": "2", "value": "second"}, {"id": "3", "value": "third"}],
+        failure="iteration-after-prefix",
+    )
+    searcher = FederatedStore({"first": first, "second": second}).searcher()
+    variable = searcher.variable("records")
+    iterator = iter(searcher.results(value=variable.value))
+    assert next(iterator).value == "first"
+    assert next(iterator).value == "second"
+    with pytest.raises(FederatedSourceError, match="second"):
+        next(iterator)

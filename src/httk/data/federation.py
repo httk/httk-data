@@ -1,19 +1,31 @@
-"""Frozen source bindings and query planning for a federated store.
+"""Frozen query planning and sequential execution for a federated store.
 
 Federated expressions are deliberately represented by a private, backend-neutral
-AST.  Child searcher expressions are used only while validating that each
-participating source accepts an operation; they never escape their source.
-Execution of a frozen federated plan arrives in phase three.
+AST. Child searcher expressions are used only while validating that each
+participating source accepts an operation; every execution replays that AST
+into fresh child searchers.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, cast
+from typing import cast
 
-from .query import Searcher, SearchExpression, SearchField, SearchVariable, Store, UnsupportedQueryError
+from .query import (
+    MultipleResultsError,
+    NoResultError,
+    ResultRow,
+    Searcher,
+    SearchExpression,
+    SearchField,
+    SearchResult,
+    SearchVariable,
+    Store,
+    UnsupportedQueryError,
+)
 
 __all__ = [
+    "FederatedResultSet",
     "FederatedSourceError",
     "FederatedStore",
     "FederatedStoreError",
@@ -97,11 +109,221 @@ class _FederatedSourcePlan:
 
 @dataclass(frozen=True, slots=True)
 class _FederatedPlan:
-    """The immutable query description that phase three will execute."""
+    """The immutable query description executed by a federated result plan."""
 
     sources: tuple[_FederatedSourcePlan, ...]
     expressions: tuple[_FederatedAst, ...]
     outputs: tuple[_FederatedOutput, ...]
+    offset: int
+    limit: int | None
+
+
+def _child_field(variable: SearchVariable, path: tuple[str, ...]) -> SearchField:
+    field: SearchField | SearchVariable = variable
+    for name in path:
+        field = cast(SearchField, getattr(field, name))
+    return cast(SearchField, field)
+
+
+def _replay_ast(ast: _FederatedAst, variable: SearchVariable) -> SearchExpression:
+    if isinstance(ast, _Constant):
+        return variable.always_true() if ast.value else variable.always_false()
+    if isinstance(ast, _Predicate):
+        operation = getattr(_child_field(variable, ast.path), ast.operation)
+        return cast(SearchExpression, operation(*ast.arguments))
+    if isinstance(ast, _And):
+        return _replay_ast(ast.left, variable) & _replay_ast(ast.right, variable)
+    if isinstance(ast, _Or):
+        return _replay_ast(ast.left, variable) | _replay_ast(ast.right, variable)
+    if isinstance(ast, _Not):
+        return ~_replay_ast(ast.expression, variable)
+    raise AssertionError(f"unknown federated AST node: {type(ast).__name__}")
+
+
+def _source_error(source: str, operation: str, exc: Exception) -> FederatedSourceError:
+    if isinstance(exc, UnsupportedQueryError):
+        return _FederatedUnsupportedQueryError(source, operation)
+    return FederatedSourceError(source, operation)
+
+
+def _execute_plan(
+    store: "FederatedStore", plan: _FederatedPlan, *, maximum: int | None = None
+) -> Iterator[SearchResult]:
+    """Execute one frozen plan, with coordinator-owned global paging.
+
+    Every invocation constructs fresh child searchers.  ``maximum`` is used by
+    ``first()`` and ``one()``; it never changes the frozen plan itself.
+    """
+
+    effective_limit = plan.limit
+    if maximum is not None:
+        effective_limit = maximum if effective_limit is None else min(effective_limit, maximum)
+    if effective_limit == 0:
+        return
+
+    child_outputs = tuple(output for output in plan.outputs if not isinstance(output, _OriginOutput))
+    hidden_output = not child_outputs
+    child_limit = None if effective_limit is None else plan.offset + effective_limit
+    skipped = 0
+    yielded = 0
+
+    for source_plan in plan.sources:
+        if effective_limit is not None and yielded >= effective_limit:
+            return
+        source = source_plan.source
+        try:
+            child_searcher = store._sources[source].searcher()
+            child_variable = cast(SearchVariable, child_searcher.variable(source_plan.target))
+        except Exception as exc:
+            raise _source_error(source, "searcher construction", exc) from exc
+        try:
+            for ast in plan.expressions:
+                child_searcher.add(_replay_ast(ast, child_variable))
+        except Exception as exc:
+            raise _source_error(source, "expression replay", exc) from exc
+        try:
+            for output in child_outputs:
+                if isinstance(output, _RecordOutput):
+                    child_searcher.output(child_variable, output.name)
+                else:
+                    assert isinstance(output, _FieldOutput)
+                    child_searcher.output(_child_field(child_variable, output.path), output.name)
+            if hidden_output:
+                child_searcher.output(child_variable, "__httk_federated_hidden_record__")
+        except Exception as exc:
+            raise _source_error(source, "output declaration", exc) from exc
+        if child_limit is not None:
+            try:
+                child_searcher.set_limit(child_limit)
+            except Exception as exc:
+                raise _source_error(source, "limit pushdown", exc) from exc
+        try:
+            child_results = iter(child_searcher)
+        except Exception as exc:
+            raise _source_error(source, "iteration", exc) from exc
+        while True:
+            try:
+                child_result = next(child_results)
+            except StopIteration:
+                break
+            except Exception as exc:
+                raise _source_error(source, "iteration", exc) from exc
+            try:
+                child_values = child_result.values
+                if len(child_values) != len(child_outputs) + hidden_output:
+                    raise ValueError("child result has a different number of outputs than its declared projection")
+                if skipped < plan.offset:
+                    skipped += 1
+                    continue
+                values: list[object] = []
+                child_index = 0
+                for planned_output in plan.outputs:
+                    if isinstance(planned_output, _OriginOutput):
+                        values.append(source)
+                    else:
+                        values.append(child_values[child_index])
+                        child_index += 1
+                yield SearchResult(tuple(values), tuple(output.name for output in plan.outputs))
+                yielded += 1
+                if effective_limit is not None and yielded >= effective_limit:
+                    return
+            except Exception as exc:
+                raise _source_error(source, "iteration", exc) from exc
+
+
+class _FederatedResultColumn:
+    """A lightweight lazy scalar projection from a federated result set."""
+
+    def __init__(self, result: "FederatedResultSet", index: int) -> None:
+        self._result = result
+        self._index = index
+        self.name = result.names[index]
+
+    def __iter__(self) -> Iterator[object]:
+        return (row[self._index] for row in self._result)
+
+
+class FederatedResultSet:
+    """A frozen, lazy, re-iterable federated result plan."""
+
+    def __init__(self, store: "FederatedStore", plan: _FederatedPlan) -> None:
+        self._store = store
+        self._plan = plan
+        self._names = tuple(output.name for output in plan.outputs)
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return self._names
+
+    def __iter__(self) -> Iterator[ResultRow]:
+        return (ResultRow(result.values, result.names) for result in _execute_plan(self._store, self._plan))
+
+    def __len__(self) -> int:
+        raise TypeError("federated exact counts are unavailable until phase four")
+
+    def __getitem__(self, item: slice) -> "FederatedResultSet":
+        if not isinstance(item, slice):
+            raise TypeError("federated result sets support slicing only")
+        if item.step not in (None, 1):
+            raise ValueError("federated result slices require a unit step")
+        start = 0 if item.start is None else item.start
+        stop = item.stop
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or start < 0
+            or (stop is not None and (not isinstance(stop, int) or isinstance(stop, bool) or stop < 0))
+        ):
+            raise ValueError("federated result slice bounds must be nonnegative integers")
+        remaining = None if self._plan.limit is None else max(self._plan.limit - start, 0)
+        slice_limit = None if stop is None else max(0, stop - start)
+        if slice_limit is not None:
+            remaining = slice_limit if remaining is None else min(remaining, slice_limit)
+        return FederatedResultSet(
+            self._store,
+            _FederatedPlan(
+                self._plan.sources,
+                self._plan.expressions,
+                self._plan.outputs,
+                self._plan.offset + start,
+                remaining,
+            ),
+        )
+
+    def first(self) -> ResultRow | None:
+        result = next(_execute_plan(self._store, self._plan, maximum=1), None)
+        return None if result is None else ResultRow(result.values, result.names)
+
+    def one(self) -> ResultRow:
+        results = _execute_plan(self._store, self._plan, maximum=2)
+        first = next(results, None)
+        if first is None:
+            raise NoResultError("expected exactly one result, found none")
+        if next(results, None) is not None:
+            raise MultipleResultsError("expected exactly one result, found more than one")
+        return ResultRow(first.values, first.names)
+
+    def scalars(self, name: str | None = None) -> Iterator[object]:
+        if name is None:
+            if len(self.names) != 1:
+                raise ValueError(f"scalars() without a name requires exactly one output; declared: {self.names}")
+            name = self.names[0]
+        if name not in self.names:
+            raise KeyError(f"unknown output {name!r}; declared: {self.names}")
+        index = self.names.index(name)
+        return (row[index] for row in self)
+
+    def column(self, name: str) -> _FederatedResultColumn:
+        scalar_names = tuple(output.name for output in self._plan.outputs if not isinstance(output, _RecordOutput))
+        if name not in self.names:
+            raise KeyError(f"unknown column {name!r}; declared scalar projections: {scalar_names}")
+        index = self.names.index(name)
+        if isinstance(self._plan.outputs[index], _RecordOutput):
+            raise TypeError(f"column {name!r} is an object output; declared scalar projections: {scalar_names}")
+        return _FederatedResultColumn(self, index)
+
+    def cursor(self) -> Iterator[ResultRow]:
+        raise NotImplementedError("federated cursors are not implemented")
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,7 +499,7 @@ class _FederatedOrigin:
 class FederatedSearcher:
     """Build and validate one portable, single-root federated query."""
 
-    __slots__ = ("_expressions", "_outputs", "_prototypes", "_store", "_variable", "origin")
+    __slots__ = ("_expressions", "_limit", "_outputs", "_prototypes", "_store", "_variable", "offset", "origin")
 
     def __init__(self, store: FederatedStore) -> None:
         self._store = store
@@ -285,6 +507,8 @@ class FederatedSearcher:
         self._prototypes: Mapping[str, Searcher] = MappingProxyType({})
         self._expressions: list[_FederatedAst] = []
         self._outputs: list[_FederatedOutput] = []
+        self._limit: int | None = None
+        self.offset = 0
         self.origin = _FederatedOrigin()
 
     def variable(self, target: object) -> FederatedVariable:
@@ -321,24 +545,10 @@ class FederatedSearcher:
 
     @staticmethod
     def _field(variable: SearchVariable, path: tuple[str, ...]) -> SearchField:
-        field: SearchField | SearchVariable = variable
-        for name in path:
-            field = cast(SearchField, getattr(field, name))
-        return cast(SearchField, field)
+        return _child_field(variable, path)
 
     def _replay(self, ast: _FederatedAst, variable: SearchVariable) -> SearchExpression:
-        if isinstance(ast, _Constant):
-            return variable.always_true() if ast.value else variable.always_false()
-        if isinstance(ast, _Predicate):
-            operation = getattr(self._field(variable, ast.path), ast.operation)
-            return cast(SearchExpression, operation(*ast.arguments))
-        if isinstance(ast, _And):
-            return self._replay(ast.left, variable) & self._replay(ast.right, variable)
-        if isinstance(ast, _Or):
-            return self._replay(ast.left, variable) | self._replay(ast.right, variable)
-        if isinstance(ast, _Not):
-            return ~self._replay(ast.expression, variable)
-        raise AssertionError(f"unknown federated AST node: {type(ast).__name__}")
+        return _replay_ast(ast, variable)
 
     def _validate(self, ast: _FederatedAst, operation: str) -> None:
         variable = self._require_variable()
@@ -423,10 +633,30 @@ class FederatedSearcher:
         if not planned_outputs:
             raise ValueError("this federated result plan has no outputs; call output() or pass results() projections")
         sources = tuple(_FederatedSourcePlan(source, target) for source, target in variable._targets.items())
-        return _FederatedPlan(sources, tuple(self._expressions), planned_outputs)
+        return _FederatedPlan(sources, tuple(self._expressions), planned_outputs, self.offset, self._limit)
 
-    def results(self, **outputs: object) -> Any:
-        """Validate a frozen projection plan; phase three will execute it."""
+    def set_limit(self, limit: int) -> None:
+        """Set the global output limit; a negative value clears it."""
 
-        self._plan(outputs or None)
-        raise NotImplementedError("federated result execution is not implemented until phase three")
+        if not isinstance(limit, int) or isinstance(limit, bool):
+            raise TypeError("limit must be an integer")
+        self._limit = None if limit < 0 else limit
+
+    def add_offset(self, offset: int) -> None:
+        """Add a global source-union offset."""
+
+        if not isinstance(offset, int) or isinstance(offset, bool):
+            raise TypeError("offset must be an integer")
+        if offset < 0:
+            raise ValueError("offset must be nonnegative")
+        self.offset += offset
+
+    def __iter__(self) -> Iterator[SearchResult]:
+        """Execute the retained-output plan directly as ``SearchResult`` values."""
+
+        return _execute_plan(self._store, self._plan())
+
+    def results(self, **outputs: object) -> FederatedResultSet:
+        """Freeze a projection plan into a lazy, re-iterable result set."""
+
+        return FederatedResultSet(self._store, self._plan(outputs or None))
