@@ -77,6 +77,7 @@ from httk.core import (
 
 from httk.data.db.codecs import codec_named
 from httk.data.db.mapping import SID_COLUMN
+from httk.data.db.rows import RowHydrator
 from httk.data.db.schema import FieldSpec, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlColumn, _query_index
 from httk.data.db.store import SqlStore, _as_fixed_tensor
@@ -117,7 +118,9 @@ def _projection_json_value(value: Any) -> Any:
     if isinstance(value, fractions.Fraction | decimal.Decimal):
         return float(value)
     if isinstance(value, datetime.datetime):
-        return value.isoformat()
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("stored entry projection timestamps must be timezone-aware")
+        return value.astimezone(datetime.UTC).isoformat()
     if isinstance(value, FracVector):
         if value.dim in ((), (0,)):
             return []
@@ -461,9 +464,25 @@ class StoreEntryProvider(EntryProvider):
         schema = self._schemas[entry_type]
         searcher = self._store.searcher()
         variable = searcher.variable(cls)
-        searcher.output(variable, "obj")
-        searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
-        for (obj, sid), _names in searcher:
+        sid_column = SqlColumn(searcher, variable._alias.c[SID_COLUMN])
+        matches: Iterator[tuple[Any, Any]]
+        if projection is not None:
+            # A search result deliberately exposes a lazy row.  Projected
+            # values, however, are a public semantic boundary and may depend
+            # on dataclass __post_init__ normalization (for example, presence
+            # flags that distinguish null from a present empty child tuple).
+            # One shared hydrator retains the SQL layer's 500-row batching;
+            # fetching each sid independently would turn provider iteration
+            # into an N+1 query path for every nested projected record.
+            searcher.output(sid_column, "sid")
+            sids = tuple(int(sid) for (sid,), _names in searcher)
+            hydrator = RowHydrator(self._store, cls, sids)
+            matches = zip(hydrator.materialize_many(), sids, strict=True)
+        else:
+            searcher.output(variable, "obj")
+            searcher.output(sid_column, "sid")
+            matches = ((obj, sid) for (obj, sid), _names in searcher)
+        for obj, sid in matches:
             row: dict[str, Any] = {
                 "__id": _projection_id(projection, obj)
                 if projection is not None

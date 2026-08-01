@@ -131,7 +131,14 @@ class _Chunk:
             RowHydrator(self.hydrator._store, cls, missing, context=self.hydrator._context)
         result = {int(sid): self.hydrator._context.find(cls, int(sid)) for sid in dict.fromkeys(sids)}
         assert all(hydrator is not None for hydrator in result.values())
-        return typing.cast(dict[int, RowHydrator], result)
+        targets = typing.cast(dict[int, RowHydrator], result)
+        # Eager materialization walks one referenced object at a time.  Pin
+        # every target hydrator here so its shared 500-row chunk survives
+        # across those calls, recursively covering both references and child
+        # sequences of storable targets.
+        for target in dict.fromkeys(targets.values()):
+            target._pin_rows()
+        return targets
 
     def _child_value(self, sid: int, spec: FieldSpec, *, eager: bool) -> Any:
         grouped, columns = self._child_rows(spec)
@@ -185,6 +192,7 @@ class RowHydrator:
         self._chunks: weakref.WeakValueDictionary[int, _Chunk] = weakref.WeakValueDictionary()
         self._context = context or _Context()
         self._context.hydrators.append(self)
+        self._pinned_rows: tuple[Any, ...] | None = None
 
     def _chunk_for(self, sid: int) -> tuple[int, _Chunk]:
         try:
@@ -211,6 +219,18 @@ class RowHydrator:
         object.__setattr__(instance, _ROW_CHUNK, chunk)
         self._context.rows[(self._cls, sid)] = instance
         return instance
+
+    def _pin_rows(self) -> None:
+        """Keep every lazy row (and therefore every weak chunk) alive for this batch."""
+
+        if self._pinned_rows is None:
+            self._pinned_rows = tuple(self.row(sid) for sid in self._sids)
+
+    def materialize_many(self) -> tuple[Any, ...]:
+        """Materialize this sid batch while retaining recursive chunk batching."""
+
+        self._pin_rows()
+        return tuple(self.materialize(sid) for sid in self._sids)
 
     def materialize(self, sid: int) -> Any:
         sid = int(sid)

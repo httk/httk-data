@@ -102,6 +102,56 @@ class ProjectedStructure:
     )
 
 
+@dataclass(frozen=True)
+class PresenceProjectedStructure:
+    """A projected record whose public null state is restored in __post_init__."""
+
+    identifier: str
+    assembly_values: tuple[str, ...] | None
+    assembly_values_present: bool
+
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="generic_presence_structures_v3",
+        dedup="none",
+    )
+    __httk_entry_projection__: ClassVar[StoredEntryProjection] = StoredEntryProjection(
+        entry_type="structures",
+        definition_id=STRUCTURES_DEFINITION,
+        property_fields={"id": "identifier", "assemblies": "assembly_values"},
+    )
+
+    def __post_init__(self) -> None:
+        restored = tuple(self.assembly_values or ()) if self.assembly_values_present else None
+        object.__setattr__(self, "assembly_values", restored)
+
+
+@dataclass(frozen=True)
+class ReferencedProjectionChild:
+    value: str
+
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="generic_projection_child_v3",
+        dedup="none",
+    )
+
+
+@dataclass(frozen=True)
+class ReferencedProjectedStructure:
+    identifier: str
+    formula: str
+    child: ReferencedProjectionChild
+
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="generic_referenced_structures_v3",
+        dedup="none",
+    )
+    __httk_entry_projection__: ClassVar[StoredEntryProjection] = StoredEntryProjection(
+        entry_type="structures",
+        definition_id=STRUCTURES_DEFINITION,
+        property_fields={"id": "identifier", "chemical_formula_reduced": "formula"},
+    )
+
+
 STRUCTURE_A = ProjectedStructure(
     identifier="source/A",
     modified=datetime.datetime(2026, 1, 2, 5, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
@@ -111,7 +161,7 @@ STRUCTURE_A = ProjectedStructure(
     feature_values=("disorder",),
     coordinate_span="unit_cell",
     symmetry_number=227,
-    optimization="theoretical",
+    optimization="local",
     species_values=(ProjectedSpecies("mixed", ("Ge", "Si"), (Fraction(5, 8), Fraction(3, 8))),),
     assembly_values=ProjectedAssemblies(()),
     positions=FracVector.create([[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)]]),
@@ -172,6 +222,86 @@ def test_projected_provider_uses_standard_definition_ids_and_recursive_values(pr
     assert rows["source/B"]["fractional_site_positions"] == [[0.0, 0.0, 0.0]]
 
 
+@pytest.mark.parametrize("dialect", ("sqlite", "duckdb"))
+def test_projected_provider_materializes_presence_normalization(dialect):
+    if dialect == "duckdb":
+        pytest.importorskip("duckdb_engine")
+        manager = Database.duckdb()
+    else:
+        manager = Database.sqlite()
+    with manager as database:
+        store = SqlStore(database)
+        store.save(PresenceProjectedStructure("absent", None, False))
+        store.save(PresenceProjectedStructure("empty", (), True))
+        provider = StoreEntryProvider(store, {"structures": PresenceProjectedStructure})
+        rows = {row["__id"]: row for row in provider.records("structures")}
+
+    assert rows["absent"]["assemblies"] is None
+    assert rows["empty"]["assemblies"] == []
+
+
+@pytest.mark.parametrize("dialect", ("sqlite", "duckdb"))
+def test_projected_provider_batches_canonical_materialization(dialect):
+    if dialect == "duckdb":
+        pytest.importorskip("duckdb_engine")
+        manager = Database.duckdb()
+    else:
+        manager = Database.sqlite()
+    with manager as database:
+        store = SqlStore(database)
+        for index in range(25):
+            store.save(PresenceProjectedStructure(f"entry-{index}", None, False))
+        provider = StoreEntryProvider(store, {"structures": PresenceProjectedStructure})
+        statements: list[str] = []
+
+        def capture_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", capture_statement)
+        try:
+            rows = list(provider.records("structures"))
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", capture_statement)
+
+    assert len(rows) == 25
+    assert all(row["assemblies"] is None for row in rows)
+    assert len(statements) < 10
+
+
+@pytest.mark.parametrize("dialect", ("sqlite", "duckdb"))
+def test_projected_provider_batches_referenced_materialization(dialect):
+    if dialect == "duckdb":
+        pytest.importorskip("duckdb_engine")
+        manager = Database.duckdb()
+    else:
+        manager = Database.sqlite()
+    with manager as database:
+        store = SqlStore(database)
+        for index in range(25):
+            store.save(
+                ReferencedProjectedStructure(
+                    f"entry-{index}",
+                    "Si",
+                    ReferencedProjectionChild(f"child-{index}"),
+                )
+            )
+        provider = StoreEntryProvider(store, {"structures": ReferencedProjectedStructure})
+        statements: list[str] = []
+
+        def capture_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", capture_statement)
+        try:
+            rows = list(provider.records("structures"))
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", capture_statement)
+
+    assert len(rows) == 25
+    assert {row["chemical_formula_reduced"] for row in rows} == {"Si"}
+    assert len(statements) < 10
+
+
 @pytest.mark.parametrize(
     ("filter_string", "expected"),
     (
@@ -184,7 +314,7 @@ def test_projected_provider_uses_standard_definition_ids_and_recursive_values(pr
         ('structure_features HAS "disorder"', [STRUCTURE_A]),
         ('site_coordinate_span = "unit_cell"', [STRUCTURE_A, STRUCTURE_B]),
         ("space_group_it_number = 227", [STRUCTURE_A]),
-        ('optimization_type = "theoretical"', [STRUCTURE_A]),
+        ('optimization_type = "local"', [STRUCTURE_A]),
         ('type = "structures"', [STRUCTURE_A, STRUCTURE_B]),
     ),
 )
