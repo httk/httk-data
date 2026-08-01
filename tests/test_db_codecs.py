@@ -48,7 +48,13 @@ def test_codec_for_matches_exact_type_then_subclass():
 def test_random_fractions_round_trip_exactly():
     rng = random.Random(20260724)
     codec = codec_named("fraction")
-    samples = [Fraction(0), Fraction(1), Fraction(-1, 3), Fraction(2**71 + 1, 3**41), Fraction(-(2**91) - 7, 10**20 + 9)]
+    samples = [
+        Fraction(0),
+        Fraction(1),
+        Fraction(-1, 3),
+        Fraction(2**71 + 1, 3**41),
+        Fraction(-(2**91) - 7, 10**20 + 9),
+    ]
     samples += [Fraction(rng.randint(-(2**80), 2**80), rng.randint(1, 2**80)) for _ in range(200)]
     for value in samples:
         encoded = codec.encode(value)
@@ -104,12 +110,16 @@ def test_surdscalar_round_trip():
 def test_datetime_round_trips_through_iso_text():
     codec = codec_named("datetime")
     for value in (
-        datetime.datetime(2026, 7, 24, 12, 30, 15, 123456),
-        datetime.datetime(1999, 1, 1, tzinfo=datetime.timezone.utc),
+        datetime.datetime(2026, 7, 24, 12, 30, 15, 123456),  # noqa: DTZ001 - naive values stay supported
+        datetime.datetime(1999, 1, 1, tzinfo=datetime.UTC),
     ):
         encoded = codec.encode(value)
         assert encoded == (value.isoformat(),)
         assert codec.decode(encoded) == value
+
+    offset = datetime.datetime(2026, 1, 1, 2, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=2)))
+    assert codec.encode(offset) == ("2026-01-01T00:00:00+00:00",)
+    assert codec.decode(codec.encode(offset)) == offset
 
 
 def test_fracvector_exact_text_round_trips_3x3():

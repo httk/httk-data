@@ -282,6 +282,8 @@ def _decode_surdscalar(values: tuple[Any, ...]) -> Any:
 
 
 def _encode_datetime(value: Any) -> tuple[Any, ...]:
+    if value.tzinfo is not None and value.utcoffset() is not None:
+        value = value.astimezone(datetime.UTC)
     return (value.isoformat(),)
 
 

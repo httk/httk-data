@@ -98,6 +98,7 @@ __all__ = [
     "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "StoredSchemaRebuildRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "TableSchema",
     "ValueCodec",
     "canonical_form",
@@ -127,6 +128,7 @@ _SQL_EXPORTS = {
     "SqlColumn": ".searcher",
     "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
+    "StoredSchemaRebuildRequiredError": ".entry_provider",
     "optimade_filter_searcher": ".optimade",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",

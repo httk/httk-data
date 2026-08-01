@@ -38,6 +38,7 @@ the doi condition and some (possibly different) related reference must match
 the year condition.
 """
 
+import datetime
 import operator
 from collections.abc import Callable, Mapping
 from typing import Any, Literal
@@ -45,6 +46,7 @@ from typing import Any, Literal
 from httk.core import FilterAst, parse_optimade_filter
 
 from httk.data.query import Searcher, SearchExpression, SearchVariable, Store
+from httk.data.validation import _is_rfc3339_datetime
 
 __all__ = [
     "FilterTranslationCategory",
@@ -56,6 +58,7 @@ __all__ = [
     "constant_stringmatching_handler",
     "constant_types",
     "false_handler",
+    "field_unknown_handler",
     "filter_searcher",
     "format_value",
     "invert_op",
@@ -227,6 +230,17 @@ def known_unknown_handler(entry: str, search_variable: SearchVariable, unknown_t
     raise FilterTranslationError("Unexpected unknown operator type", "internal")
 
 
+def field_unknown_handler(entry: str, search_variable: SearchVariable, unknown_type: str) -> SearchExpression:
+    """Test nullability against the mapped backend field rather than a schema constant."""
+
+    field = getattr(search_variable, entry)
+    if unknown_type == 'IS_UNKNOWN':
+        return field == None
+    if unknown_type == 'IS_KNOWN':
+        return field != None
+    raise FilterTranslationError("Unexpected unknown operator type", "internal")
+
+
 def unknown_comparison_handler(entry: str, ops: Any, values: Any, search_variable: SearchVariable) -> SearchExpression:
     return false_handler(search_variable)
 
@@ -304,7 +318,19 @@ def number_handler(entry: str, op: str, value: Any, search_variable: SearchVaria
 
 
 def timestamp_handler(entry: str, op: str, value: Any, search_variable: SearchVariable) -> SearchExpression:
-    raise FilterTranslationError("Timestamp comparison not yet implemented.", "not-implemented")
+    if not _is_rfc3339_datetime(value):
+        raise FilterTranslationError("Timestamp filter value is not RFC 3339.", "type-mismatch")
+    normalized_text = str(value).replace("t", "T", 1)
+    if normalized_text.endswith(("Z", "z")):
+        normalized_text = normalized_text[:-1] + "+00:00"
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized_text)
+    except ValueError as exc:
+        raise FilterTranslationError("Timestamp filter value is not RFC 3339.", "type-mismatch") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise FilterTranslationError("Timestamp filter value must include a UTC offset.", "type-mismatch")
+    normalized = parsed.astimezone(datetime.UTC).isoformat()
+    return string_handler(entry, op, normalized, search_variable)
 
 
 def set_handler(entry: str, ops: Any, values: Any, has_type: str, search_variable: SearchVariable) -> SearchExpression:
@@ -595,6 +621,7 @@ def translate_filter_ast(
         assert left[0] == 'Identifier'
         if len(left) > 2 and left[1] in relationship_targets:
             return relationship_semi_join(left, (node[0], ('Identifier',) + tuple(left[2:])))
+        unknown_handler: Callable[..., Any] | None
         if left[1] not in property_fulltypes:
             if left[1].startswith(recognized_prefixes):
                 raise FilterTranslationError(
@@ -602,10 +629,14 @@ def translate_filter_ast(
                 )
             else:
                 # TODO: this should warn
-                unknown = unknown_unknown_handler
+                unknown_handler = unknown_unknown_handler
         else:
-            unknown = handlers[left[1]]['unknown']
-        search_expr = unknown(left[1], search_variable, node[0])
+            unknown_handler = handlers.get(left[1], {}).get('unknown')
+            if unknown_handler is None:
+                raise FilterTranslationError(
+                    "Filtering on property " + left[1] + " not implemented.", "not-implemented"
+                )
+        search_expr = unknown_handler(left[1], search_variable, node[0])
     else:
         raise FilterTranslationError("Unexpected translation error at: " + str(node[0]), "internal")
     assert search_expr is not None
@@ -657,11 +688,9 @@ def simple_property_handlers(
         elif fulltype in ('integer', 'float'):
             table['comparison'] = lambda entry, op, value, sv, k=key: number_handler(k, op, value, sv)
         elif fulltype == 'timestamp':
-            # Timestamps are RFC 3339 strings; lexicographic comparison is
-            # correct for same-format UTC timestamps, so string_handler applies.
-            # No stringmatching handler: substring matching on timestamps is not
-            # meaningful.
-            table['comparison'] = lambda entry, op, value, sv, k=key: string_handler(k, op, value, sv)
+            # The datetime codec and timestamp handler both canonicalize to a
+            # fixed-width UTC spelling, making SQL lexical order chronological.
+            table['comparison'] = lambda entry, op, value, sv, k=key: timestamp_handler(k, op, value, sv)
         else:
             table['comparison'] = lambda entry, op, value, sv, k=key: string_handler(k, op, value, sv)
             table['stringmatching'] = lambda entry, value, smtype, sv, k=key: stringmatching_handler(
