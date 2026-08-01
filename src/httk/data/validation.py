@@ -78,6 +78,12 @@ def _validator_schema(definition: PropertyDefinition) -> dict[str, Any]:
     """
     schema = definition.as_optimade()
     schema.pop("$schema", None)
+    # Nullable enum properties use ``type: [<kind>, "null"]`` while the enum lists
+    # only the non-null vocabulary. JSON Schema applies both constraints, so explicitly
+    # include null in the validator copy instead of rejecting a value the OPTIMADE
+    # definition declares nullable.
+    if definition.nullable and isinstance(schema.get("enum"), list) and None not in schema["enum"]:
+        schema["enum"] = [*schema["enum"], None]
     return schema
 
 

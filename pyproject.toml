@@ -131,11 +131,11 @@ ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
-# httk-optimade is a *consumer* of this package, not a dependency of it: the two
+# httk-serve is a *consumer* of this package, not a dependency of it: the two
 # meet only at the httk.core.EntryProvider contract. The cross-repo example
 # (examples/serve_as_optimade.py) imports it to show the serving end of that
-# contract, so its import must typecheck whether httk-optimade is absent
+# contract, so its import must typecheck whether httk-serve is absent
 # entirely or present without a py.typed marker.
-module = ["httk.optimade", "httk.optimade.*"]
+module = ["httk.serve.optimade", "httk.serve.optimade.*"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]

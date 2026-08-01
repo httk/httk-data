@@ -173,9 +173,9 @@ def show_provider(provider: StoreEntryProvider) -> None:
 
 
 def show_queries(provider: StoreEntryProvider) -> None:
-    """Hand the provider to httk-optimade and run OPTIMADE queries against it."""
-    from httk.optimade import adapter_from_providers
-    from httk.optimade.backend import execute_query
+    """Hand the provider to httk-serve and run OPTIMADE queries against it."""
+    from httk.serve.optimade import adapter_from_providers
+    from httk.serve.optimade.backend import execute_query
 
     adapter = adapter_from_providers([provider])
     print("== The adapter serves ==")
