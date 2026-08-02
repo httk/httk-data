@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import StorageInfo, content_id, register_entry_backing, register_entry_family
+from httk.core import StorageInfo, content_id, register_entry_family, register_entry_record
 from sqlalchemy.exc import IntegrityError
 
 import httk.data.db.store as store_module
@@ -82,22 +82,23 @@ class UnregisteredFamily:
 
 
 register_entry_family(name="test-layout-single-family", family=f"{__name__}:LayoutFamily")
-register_entry_backing(
+register_entry_record(
     name="test-layout-single-backing",
-    family_name="test-layout-single-family",
+    family="test-layout-single-family",
     record=f"{__name__}:LayoutSingle",
 )
 register_entry_family(name="test-layout-multi-family", family=f"{__name__}:MultiLayoutFamily")
-register_entry_backing(
+register_entry_record(
     name="test-layout-first-backing",
-    family_name="test-layout-multi-family",
+    family="test-layout-multi-family",
     record=f"{__name__}:LayoutFirst",
 )
-register_entry_backing(
+register_entry_record(
     name="test-layout-second-backing",
-    family_name="test-layout-multi-family",
+    family="test-layout-multi-family",
     record=f"{__name__}:LayoutSecond",
 )
+register_entry_record(name="test-layout-unbound-record", record=f"{__name__}:PrivateLayoutRecord")
 
 
 @pytest.fixture
@@ -109,6 +110,11 @@ def database() -> Iterator[Database]:
 def _tables(database: Database) -> set[str]:
     with database.engine.connect() as connection:
         return set(connection.execute(sqlalchemy.text("SELECT name FROM sqlite_master WHERE type = 'table'")).scalars())
+
+
+def test_family_store_rejects_record_without_registered_family() -> None:
+    with pytest.raises(ValueError, match="no registered family"):
+        normalize_entry_backings({LayoutFamily: PrivateLayoutRecord})
 
 
 def _multi_layout() -> tuple[StorageLayout, sqlalchemy.MetaData, sqlalchemy.Table]:

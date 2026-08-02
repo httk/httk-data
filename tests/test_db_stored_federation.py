@@ -11,8 +11,8 @@ from httk.core import (
     StoredPropertyProjection,
     content_id,
     load_entry_type_schema,
-    register_entry_backing,
     register_entry_family,
+    register_entry_record,
 )
 
 from httk.data.db import (
@@ -116,14 +116,14 @@ register_entry_family(
     family=f"{__name__}:FederatedCalculation",
     definition_id=CALCULATIONS_DEFINITION,
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-federation-first",
-    family_name="test-stored-federation-calculations",
+    family="test-stored-federation-calculations",
     record=f"{__name__}:FederationFirst",
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-federation-second",
-    family_name="test-stored-federation-calculations",
+    family="test-stored-federation-calculations",
     record=f"{__name__}:FederationSecond",
 )
 

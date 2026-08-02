@@ -47,14 +47,14 @@ class StructureRecord:
 
     formula: Annotated[str, Indexed()]
     spacegroup: int
-    energy: Fraction                                      # stored exactly (see below)
-    cell_basis: Annotated[FracVector, Shape(3, 3)]        # fixed-shape tensor, stored inline
-    reduced_coords: Annotated[FracVector, Shape(0, 3)]    # variable rows, child table
-    symbols: list[str]                                    # child table
-    reference: Author | None = None                       # foreign key, saved recursively
+    energy: Fraction  # stored exactly (see below)
+    cell_basis: Annotated[FracVector, Shape(3, 3)]  # fixed-shape tensor, stored inline
+    reduced_coords: Annotated[FracVector, Shape(0, 3)]  # variable rows, child table
+    symbols: list[str]  # child table
+    reference: Author | None = None  # foreign key, saved recursively
 
     @stored_property
-    def natoms(self) -> int:                              # stored & queryable; recomputed on load
+    def natoms(self) -> int:  # stored & queryable; recomputed on load
         return len(self.symbols)
 ```
 
@@ -76,14 +76,14 @@ operations into one database transaction:
 ```python
 from httk.data.db import Database, SqlStore
 
-db = Database.sqlite("example.sqlite")   # or Database.sqlite() in memory,
-store = SqlStore(db, entry_backings={})   # first-time custom-record store
+db = Database.sqlite("example.sqlite")  # or Database.sqlite() in memory,
+store = SqlStore(db, entry_backings={})  # first-time custom-record store
 # Reopen an initialized database with: SqlStore(db)
 
 with store.transaction():
-    sid = store.save(record)             # returns the integer sid; dedups; recurses
+    sid = store.save(record)  # returns the integer sid; dedups; recurses
 
-same_record = store.fetch(StructureRecord, sid)   # reconstructed exactly
+same_record = store.fetch(StructureRecord, sid)  # reconstructed exactly
 ```
 
 Every database starts with a persisted, versioned layout declaration. Passing
@@ -114,7 +114,7 @@ layouts raise `StorageLayoutUpgradeRequiredError`; its immutable `diff`
 describes protocol, declaration, and schema differences. This redesign does
 not migrate old stores: rebuild them explicitly.
 
-A source object with an exact `__httk_storage_binding__` can be saved directly;
+A source object with an exact `__httk_storage_record__` can be saved directly;
 `save(source, as_record=OtherRecord)` selects another declared projection.
 Nested record fields are projected recursively. A projected source must expose
 any derived `stored_property` declared by its target record because storage
@@ -138,12 +138,12 @@ variable-length fields support the set operations (`has_any`, `has_only`), and
 search = store.searcher()
 s = search.variable(StructureRecord)
 search.add(s.spacegroup == 225)
-search.add(s.reference.name == "Ada")            # auto-joins the author table
+search.add(s.reference.name == "Ada")  # auto-joins the author table
 search.add(s.symbols.has_only("O", "Ca", "Ti"))  # for-all over the child rows
-search.add(~s.symbols.has_any("Fe"))             # no child row is iron
+search.add(~s.symbols.has_any("Fe"))  # no child row is iron
 results = search.results(structure=s, energy=s.energy)
-for row in results:                               # lazy ResultRow values
-    print(row.structure.formula, row.energy)      # exact rational energy
+for row in results:  # lazy ResultRow values
+    print(row.structure.formula, row.energy)  # exact rational energy
 ```
 
 `ResultRow` supports names, attributes, and positions. `scalars()` is the

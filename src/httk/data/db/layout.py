@@ -16,12 +16,12 @@ from typing import Any, Final
 
 import sqlalchemy
 from httk.core import (
-    entry_backing_info,
     entry_family_info,
-    known_entry_backings,
+    entry_record_info,
     known_entry_families,
-    resolve_entry_backing,
+    known_entry_records,
     resolve_entry_family,
+    resolve_entry_record,
 )
 
 from httk.data.db.mapping import dispatch_table_for, entry_dispatch_table_name, table_for
@@ -148,7 +148,11 @@ def normalize_entry_backings(entry_backings: Mapping[type, type | tuple[type, ..
         backing_names: list[str] = []
         for backing in backings:
             backing_name = _registered_backing_name(backing)
-            registered_family_name, _ = entry_backing_info(backing_name)
+            _, registered_family_name, _ = entry_record_info(backing_name)
+            if registered_family_name is None:
+                raise ValueError(
+                    f"entry record {backing_name!r} has no registered family and cannot be used in a family store"
+                )
             if registered_family_name != family_name:
                 raise ValueError(
                     f"entry backing {backing.__name__} belongs to registered family {registered_family_name!r}, "
@@ -213,12 +217,16 @@ def _layout_from_declaration(value: str) -> StorageLayout:
         for backing_name in backing_names:
             if not isinstance(backing_name, str):
                 raise ValueError("stored entry declaration backing names must be strings")
-            declared_family, _ = entry_backing_info(backing_name)
+            _, declared_family, _ = entry_record_info(backing_name)
+            if declared_family is None:
+                raise ValueError(
+                    f"entry record {backing_name!r} has no registered family and cannot be used in a family store"
+                )
             if declared_family != family_name:
                 raise ValueError(
                     f"stored entry backing {backing_name!r} is registered for {declared_family!r}, not {family_name!r}"
                 )
-            resolved_backings.append(resolve_entry_backing(backing_name))
+            resolved_backings.append(resolve_entry_record(backing_name))
         supplied[family] = tuple(resolved_backings)
     layout = normalize_entry_backings(supplied)
     if declaration_json(layout) != value:
@@ -338,9 +346,9 @@ def _registered_family_name(family: type) -> str:
 
 def _registered_backing_name(backing: type) -> str:
     matches: list[str] = []
-    for name in known_entry_backings():
-        entry_backing_info(name)
-        if resolve_entry_backing(name) is backing:
+    for name in known_entry_records():
+        entry_record_info(name)
+        if resolve_entry_record(name) is backing:
             matches.append(name)
     if len(matches) != 1:
         found = ", ".join(matches) or "none"

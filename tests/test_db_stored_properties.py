@@ -11,8 +11,8 @@ from httk.core import (
     QueryLiteralError,
     StorageInfo,
     StoredPropertyProjection,
-    register_entry_backing,
     register_entry_family,
+    register_entry_record,
 )
 
 from httk.data.db import (
@@ -179,14 +179,14 @@ register_entry_family(
     family=f"{__name__}:CalculationEntry",
     definition_id=CALCULATIONS_DEFINITION,
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-properties-calculation-first",
-    family_name="test-stored-properties-calculations",
+    family="test-stored-properties-calculations",
     record=f"{__name__}:GenericCalculationFirst",
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-properties-calculation-second",
-    family_name="test-stored-properties-calculations",
+    family="test-stored-properties-calculations",
     record=f"{__name__}:GenericCalculationSecond",
 )
 register_entry_family(
@@ -194,9 +194,9 @@ register_entry_family(
     family=f"{__name__}:FileEntry",
     definition_id=FILES_DEFINITION,
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-properties-incomplete-file",
-    family_name="test-stored-properties-files",
+    family="test-stored-properties-files",
     record=f"{__name__}:IncompleteFile",
 )
 register_entry_family(
@@ -204,9 +204,9 @@ register_entry_family(
     family=f"{__name__}:BadFamily",
     definition_id=CALCULATIONS_DEFINITION,
 )
-register_entry_backing(
+register_entry_record(
     name="test-stored-properties-bad-backing",
-    family_name="test-stored-properties-bad-family",
+    family="test-stored-properties-bad-family",
     record=f"{__name__}:BadCalculation",
 )
 

@@ -690,7 +690,7 @@ class SqlStore:
         """Store ``obj`` (deduplicating per its class's policy) and return its integer sid.
 
         An opted-in domain object is projected through its exact
-        ``__httk_storage_binding__``; ``as_record`` selects an alternate record
+        ``__httk_storage_record__``; ``as_record`` selects an alternate record
         representation explicitly. Referenced records and record-valued child
         elements are saved recursively without constructing intermediate
         record instances.

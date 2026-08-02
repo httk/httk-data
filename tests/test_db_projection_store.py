@@ -135,18 +135,14 @@ class CycleRecord:
 
 @dataclass(frozen=True)
 class NoDedupLeaf:
-    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
-        storage_name="projection_no_dedup_leaf", dedup="none"
-    )
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_no_dedup_leaf", dedup="none")
 
     value: str
 
 
 @dataclass(frozen=True)
 class ByValueHolder:
-    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
-        storage_name="projection_by_value_holder", dedup="by_value"
-    )
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_by_value_holder", dedup="by_value")
 
     leaf: NoDedupLeaf
     value: str
@@ -188,8 +184,8 @@ class LazyAlternateRecord:
         return {"value": source.value}
 
 
-LeafView.__httk_storage_binding__ = LeafRecord
-RootView.__httk_storage_binding__ = RootRecord
+LeafView.__httk_storage_record__ = LeafRecord
+RootView.__httk_storage_record__ = RootRecord
 
 
 def _root(name: str = "one") -> RootView:
@@ -312,9 +308,7 @@ def test_insert_race_winner_still_checks_metadata(monkeypatch):
 
 
 @pytest.mark.parametrize("explicit_transaction", [False, True])
-def test_by_value_reuse_discards_nested_no_dedup_insert(
-    projection_database, monkeypatch, explicit_transaction
-):
+def test_by_value_reuse_discards_nested_no_dedup_insert(projection_database, monkeypatch, explicit_transaction):
     store = SqlStore(projection_database, entry_backings={})
     leaf = NoDedupLeaf("same")
     winner = ByValueHolder(leaf, "holder")
@@ -337,9 +331,7 @@ def test_by_value_reuse_discards_nested_no_dedup_insert(
 
 
 @pytest.mark.parametrize("explicit_transaction", [False, True])
-def test_content_race_loss_discards_nested_no_dedup_insert(
-    projection_database, monkeypatch, explicit_transaction
-):
+def test_content_race_loss_discards_nested_no_dedup_insert(projection_database, monkeypatch, explicit_transaction):
     store = SqlStore(projection_database, entry_backings={})
     winner = RaceHolder(NoDedupLeaf("same"), "holder")
     winner_sid = store.save(winner)
