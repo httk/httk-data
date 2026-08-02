@@ -39,9 +39,10 @@ the year condition.
 """
 
 import datetime
+import decimal
 import operator
 from collections.abc import Callable, Mapping
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from httk.core import FilterAst, parse_optimade_filter
 
@@ -159,6 +160,27 @@ evaluation needs its own table.
 """
 
 
+class _FilterFloat(float):
+    """A database-compatible float that retains the parsed numeric lexeme.
+
+    Generic query paths still receive a :class:`float` for DBAPI binding and
+    ordinary comparisons.  Exact stored-property callbacks can instead use
+    :func:`str` to recover the original decimal spelling before entering their
+    exact numeric domain.
+    """
+
+    __slots__ = ("_lexeme",)
+    _lexeme: str
+
+    def __new__(cls, lexeme: str) -> Self:
+        value = float.__new__(cls, lexeme)
+        value._lexeme = lexeme
+        return value
+
+    def __str__(self) -> str:
+        return self._lexeme
+
+
 def format_value(fulltype: str, val: tuple[Any, ...], allow_null: bool = False) -> Any:
     """Convert a filter constant node to a Python value of the property's ``fulltype``.
 
@@ -185,10 +207,18 @@ def format_value(fulltype: str, val: tuple[Any, ...], allow_null: bool = False) 
             return val[1] == 'TRUE'
     elif fulltype == 'integer':
         if val[0] in ['Number']:
-            return int(val[1])
+            try:
+                number = decimal.Decimal(val[1])
+            except decimal.InvalidOperation as error:
+                raise FilterTranslationError(
+                    "Type mismatch in filter, expected an integer Number.", "type-mismatch"
+                ) from error
+            if not number.is_finite() or number != number.to_integral_value():
+                raise FilterTranslationError("Type mismatch in filter, expected an integer Number.", "type-mismatch")
+            return int(number)
     elif fulltype == 'float':
         if val[0] in ['Number']:
-            return float(val[1])
+            return _FilterFloat(val[1])
     elif fulltype == 'string' or fulltype == 'timestamp':
         if val[0] in ['String']:
             return val[1]

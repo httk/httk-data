@@ -7,12 +7,6 @@ JSON-able entry-type records, so a serving module (such as *httk-serve*)
 can expose a database as an OPTIMADE API without either side depending on the
 other.
 
-A class carrying :class:`~httk.core.StoredEntryProjection` uses that declaration
-as the authoritative entry type, standard definition IRI, property map, and
-stored id. Its mapped values are serialized recursively, including typed nested
-values implementing :class:`~httk.core.StoredEntryValue`. Ordinary classes keep
-the database-prefixed projection described below.
-
 For each served class the provider either passes through a supplied
 :class:`~httk.core.EntryTypeDefinition` (validated to describe every served
 property) or auto-generates one from the class's resolved
@@ -55,11 +49,8 @@ link's metadata.
 """
 
 import dataclasses
-import datetime
-import decimal
-import fractions
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from typing import Any, Final, cast
+from typing import Any, Final
 
 import sqlalchemy
 from httk.core import (
@@ -69,83 +60,20 @@ from httk.core import (
     PropertyDefinition,
     RelatedEntry,
     RelationshipLink,
-    StoredEntryValue,
     known_definition_prefixes,
-    load_entry_type_schema,
-    stored_entry_projection,
 )
 
 from httk.data.db.codecs import codec_named
 from httk.data.db.mapping import SID_COLUMN
-from httk.data.db.rows import RowHydrator
 from httk.data.db.schema import FieldSpec, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlColumn, _query_index
 from httk.data.db.store import SqlStore, _as_fixed_tensor
 
 __all__ = [
     "StoreEntryProvider",
-    "StoredSchemaRebuildRequiredError",
     "auto_definition",
     "served_specs",
 ]
-
-
-class StoredSchemaRebuildRequiredError(RuntimeError):
-    """The database contains a declared obsolete root table instead of the requested one."""
-
-
-def _check_projection_storage(store: SqlStore, cls: type, projection: Any) -> None:
-    """Fail clearly when a projected class declares an incompatible prior root table."""
-
-    if not projection.obsolete_storage_names:
-        return
-    requested = resolve_schema(cls).table_name
-    bind = store._current_connection() or store._database.engine
-    present = set(sqlalchemy.inspect(bind).get_table_names())
-    obsolete = sorted(present.intersection(projection.obsolete_storage_names))
-    if requested not in present and obsolete:
-        raise StoredSchemaRebuildRequiredError(
-            f"stored entry table {requested!r} is absent, but obsolete incompatible table(s) "
-            f"{', '.join(repr(name) for name in obsolete)} are present; rebuild/reimport this store"
-        )
-
-
-def _projection_json_value(value: Any) -> Any:
-    """Recursively convert a typed projected value to its lossless JSON boundary form."""
-
-    if value is None or isinstance(value, str | bool | int | float):
-        return value
-    if isinstance(value, fractions.Fraction | decimal.Decimal):
-        return float(value)
-    if isinstance(value, datetime.datetime):
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("stored entry projection timestamps must be timezone-aware")
-        return value.astimezone(datetime.UTC).isoformat()
-    if isinstance(value, FracVector):
-        if value.dim in ((), (0,)):
-            return []
-        return _projection_json_value(value.to_fractions())
-    if isinstance(value, StoredEntryValue):
-        return _projection_json_value(value.to_stored_entry_value())
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {field.name: _projection_json_value(getattr(value, field.name)) for field in dataclasses.fields(value)}
-    if isinstance(value, Mapping):
-        if not all(isinstance(key, str) for key in value):
-            raise TypeError("stored entry projection dictionaries must have string keys")
-        return {key: _projection_json_value(item) for key, item in value.items()}
-    if isinstance(value, tuple | list):
-        return [_projection_json_value(item) for item in value]
-    to_float = getattr(value, "to_float", None)
-    if callable(to_float):
-        return float(cast(Any, to_float)())
-    raise TypeError(f"stored entry projection cannot serialize {type(value).__name__}")
-
-
-def _projection_id(projection: Any, obj: Any) -> str:
-    value = getattr(obj, projection.property_fields["id"])
-    if not isinstance(value, str) or not value:
-        raise ValueError("stored entry projection id must be a non-empty string")
-    return value
 
 
 #: How a scalar column kind maps onto an OPTIMADE fulltype (bytes has none).
@@ -266,9 +194,7 @@ class StoreEntryProvider(EntryProvider):
     """Serves the stored rows of storable classes as httk-core entry types.
 
     ``classes`` maps each served entry-type name to its storable dataclass;
-    the classes' tables are read through ``store``. A declared
-    :class:`~httk.core.StoredEntryProjection` is authoritative for its mapping
-    key, definition, standard properties, and ids. ``definitions`` optionally
+    the classes' tables are read through ``store``. ``definitions`` optionally
     supplies the :class:`~httk.core.EntryTypeDefinition` of an entry type
     (validated: it must describe every property the provider serves for it);
     entry types without a supplied definition get one auto-generated from the
@@ -310,18 +236,6 @@ class StoreEntryProvider(EntryProvider):
         self._id_of: Callable[[str, int, Any], str] = id_of if id_of is not None else _default_id
         self._entry_type_of: dict[type, str] = {cls: name for name, cls in self._classes.items()}
         self._schemas: dict[str, TableSchema] = {name: resolve_schema(cls) for name, cls in self._classes.items()}
-        self._projections = {}
-        for entry_type, cls in self._classes.items():
-            projection = stored_entry_projection(cls)
-            if projection is None:
-                continue
-            if projection.entry_type != entry_type:
-                raise ValueError(
-                    f"stored-entry projection for {cls.__name__} declares entry type "
-                    f"{projection.entry_type!r}, not provider mapping key {entry_type!r}"
-                )
-            _check_projection_storage(store, cls, projection)
-            self._projections[entry_type] = projection
         self._links_by_from: dict[str, list[_LinkScan]] = self._build_link_inventory(tuple(link_classes))
         self._definitions: dict[str, EntryTypeDefinition] = dict(definitions or {})
         unknown = sorted(name for name in self._definitions if name not in self._classes)
@@ -330,16 +244,7 @@ class StoreEntryProvider(EntryProvider):
                 f"definitions were supplied for entry types this provider does not serve: {', '.join(unknown)}"
             )
         for entry_type in self._classes:
-            projection = self._projections.get(entry_type)
             definition = self._definitions.get(entry_type)
-            if projection is not None:
-                definition = definition or load_entry_type_schema(projection.definition_id)
-                source_id = definition.definition_id or definition.extends_id
-                if source_id != projection.definition_id:
-                    raise ValueError(
-                        f"the supplied definition for projected entry type {entry_type!r} must use "
-                        f"definition IRI {projection.definition_id!r}"
-                    )
             if definition is not None:
                 described = definition.properties
                 missing = sorted(name for name in self.property_keys(entry_type) if name not in described)
@@ -412,8 +317,6 @@ class StoreEntryProvider(EntryProvider):
 
     def _served_specs(self, entry_type: str) -> list[tuple[str, FieldSpec, str]]:
         """The served ``(property name, field spec, fulltype)`` triples of ``entry_type``."""
-        if entry_type in self._projections:
-            return []
         return served_specs(self._schemas[entry_type], self._prefix)
 
     def _relationship_specs(self, entry_type: str) -> list[tuple[FieldSpec, str]]:
@@ -443,58 +346,29 @@ class StoreEntryProvider(EntryProvider):
         }
 
     def _auto_definition(self, entry_type: str) -> EntryTypeDefinition:
-        projection = self._projections.get(entry_type)
-        if projection is not None:
-            return load_entry_type_schema(projection.definition_id)
         return auto_definition(entry_type, self._schemas[entry_type], self._prefix)
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
         self._require_entry_type(entry_type)
-        projection = self._projections.get(entry_type)
-        if projection is not None:
-            return {"id": "__id", "type": "type"} | {name: name for name in projection.property_fields if name != "id"}
         property_keys = {"id": "__id", "type": "type"}
         property_keys.update({name: name for name, _spec, _fulltype in self._served_specs(entry_type)})
         return property_keys
 
     def records(self, entry_type: str) -> Iterator[Mapping[str, Any]]:
         cls = self._require_entry_type(entry_type)
-        projection = self._projections.get(entry_type)
         served = self._served_specs(entry_type)
         schema = self._schemas[entry_type]
         searcher = self._store.searcher()
         variable = searcher.variable(cls)
         sid_column = SqlColumn(searcher, variable._alias.c[SID_COLUMN])
-        matches: Iterator[tuple[Any, Any]]
-        if projection is not None:
-            # A search result deliberately exposes a lazy row.  Projected
-            # values, however, are a public semantic boundary and may depend
-            # on dataclass __post_init__ normalization (for example, presence
-            # flags that distinguish null from a present empty child tuple).
-            # One shared hydrator retains the SQL layer's 500-row batching;
-            # fetching each sid independently would turn provider iteration
-            # into an N+1 query path for every nested projected record.
-            searcher.output(sid_column, "sid")
-            sids = tuple(int(sid) for (sid,), _names in searcher)
-            hydrator = RowHydrator(self._store, cls, sids)
-            matches = zip(hydrator.materialize_many(), sids, strict=True)
-        else:
-            searcher.output(variable, "obj")
-            searcher.output(sid_column, "sid")
-            matches = ((obj, sid) for (obj, sid), _names in searcher)
+        searcher.output(variable, "obj")
+        searcher.output(sid_column, "sid")
+        matches: Iterator[tuple[Any, Any]] = ((obj, sid) for (obj, sid), _names in searcher)
         for obj, sid in matches:
             row: dict[str, Any] = {
-                "__id": _projection_id(projection, obj)
-                if projection is not None
-                else self._id_of(entry_type, int(sid), obj),
+                "__id": self._id_of(entry_type, int(sid), obj),
                 "type": entry_type,
             }
-            if projection is not None:
-                for name, field_name in projection.property_fields.items():
-                    if name != "id":
-                        row[name] = _projection_json_value(getattr(obj, field_name))
-                yield row
-                continue
             for name, spec, _fulltype in served:
                 row[name] = _json_value(schema, spec, getattr(obj, spec.field))
             yield row
@@ -516,9 +390,6 @@ class StoreEntryProvider(EntryProvider):
         fast_ids = self._id_of is _default_id
 
         def stored_id(connection: Any, related_type: str, related_cls: type, sid: int) -> str:
-            projection = self._projections.get(related_type)
-            if projection is not None:
-                return _projection_id(projection, store._fetch(connection, related_cls, sid))
             return self._id_of(
                 related_type,
                 sid,

@@ -138,6 +138,12 @@ nitpick_ignore = [
     # private class is deliberately undocumented, so the annotation xref cannot
     # resolve.
     ("py:class", "_Context"),
+    # StoredPropertySqlPlan's constructor retains its private backing-plan
+    # annotation while AutoAPI intentionally omits that implementation class.
+    ("py:class", "_BackingPlan"),
+    # StoredPropertyProjection is new in the sibling core workspace; the
+    # committed release inventory cannot name it until core is released.
+    ("py:class", "httk.core.StoredPropertyProjection"),
     # AutoAPI renders ResultSetLike.one as a bare method reference in the
     # protocol and implementing result-set summaries.  There is no module-level
     # ``one`` method for Sphinx to resolve; the qualified class members remain

@@ -16,11 +16,6 @@ declared via ``related_classes`` can be filtered relationally —
 ``references._httk_doi CONTAINS "10.1"`` — over the class's reference or
 child-of-storable fields.
 
-When a class declares :class:`~httk.core.StoredEntryProjection`, only its
-explicitly ``filterable`` standard-property mappings are translated to native
-SQL. Other mapped standard values remain recognized and servable but report a
-``not-implemented`` filter translation instead of falling back to a prefixed
-field or an unknown-property interpretation.
 """
 
 from collections.abc import Callable, Mapping
@@ -30,17 +25,14 @@ from httk.core import (
     EntryTypeDefinition,
     FilterAst,
     PropertyDefinition,
-    load_entry_type_schema,
-    stored_entry_projection,
 )
 
-from httk.data.db.entry_provider import _check_projection_storage, served_specs
+from httk.data.db.entry_provider import served_specs
 from httk.data.db.schema import resolve_schema
 from httk.data.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable
 from httk.data.db.store import SqlStore
 from httk.data.optimade_query import (
     FilterTranslationError,
-    field_unknown_handler,
     filter_searcher,
     known_unknown_handler,
     set_handler,
@@ -127,11 +119,7 @@ def optimade_filter_searcher(
     :py:type:`~httk.core.FilterAst`. The returned searcher outputs the matching
     stored instances (``item[0][0]`` per match).
 
-    **Property names.** For a class carrying
-    :class:`~httk.core.StoredEntryProjection`, the declared standard definition
-    supplies recognized names and types, while only the declaration's
-    ``filterable`` property-to-field mappings become SQL handlers. For an
-    ordinary class, every servable stored field of ``cls`` (per
+    **Property names.** Every servable stored field of ``cls`` (per
     :func:`~httk.data.db.entry_provider.served_specs`) is filterable as
     ``{prefix}{field}``, with its schema-derived fulltype driving constant
     conversion and handler dispatch (rational fields compare on their
@@ -178,57 +166,23 @@ def optimade_filter_searcher(
             reference or child-of-storable field of ``cls``.
     """
     schema = resolve_schema(cls)
-    projection = stored_entry_projection(cls)
-    if projection is not None:
-        _check_projection_storage(store, cls, projection)
-        effective_definition = definition or load_entry_type_schema(projection.definition_id)
-        source_id = effective_definition.definition_id or effective_definition.extends_id
-        if source_id != projection.definition_id:
-            raise ValueError(
-                f"the definition for projected class {cls.__name__} must use definition IRI "
-                f"{projection.definition_id!r}"
-            )
-        property_fulltypes = {
-            name: _definition_fulltype(prop) for name, prop in effective_definition.properties.items()
-        }
-        missing = sorted(set(projection.property_fields) - set(property_fulltypes))
-        if missing:
-            raise ValueError(
-                f"stored-entry projection for {cls.__name__} maps properties absent from "
-                f"{projection.definition_id!r}: {', '.join(missing)}"
-            )
-        property_keys = {name: projection.property_fields[name] for name in projection.filterable}
-        handlers = simple_property_handlers(projection.entry_type, property_keys, property_fulltypes)
-        for name in projection.filterable:
-            if not effective_definition.properties[name].nullable:
+    served = served_specs(schema, prefix)
+    property_fulltypes = {"id": "string", "type": "string"}
+    property_fulltypes.update({name: fulltype for name, _spec, fulltype in served})
+    property_keys = {name: spec.field for name, spec, _fulltype in served}
+    if definition is not None:
+        for name, prop in definition.properties.items():
+            if name in ("id", "type"):
                 continue
-            table = dict(handlers[name])
-            field = projection.property_fields[name]
-            table["unknown"] = lambda entry, search_variable, unknown_type, key=field: field_unknown_handler(
-                key, search_variable, unknown_type
-            )
-            handlers[name] = table
-        if "id" not in projection.filterable:
-            del handlers["id"]
-        entry_type = projection.entry_type
-    else:
-        served = served_specs(schema, prefix)
-        property_fulltypes = {"id": "string", "type": "string"}
-        property_fulltypes.update({name: fulltype for name, _spec, fulltype in served})
-        property_keys = {name: spec.field for name, spec, _fulltype in served}
-        if definition is not None:
-            for name, prop in definition.properties.items():
-                if name in ("id", "type"):
-                    continue
-                property_fulltypes[name] = _definition_fulltype(prop)
+            property_fulltypes[name] = _definition_fulltype(prop)
 
-        handlers = simple_property_handlers(cls.__name__, property_keys, property_fulltypes)
-        # The default id/type handlers of simple_property_handlers query the
-        # serving-layer '__id' column and constant entry-type name; neither exists
-        # on an ordinary store row, so filtering needs explicit extra_handlers.
-        del handlers["id"]
-        del handlers["type"]
-        entry_type = cls.__name__
+    handlers = simple_property_handlers(cls.__name__, property_keys, property_fulltypes)
+    # The default id/type handlers of simple_property_handlers query the
+    # serving-layer '__id' column and constant entry-type name; neither exists
+    # on an ordinary store row, so filtering needs explicit extra_handlers.
+    del handlers["id"]
+    del handlers["type"]
+    entry_type = cls.__name__
 
     relationship_targets: tuple[str, ...] = ()
     resolver = None

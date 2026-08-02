@@ -104,7 +104,8 @@ __all__ = [
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "StoredSchemaRebuildRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoredPropertySqlConfigurationError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoredPropertySqlPlan",  # pyright: ignore[reportUnsupportedDunderAll]
     "TableSchema",
     "ValueCodec",
     "canonical_form",
@@ -124,6 +125,7 @@ __all__ = [
     "register_value_codec",
     "resolve_schema",
     "snake_case",
+    "stored_property_sql_plan",  # pyright: ignore[reportUnsupportedDunderAll]
 ]
 
 _SQL_EXPORTS = {
@@ -135,9 +137,11 @@ _SQL_EXPORTS = {
     "SqlColumn": ".searcher",
     "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
-    "StoredSchemaRebuildRequiredError": ".entry_provider",
+    "StoredPropertySqlConfigurationError": ".stored_properties",
+    "StoredPropertySqlPlan": ".stored_properties",
     "StorageLayoutUpgradeRequiredError": ".layout",
     "optimade_filter_searcher": ".optimade",
+    "stored_property_sql_plan": ".stored_properties",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",
     "ResultColumn": ".results",

@@ -1,11 +1,10 @@
 """Tests for the generic OPTIMADE filter translation (httk.data.optimade_query)."""
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from httk.core import parse_optimade_filter
-
-from httk.data.query import SearchResult
 
 from httk.data.optimade_query import (
     FilterTranslationError,
@@ -16,6 +15,7 @@ from httk.data.optimade_query import (
     simple_property_handlers,
     translate_filter_ast,
 )
+from httk.data.query import SearchResult
 
 # ---------------------------------------------------------------------- a minimal fake store
 
@@ -380,10 +380,30 @@ def test_type_mismatch_category():
     assert excinfo.value.category == "type-mismatch"
 
 
+@pytest.mark.parametrize("literal", ("1.5", "2.11e1"))
+def test_nonintegral_integer_number_is_a_filter_value_type_mismatch(literal: str):
+    with pytest.raises(FilterTranslationError) as excinfo:
+        translate(f"nelements = {literal}")
+    assert excinfo.value.category == "type-mismatch"
+
+
+@pytest.mark.parametrize(("literal", "expected"), (("1.0", 1), ("2.1e1", 21), ("2e3", 2000)))
+def test_integral_integer_number_accepts_decimal_and_exponent_spelling(literal: str, expected: int):
+    assert format_value("integer", ("Number", literal)) == expected
+
+
 def test_format_value_scalar_for_list_is_type_mismatch():
     with pytest.raises(FilterTranslationError) as excinfo:
         format_value("list of string", ("String", "Si"))
     assert excinfo.value.category == "type-mismatch"
+
+
+def test_format_value_float_preserves_the_number_lexeme_for_exact_callbacks():
+    literal = "0.1234567890123456789"
+    value = format_value("float", ("Number", literal))
+    assert isinstance(value, float)
+    assert float(value) == float(literal)
+    assert str(value) == literal
 
 
 def test_dict_property_not_implemented():
@@ -465,9 +485,7 @@ def test_relationship_id_handler_directly():
 
 def test_resolver_receives_stripped_comparison_sub_ast():
     resolver = StubResolver()
-    expr = translate(
-        "references.year >= 2000", relationship_targets=("references",), resolver=resolver
-    )
+    expr = translate("references.year >= 2000", relationship_targets=("references",), resolver=resolver)
     assert resolver.calls == [("references", (">=", ("Identifier", "year"), ("Number", "2000")))]
     assert expr.tree == ("has_any", ("field", "refs_key"), ("references-1", "references-2"))
 
@@ -513,16 +531,12 @@ def test_resolver_receives_stripped_known_unknown_sub_ast():
 def test_resolver_receives_stripped_has_sub_ast():
     resolver = StubResolver()
     translate('references.authors HAS "who"', relationship_targets=("references",), resolver=resolver)
-    assert resolver.calls == [
-        ("references", ("HAS_ALL", ("=",), ("Identifier", "authors"), (("String", "who"),)))
-    ]
+    assert resolver.calls == [("references", ("HAS_ALL", ("=",), ("Identifier", "authors"), (("String", "who"),)))]
 
 
 def test_resolver_empty_ids_translate_to_false_without_post_filter():
     resolver = StubResolver(ids=())
-    expr = translate(
-        'references.doi CONTAINS "nomatch"', relationship_targets=("references",), resolver=resolver
-    )
+    expr = translate('references.doi CONTAINS "nomatch"', relationship_targets=("references",), resolver=resolver)
     assert expr.tree == FALSE_TREE
 
 
@@ -530,18 +544,14 @@ def test_not_composes_through_the_semi_join_rewrite():
     # The resolver sees the sub-filter WITHOUT the surrounding NOT; inversion
     # applies to the id-set membership (the rewritten `<type>.id HAS ANY`).
     resolver = StubResolver(ids=("references-1",))
-    expr = translate(
-        'NOT references.doi CONTAINS "10.1"', relationship_targets=("references",), resolver=resolver
-    )
+    expr = translate('NOT references.doi CONTAINS "10.1"', relationship_targets=("references",), resolver=resolver)
     assert resolver.calls == [("references", ("CONTAINS", ("Identifier", "doi"), ("String", "10.1")))]
     assert expr.tree == ("NOT", ("has_any", ("field", "refs_key"), ("references-1",)))
 
 
 def test_not_of_empty_resolver_result_is_not_of_false():
     resolver = StubResolver(ids=())
-    expr = translate(
-        'NOT references.doi CONTAINS "nomatch"', relationship_targets=("references",), resolver=resolver
-    )
+    expr = translate('NOT references.doi CONTAINS "nomatch"', relationship_targets=("references",), resolver=resolver)
     assert expr.tree == ("NOT", FALSE_TREE)
 
 
@@ -641,6 +651,4 @@ def test_filter_searcher_accepts_parsed_ast_and_default_property_keys():
         property_fulltypes={"nelements": "integer"},
     )
     # Default property keys: identity map over property_fulltypes.
-    assert [expression.tree for expression in searcher.expressions] == [
-        ("eq", ("field", "nelements"), 3)
-    ]
+    assert [expression.tree for expression in searcher.expressions] == [("eq", ("field", "nelements"), 3)]

@@ -12,14 +12,20 @@ and no interpreter-exit hook; dispose of a database explicitly with
 
 import importlib
 import os
+from fractions import Fraction
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 
 import sqlalchemy
+from sqlalchemy import event
 
 __all__ = [
     "Database",
 ]
+
+
+_EXACT_FRACTION_FUNCTIONS_ATTRIBUTE = "_httk_exact_fraction_functions_installed"
+_EXACT_FRACTION_FUNCTIONS_KEY = "httk_exact_fraction_functions_installed"
 
 
 class Database:
@@ -34,6 +40,7 @@ class Database:
     def __init__(self, engine: sqlalchemy.Engine) -> None:
         """Wrap an already-configured SQLAlchemy :class:`~sqlalchemy.Engine`."""
         self._engine = engine
+        _install_exact_fraction_functions(engine)
 
     @classmethod
     def sqlite(cls, path: str | os.PathLike[str] | None = None) -> Self:
@@ -101,3 +108,94 @@ class Database:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self._engine.url!r})"
+
+
+def _install_exact_fraction_functions(engine: sqlalchemy.Engine) -> None:
+    """Install exact-fraction scalar functions on every SQLite/DuckDB connection.
+
+    Fraction values are persisted canonically as text because SQL integer
+    products can overflow long before a valid Python :class:`Fraction` does.
+    These functions preserve exact comparisons without touching presentation
+    float columns.
+    """
+
+    dialect = engine.dialect.name
+    if dialect not in {"sqlite", "duckdb"}:
+        return
+    if getattr(engine, _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE, False):
+        return
+
+    def install(dbapi_connection: Any, connection_record: Any) -> None:
+        if connection_record.info.get(_EXACT_FRACTION_FUNCTIONS_KEY):
+            return
+        if dialect == "sqlite":
+            dbapi_connection.create_function("httk_fraction_scaled_equal", 4, _fraction_scaled_equal)
+        else:
+            duckdb = importlib.import_module("duckdb")
+            try:
+                dbapi_connection.create_function(
+                    "httk_fraction_scaled_equal",
+                    _fraction_scaled_equal,
+                    return_type=duckdb.sqltypes.BOOLEAN,
+                )
+            except Exception as error:
+                # DuckDB registers functions in the database catalog, rather
+                # than per DBAPI connection.  A simultaneous peer may already
+                # have installed it, in which case this connection can use the
+                # same catalog function immediately.  Never remove/recreate:
+                # doing so races an active peer's query.
+                if not _duckdb_duplicate_function_error(error):
+                    raise
+        connection_record.info[_EXACT_FRACTION_FUNCTIONS_KEY] = True
+
+    def connect(dbapi_connection: Any, connection_record: Any) -> None:
+        install(dbapi_connection, connection_record)
+
+    def checkout(dbapi_connection: Any, connection_record: Any, _connection_proxy: Any) -> None:
+        # ``connect`` only observes newly-created DBAPI connections.  This
+        # covers an engine that was already in use before ``Database(engine)``
+        # wrapped it and subsequently checks out an existing pooled handle.
+        install(dbapi_connection, connection_record)
+
+    event.listen(engine, "connect", connect)
+    event.listen(engine, "checkout", checkout)
+    setattr(engine, _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE, True)
+
+
+def _duckdb_duplicate_function_error(error: Exception) -> bool:
+    """Whether DuckDB reports a catalog function already installed by a peer."""
+    text = str(error).casefold()
+    return "already exists" in text or "already created" in text
+
+
+def _fraction(value: object) -> Fraction | None:
+    if value is None:
+        return None
+    if isinstance(value, Fraction):
+        return value
+    if isinstance(value, int):
+        return Fraction(value)
+    if isinstance(value, float):
+        raise ValueError("exact fraction SQL functions do not accept float values")
+    return Fraction(str(value))
+
+
+def _fraction_scaled_equal(
+    left: object,
+    left_factor: object,
+    right: object,
+    right_factor: object,
+) -> bool | None:
+    left_value = _fraction(left)
+    left_multiplier = _fraction(left_factor)
+    right_value = _fraction(right)
+    right_multiplier = _fraction(right_factor)
+    if None in (left_value, left_multiplier, right_value, right_multiplier):
+        return None
+    assert (
+        left_value is not None
+        and left_multiplier is not None
+        and right_value is not None
+        and right_multiplier is not None
+    )
+    return left_value * left_multiplier == right_value * right_multiplier
