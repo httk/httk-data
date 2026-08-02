@@ -1,6 +1,7 @@
 """Tests for the value-codec registry and exact text formats (httk.data.db.codecs)."""
 
 import datetime
+import math
 import random
 from dataclasses import dataclass
 from fractions import Fraction
@@ -29,11 +30,12 @@ from httk.data.db import (
 
 def test_builtin_codecs_are_registered():
     names = known_value_codecs()
-    for name in ("fraction", "fracscalar", "surdscalar", "datetime"):
+    for name in ("float", "fraction", "fracscalar", "surdscalar", "datetime"):
         assert name in names
 
 
 def test_codec_for_matches_exact_type_then_subclass():
+    assert codec_for(float) is codec_named("float")
     assert codec_for(Fraction) is codec_named("fraction")
     assert codec_for(FracScalar) is codec_named("fracscalar")
     assert codec_for(SurdScalar) is codec_named("surdscalar")
@@ -42,6 +44,14 @@ def test_codec_for_matches_exact_type_then_subclass():
     assert codec_for(SurdVector) is None
     assert codec_for(int) is None
     assert codec_for(list[int]) is None
+
+
+def test_float_codec_preserves_signed_zero_exactly():
+    codec = codec_named("float")
+    assert codec.encode(-0.0)[1] == "-0x0.0p+0"
+    assert codec.encode(0.0)[1] == "0x0.0p+0"
+    assert math.copysign(1.0, codec.decode(codec.encode(-0.0))) == -1.0
+    assert math.copysign(1.0, codec.decode(codec.encode(0.0))) == 1.0
 
     class MyFraction(Fraction):
         pass

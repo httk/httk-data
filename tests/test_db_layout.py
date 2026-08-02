@@ -21,6 +21,8 @@ from httk.data.db import (
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
+    actual_schema_objects,
+    actual_table_names,
     expected_metadata,
     normalize_entry_backings,
     validate_expected_tables,
@@ -109,14 +111,6 @@ def _tables(database: Database) -> set[str]:
         return set(connection.execute(sqlalchemy.text("SELECT name FROM sqlite_master WHERE type = 'table'")).scalars())
 
 
-def _create_unversioned_layout(database: Database, declaration: dict[type, type | tuple[type, ...]]) -> None:
-    metadata = expected_metadata(normalize_entry_backings(declaration))
-    with database.engine.begin() as connection:
-        for table in metadata.sorted_tables:
-            if table.name != METADATA_TABLE_NAME:
-                table.create(connection)
-
-
 def _multi_layout() -> tuple[StorageLayout, sqlalchemy.MetaData, sqlalchemy.Table]:
     layout = normalize_entry_backings({MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
     metadata = expected_metadata(layout)
@@ -179,39 +173,95 @@ def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(data
         )
 
 
-def test_unversioned_adoption_requires_exact_schema_and_preserves_unclaimed_names(database: Database) -> None:
-    _create_unversioned_layout(database, {LayoutFamily: LayoutSingle})
+def test_nonempty_unversioned_database_is_never_adopted(database: Database) -> None:
+    metadata = expected_metadata(normalize_entry_backings({LayoutFamily: LayoutSingle}))
     with database.engine.begin() as connection:
+        for table in metadata.sorted_tables:
+            if table.name != METADATA_TABLE_NAME:
+                table.create(connection)
         connection.execute(sqlalchemy.text("CREATE TABLE unrelated_layout_table (value INTEGER)"))
-    adopted = SqlStore(database, entry_backings={LayoutFamily: LayoutSingle})
-    assert adopted.entry_layout[0].name == "test-layout-single-family"
-    assert METADATA_TABLE_NAME in _tables(database)
+    tables_before = _tables(database)
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as explicit:
+        SqlStore(database, entry_backings={LayoutFamily: LayoutSingle})
+    assert explicit.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": None}
+    assert explicit.value.diff["schema"]["layout_single"]["unversioned"] is True
+    assert explicit.value.diff["schema"]["unrelated_layout_table"]["unversioned"] is True
+    assert _tables(database) == tables_before
 
-    with Database.sqlite() as missing_database:
-        with missing_database.engine.begin() as connection:
-            connection.execute(sqlalchemy.text("CREATE TABLE unrelated_layout_table (value INTEGER)"))
-        with pytest.raises(StorageLayoutUpgradeRequiredError) as missing:
-            SqlStore(missing_database, entry_backings={LayoutFamily: LayoutSingle})
-        assert "layout_single" in missing.value.diff["schema"]
-        assert METADATA_TABLE_NAME not in _tables(missing_database)
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as implicit:
+        SqlStore(database)
+    assert implicit.value.diff["declaration"] == {"expected": "explicit entry_backings", "actual": None}
+    assert _tables(database) == tables_before
 
     with Database.sqlite() as collision_database:
         with collision_database.engine.begin() as connection:
             connection.execute(sqlalchemy.text("CREATE TABLE private_layout_record (value TEXT)"))
-        SqlStore(collision_database, entry_backings={})
-        store = SqlStore(collision_database)
         with pytest.raises(StorageLayoutUpgradeRequiredError) as collision:
-            store.save(PrivateLayoutRecord("cannot claim old table"))
+            SqlStore(collision_database, entry_backings={})
         assert collision.value.diff["schema"]["private_layout_record"]["unversioned"]
+        assert METADATA_TABLE_NAME not in _tables(collision_database)
 
 
-def test_unversioned_adoption_audits_content_ids(database: Database) -> None:
-    _create_unversioned_layout(database, {LayoutFamily: LayoutSingle})
+@pytest.mark.parametrize("dialect", ("sqlite", "duckdb"))
+def test_view_only_unversioned_database_is_not_physically_empty(dialect: str) -> None:
+    if dialect == "duckdb":
+        pytest.importorskip("duckdb_engine")
+        database = Database.duckdb()
+    else:
+        database = Database.sqlite()
+    with database:
+        with database.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("CREATE VIEW preexisting_view AS SELECT 7 AS value"))
+            assert actual_schema_objects(connection)["preexisting_view"] == frozenset(("view",))
+        for mode in ("ensure", "verify"):
+            with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+                SqlStore(database, entry_backings={}, layout_mode=mode)
+            assert error.value.diff["schema"]["preexisting_view"] == {
+                "unversioned": True,
+                "object_type": "view",
+                "message": "a nonempty database without SqlStore metadata cannot be adopted",
+            }
+        with database.engine.connect() as connection:
+            assert connection.execute(sqlalchemy.text("SELECT value FROM preexisting_view")).scalar_one() == 7
+            assert METADATA_TABLE_NAME not in actual_schema_objects(connection)
+
+
+def test_duckdb_schema_discovery_preserves_table_sequence_name_collisions() -> None:
+    pytest.importorskip("duckdb_engine")
+    with Database.duckdb() as database:
+        with database.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("CREATE TABLE same_name (value INTEGER)"))
+            connection.execute(sqlalchemy.text("CREATE SEQUENCE same_name"))
+            objects = actual_schema_objects(connection)
+            tables = actual_table_names(connection)
+        assert objects["same_name"] == frozenset(("sequence", "table"))
+        assert "same_name" in tables
+
+
+def test_marked_duckdb_rejects_sequence_sharing_managed_table_name() -> None:
+    pytest.importorskip("duckdb_engine")
+    with Database.duckdb() as database:
+        SqlStore(database, entry_backings={})
+        with database.engine.begin() as connection:
+            connection.execute(sqlalchemy.text(f"CREATE SEQUENCE {METADATA_TABLE_NAME}"))
+        with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+            SqlStore(database)
+        assert error.value.diff["schema"][METADATA_TABLE_NAME] == {
+            "object_type": ("sequence", "table"),
+            "message": "a managed table name is also used by an unexpected schema object",
+        }
+
+
+def test_unversioned_rows_are_refused_before_content_identity_is_trusted(database: Database) -> None:
+    metadata = expected_metadata(normalize_entry_backings({LayoutFamily: LayoutSingle}))
     with database.engine.begin() as connection:
+        for table in metadata.sorted_tables:
+            if table.name != METADATA_TABLE_NAME:
+                table.create(connection)
         connection.execute(sqlalchemy.text("INSERT INTO layout_single (content_id, value) VALUES ('wrong', 'value')"))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(database, entry_backings={LayoutFamily: LayoutSingle})
-    assert error.value.diff["schema"]["layout_single"]["identity_audit"] == "content_id mismatch"
+    assert error.value.diff["schema"]["layout_single"]["unversioned"] is True
     assert METADATA_TABLE_NAME not in _tables(database)
 
 
@@ -241,26 +291,29 @@ def test_sqlite_schema_diff_rejects_partial_ordered_collated_indexes() -> None:
     table = metadata.tables["layout_single"]
     index = next(iter(table.indexes))
     assert index.name is not None
-    index.dialect_options["sqlite"]["where"] = table.c.content_id.is_not(None)
     with Database.sqlite() as partial_database:
+        SqlStore(partial_database, entry_backings={LayoutFamily: LayoutSingle})
         with partial_database.engine.begin() as connection:
-            for candidate in metadata.sorted_tables:
-                if candidate.name != METADATA_TABLE_NAME:
-                    candidate.create(connection)
+            connection.execute(sqlalchemy.text(f'DROP INDEX "{index.name}"'))
+            connection.execute(
+                sqlalchemy.text(
+                    f'CREATE UNIQUE INDEX "{index.name}" ON layout_single (content_id) WHERE content_id IS NOT NULL'
+                )
+            )
         with pytest.raises(StorageLayoutUpgradeRequiredError) as partial:
-            SqlStore(partial_database, entry_backings={LayoutFamily: LayoutSingle})
+            SqlStore(partial_database)
         assert "indexes" in partial.value.diff["schema"]["layout_single"]
         assert "unique" in partial.value.diff["schema"]["layout_single"]
 
     with Database.sqlite() as ordered_database:
-        _create_unversioned_layout(ordered_database, {LayoutFamily: LayoutSingle})
+        SqlStore(ordered_database, entry_backings={LayoutFamily: LayoutSingle})
         with ordered_database.engine.begin() as connection:
             connection.execute(sqlalchemy.text(f'DROP INDEX "{index.name}"'))
             connection.execute(
                 sqlalchemy.text(f'CREATE UNIQUE INDEX "{index.name}" ON layout_single (content_id COLLATE NOCASE DESC)')
             )
         with pytest.raises(StorageLayoutUpgradeRequiredError) as ordered:
-            SqlStore(ordered_database, entry_backings={LayoutFamily: LayoutSingle})
+            SqlStore(ordered_database)
         assert "indexes" in ordered.value.diff["schema"]["layout_single"]
 
 
@@ -313,11 +366,11 @@ def test_sqlite_schema_scanning_ignores_keywords_and_parentheses_inside_quotes()
         sqlalchemy.Column("check_record", sqlalchemy.Text, server_default=sqlalchemy.text("'CHECK(fake(value))'")),
     )
     with Database.sqlite() as database:
+        store = SqlStore(database, entry_backings={})
         with database.engine.begin() as connection:
             metadata.create_all(connection)
             assert validate_expected_tables(connection, metadata) == {}
 
-        store = SqlStore(database, entry_backings={})
         check_record = CheckRecord("ordinary")
         check_sid = store.save(check_record)
         weird_record = WeirdNamedRecord("parenthesized table name")
@@ -664,24 +717,6 @@ def test_marked_reopen_audits_missing_mismatched_and_invalid_dispatch_rows() -> 
         with pytest.raises(StorageLayoutUpgradeRequiredError) as invalid:
             SqlStore(invalid_database)
         assert "invalid_dispatch_rows" in invalid.value.diff["schema"][family.dispatch_table_name]["data"]
-
-
-def test_dispatch_audit_rejects_missing_rows_during_unversioned_adoption() -> None:
-    with Database.sqlite() as adoption_database:
-        _create_unversioned_layout(adoption_database, {MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
-        adoption_record = LayoutFirst("adoption")
-        with adoption_database.engine.begin() as connection:
-            connection.execute(
-                sqlalchemy.text("INSERT INTO layout_first (content_id, value) VALUES (:content_id, :value)"),
-                {"content_id": content_id(adoption_record), "value": adoption_record.value},
-            )
-        with pytest.raises(StorageLayoutUpgradeRequiredError) as adoption:
-            SqlStore(adoption_database, entry_backings={MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
-        adoption_table = (
-            normalize_entry_backings({MultiLayoutFamily: (LayoutFirst, LayoutSecond)}).families[0].dispatch_table_name
-        )
-        assert "missing_dispatch_rows" in adoption.value.diff["schema"][adoption_table]["data"]
-        assert METADATA_TABLE_NAME not in _tables(adoption_database)
 
 
 def test_private_tables_are_created_only_by_ensure_and_content_identity_is_store_local(database: Database) -> None:

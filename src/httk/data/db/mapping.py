@@ -66,8 +66,8 @@ _TYPE_FOR_KIND: Final[dict[ScalarKind, type[sqlalchemy.types.TypeEngine[Any]]]] 
     "int": sqlalchemy.Integer,
     # Double (a Float subclass), not Float: a Python float is a C double, and on
     # dialects that distinguish the two (DuckDB renders Float as a 4-byte FLOAT)
-    # plain Float would silently round scalar float fields, which have no exact
-    # companion column to recover from. SQLite stores REAL either way.
+    # plain Float would silently round query companions on dialects such as
+    # DuckDB. Exact float reconstruction uses the codec's text companion.
     "float": sqlalchemy.Double,
     "str": sqlalchemy.Text,
     "bool": sqlalchemy.Boolean,

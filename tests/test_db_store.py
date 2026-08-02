@@ -2,6 +2,7 @@
 
 import datetime
 import gc
+import math
 import os
 import pathlib
 import subprocess
@@ -65,6 +66,12 @@ class OptionalChildMetadata:
 @dataclass(frozen=True)
 class RowVector:
     vec: Annotated[FracVector, Shape(1, 3)]
+
+
+@dataclass(frozen=True)
+class FloatRecord:
+    scalar: float
+    values: tuple[float, ...]
 
 
 @dataclass(frozen=True)
@@ -153,6 +160,7 @@ def test_parent_table_columns_and_types():
     assert isinstance(table.c["formula"].type, sqlalchemy.Text) and not table.c["formula"].nullable
     assert isinstance(table.c["spacegroup"].type, sqlalchemy.Integer)
     assert isinstance(table.c["energy"].type, sqlalchemy.Float)
+    assert isinstance(table.c["energy_exact"].type, sqlalchemy.Text)
     assert isinstance(table.c["stable"].type, sqlalchemy.Boolean)
     assert isinstance(table.c["payload"].type, sqlalchemy.LargeBinary)
     assert table.c["note"].nullable and table.c["weight"].nullable
@@ -249,6 +257,18 @@ def test_round_trip_optionals_present(database):
     fetched = SqlStore(database).fetch(Sample, sid)
     assert fetched.note == "a note"
     assert fetched.weight == 1.25
+
+
+def test_float_round_trip_and_content_lookup_preserve_signed_zero(database):
+    record = FloatRecord(-0.0, (-0.0, 0.0, 1.25))
+    key = content_id(record)
+    sid = SqlStore(database, entry_backings={}).save(record)
+    reopened = SqlStore(database)
+    fetched = reopened.fetch(FloatRecord, sid)
+    assert content_id(fetched) == key
+    assert reopened.fetch_by_content_id(FloatRecord, key) == fetched
+    assert math.copysign(1.0, fetched.scalar) == -1.0
+    assert [math.copysign(1.0, value) for value in fetched.values[:2]] == [-1.0, 1.0]
 
 
 def test_round_trip_optional_reference_none(database):

@@ -33,6 +33,7 @@ __all__ = [
     "EntryFamilyLayout",
     "StorageLayout",
     "StorageLayoutUpgradeRequiredError",
+    "actual_schema_objects",
     "actual_table_names",
     "declaration_json",
     "expected_metadata",
@@ -58,7 +59,7 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
 
     ``diff`` is immutable and JSON-shaped.  Its top-level keys are stable
     categories (currently ``protocol``, ``declaration`` and ``schema``), so a
-    caller can present a precise upgrade/adoption diagnostic without parsing
+    caller can present a precise upgrade diagnostic without parsing
     the human-readable exception message.
     """
 
@@ -66,7 +67,7 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
         frozen = _freeze_mapping(diff)
         self.diff: Mapping[str, object] = frozen
         categories = ", ".join(frozen) or "unknown layout difference"
-        super().__init__(f"SqlStore layout upgrade or explicit adoption is required ({categories})")
+        super().__init__(f"SqlStore layout upgrade is required ({categories})")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -251,8 +252,8 @@ def metadata_table_for(metadata: sqlalchemy.MetaData) -> sqlalchemy.Table:
     )
 
 
-def actual_table_names(connection: sqlalchemy.Connection) -> frozenset[str]:
-    """Return application table names without SQLAlchemy reflection.
+def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, frozenset[str]]:
+    """Return application schema-object names mapped to their stable object kinds.
 
     The DuckDB SQLAlchemy inspector presently routes column inspection through
     a PostgreSQL catalogue relation DuckDB does not expose, so the whole
@@ -260,18 +261,30 @@ def actual_table_names(connection: sqlalchemy.Connection) -> frozenset[str]:
     """
     if connection.dialect.name == "sqlite":
         rows = connection.execute(
-            sqlalchemy.text("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+            sqlalchemy.text(
+                "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
+            )
         )
     elif connection.dialect.name == "duckdb":
         rows = connection.execute(
             sqlalchemy.text(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"
+                "SELECT table_name, lower(table_type) FROM information_schema.tables "
+                "WHERE table_schema = current_schema() "
+                "UNION ALL "
+                "SELECT sequence_name, 'sequence' FROM duckdb_sequences() WHERE schema_name = current_schema()"
             )
         )
     else:
         raise ValueError(f"SqlStore layout validation does not support dialect {connection.dialect.name!r}")
-    return frozenset(str(row[0]) for row in rows)
+    result: dict[str, set[str]] = {}
+    for name, kind in rows:
+        result.setdefault(str(name), set()).add(str(kind).lower().replace("base ", ""))
+    return MappingProxyType({name: frozenset(kinds) for name, kinds in result.items()})
+
+
+def actual_table_names(connection: sqlalchemy.Connection) -> frozenset[str]:
+    """Return application base-table names without SQLAlchemy reflection."""
+    return frozenset(name for name, kinds in actual_schema_objects(connection).items() if "table" in kinds)
 
 
 def read_store_metadata(connection: sqlalchemy.Connection) -> Mapping[str, str] | None:

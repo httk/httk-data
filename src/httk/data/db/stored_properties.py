@@ -64,7 +64,7 @@ __all__ = [
 
 
 _CORE_PROPERTIES: Final[frozenset[str]] = frozenset(("id", "type"))
-_EXACT_CODEC_NAMES: Final = frozenset(("fraction", "fracscalar", "surdscalar"))
+_EXACT_CODEC_NAMES: Final = frozenset(("float", "fraction", "fracscalar", "surdscalar"))
 _NO_LITERAL: Final = object()
 _RFC3339_TIMESTAMP: Final = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})\Z",
@@ -214,7 +214,9 @@ class _SqlQueryContext:
             return self.equal(left_value, right_value)
         if operator == "!=":
             return _SqlPredicate(sqlalchemy.not_(self.equal(left_value, right_value).clause))
-        if left_value.exact_element is not None or right_value.exact_element is not None:
+        if (
+            left_value.exact_element is not None or right_value.exact_element is not None
+        ) and not _exact_ordering_uses_float_companion(left_value, right_value):
             raise QueryLiteralError("ordering an exact stored value is not implemented")
         if operator == "<":
             return _SqlPredicate(_bool_clause(left_value.element < right_value.element))
@@ -597,7 +599,8 @@ class StoredPropertySqlPlan:
             # explicit before the actual user key in both directions.
             null_rank = sqlalchemy.case((value.element.is_(None), 1), else_=0)
             searcher.add_sort(SqlColumn(searcher, null_rank), False)
-            searcher.add_sort(SqlColumn(searcher, value.exact), descending)
+            order_element = value.element if value.codec is not None and value.codec.name == "float" else value.exact
+            searcher.add_sort(SqlColumn(searcher, order_element), descending)
             sort_values.append(value)
         return searcher, variable, tuple(sort_values)
 
@@ -643,7 +646,7 @@ class StoredPropertySqlPlan:
         sorter = projection.sort
         assert sorter is not None
         value = _value(sorter(cast(Any, context)))
-        if value.exact_element is not None:
+        if value.exact_element is not None and (value.codec is None or value.codec.name != "float"):
             raise StoredPropertySqlConfigurationError(
                 f"{backing.backing.__name__}.{name} cannot sort an exact value through its canonical text column"
             )
@@ -864,6 +867,12 @@ def _codec_literals(left: _SqlValue, right: _SqlValue) -> tuple[_SqlValue, _SqlV
     elif right.codec is not None and left.literal is not _NO_LITERAL:
         left = _codec_literal(left, right.codec, right.exact_element is not None)
     return left, right
+
+
+def _exact_ordering_uses_float_companion(left: _SqlValue, right: _SqlValue) -> bool:
+    """Whether exact operands belong to float fields whose DOUBLE remains orderable."""
+    codecs = tuple(value.codec for value in (left, right) if value.codec is not None)
+    return bool(codecs) and all(codec.name == "float" for codec in codecs)
 
 
 def _codec_literal(value: _SqlValue, codec: ValueCodec, needs_exact: bool) -> _SqlValue:

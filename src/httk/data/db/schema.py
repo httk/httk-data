@@ -12,8 +12,10 @@ derives DDL, inserts, selects, and reconstruction alike.
 
 Resolution rules (field annotation, then the resulting relational shape):
 
-- ``int``/``float``/``str``/``bool``/``bytes`` — one scalar column named after
-  the field (``bool`` is its own column kind, never folded into ``int``).
+- ``int``/``str``/``bool``/``bytes`` — one scalar column named after the field
+  (``bool`` is its own column kind, never folded into ``int``). ``float`` uses
+  a query ``DOUBLE`` plus an exact ``*_exact`` hexadecimal text column so
+  signed zero and every other finite binary64 value round-trip unchanged.
 - ``X | None`` — the field is optional; all of its columns become nullable.
 - a type with a registered :class:`~httk.data.db.codecs.ValueCodec`
   (:class:`fractions.Fraction`, :class:`~httk.core.FracScalar`,
@@ -225,7 +227,6 @@ _RESERVED_FIELD_NAMES: Final = frozenset({"sid", "content_id"})
 
 _SCALAR_KINDS: Final[dict[type, ScalarKind]] = {
     int: "int",
-    float: "float",
     str: "str",
     bool: "bool",
     bytes: "bytes",

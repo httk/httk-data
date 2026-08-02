@@ -85,11 +85,13 @@ def _immutable_id_query(ctx, operator: str, literal: object):
         return ctx.and_()
     if literal == "empty-or":
         return ctx.or_()
+    if literal == "score-gt":
+        return ctx.compare(ctx.field("score"), ">", ctx.constant(1.5))
     raise QueryLiteralError(f"unknown generic calculation literal {literal!r}")
 
 
 def _immutable_id_sort(ctx):
-    return ctx.field("label")
+    return ctx.field("score")
 
 
 def _last_modified_query(ctx, operator: str, literal: object):
@@ -108,6 +110,7 @@ class GenericCalculationFirst:
     label: str
     energy: Fraction
     comment: str | None
+    score: float
     parts: list[CompositionPart] = field(default_factory=list)
 
     __httk_stored_properties__: ClassVar = {
@@ -127,6 +130,7 @@ class GenericCalculationSecond:
     energy: Fraction
     comment: str | None
     modified: datetime.datetime
+    score: float
     parts: list[CompositionPart] = field(default_factory=list)
 
     __httk_stored_properties__: ClassVar = {
@@ -211,6 +215,7 @@ FIRST = GenericCalculationFirst(
     "first",
     Fraction(1, 3),
     None,
+    0.5,
     [
         CompositionPart("A", Fraction(2, 3), [Fraction(2, 3)]),
         CompositionPart("B", Fraction(1, 3), [Fraction(1, 3)]),
@@ -221,6 +226,7 @@ SECOND = GenericCalculationSecond(
     Fraction(7, 9),
     "known",
     datetime.datetime(2026, 8, 2, 10, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
+    2.0,
     [
         CompositionPart("A", Fraction(1, 2), [Fraction(1, 2)]),
         CompositionPart("B", Fraction(1, 2), [Fraction(1, 2)]),
@@ -269,6 +275,7 @@ def test_plan_projects_concrete_backings_and_nullable_missing_properties(plan):
         ('immutable_id = "null-comment"', {"first"}),
         ('immutable_id = "nested"', {"first"}),
         ('immutable_id = "when-known"', {"second"}),
+        ('immutable_id = "score-gt"', {"second"}),
         ("last_modified IS UNKNOWN", {"first"}),
         ("last_modified IS KNOWN", {"second"}),
         ('NOT last_modified = "2026-01-01T00:00:00Z"', {"second"}),

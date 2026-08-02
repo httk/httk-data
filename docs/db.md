@@ -58,11 +58,13 @@ class StructureRecord:
         return len(self.symbols)
 ```
 
-Scalars (`int`/`float`/`str`/`bool`/`bytes`) become columns, `X | None` makes
-them nullable, rationals and datetimes are encoded by value codecs, lists and
-tuples become child tables, and nested storable dataclasses become foreign keys
-(saved recursively first). Classes you cannot modify can be described
-externally with `register_schema_override`.
+Scalars (`int`/`str`/`bool`/`bytes`) become columns, while `float` gets a query
+`DOUBLE` plus an exact hexadecimal text companion so signed zero and every
+other finite binary64 value round-trip unchanged. `X | None` makes fields
+nullable, rationals and datetimes are encoded by value codecs, lists and tuples
+become child tables, and nested storable dataclasses become foreign keys (saved
+recursively first). Classes you cannot modify can be described externally with
+`register_schema_override`.
 
 ## Storing and fetching
 

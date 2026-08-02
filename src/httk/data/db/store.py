@@ -67,6 +67,7 @@ from httk.data.db.layout import (
     EntryFamilyLayout,
     StorageLayout,
     StorageLayoutUpgradeRequiredError,
+    actual_schema_objects,
     actual_table_names,
     declaration_json,
     expected_metadata,
@@ -121,12 +122,16 @@ class _Projection:
         return content_id(source, as_record=record_type, projector=self.projector)
 
 
+def _schema_object_type(kinds: frozenset[str]) -> object:
+    return next(iter(kinds)) if len(kinds) == 1 else tuple(sorted(kinds))
+
+
 class SqlStore:
     """Object storage for storable frozen dataclasses in a relational :class:`~httk.data.db.engine.Database`.
 
     A store starts with an explicit, versioned entry declaration. Ordinary
     unconfigured frozen-dataclass tables remain on-demand, but only after the
-    layout marker has been initialized or adopted exactly.
+    layout marker has been initialized on a physically empty database.
     """
 
     def __init__(
@@ -148,9 +153,7 @@ class SqlStore:
         self._unclaimed_table_names: frozenset[str] = frozenset()
         self._validated_table_names: set[str] = set()
         self._initialized = False
-        self._initializing = False
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
-        self._initialization_metadata_created = False
         self._instances: weakref.WeakValueDictionary[tuple[type, int], Any] = weakref.WeakValueDictionary()
         self._sids: weakref.WeakKeyDictionary[Any, dict[type, int]] = weakref.WeakKeyDictionary()
         self._sids_by_identity: dict[tuple[type, int], int] = {}
@@ -189,17 +192,13 @@ class SqlStore:
                 self._initialize_layout_on_connection(connection, supplied, write=True)
         except BaseException:
             created_tables = tuple(self._initialization_ddl_journal)
-            cleanup_marker = self._initialization_metadata_created
             self._initialization_ddl_journal.clear()
-            self._initialization_metadata_created = False
             # The transaction context has now unwound. This ordering matters
             # for SQLite, whose DDL can survive SQLAlchemy's outer rollback;
             # opening the cleanup transaction while the original one is still
             # active would merely fail against its shared connection.
             if created_tables:
                 self._cleanup_initialization_tables(created_tables)
-            elif cleanup_marker:
-                self._cleanup_metadata_table()
             self._metadata = sqlalchemy.MetaData()
             self._layout = None
             self._managed_table_names = frozenset()
@@ -209,7 +208,6 @@ class SqlStore:
             self._clear_identity_caches()
             raise
         self._initialization_ddl_journal.clear()
-        self._initialization_metadata_created = False
 
     def _initialize_layout_on_connection(
         self,
@@ -218,7 +216,8 @@ class SqlStore:
         *,
         write: bool,
     ) -> None:
-        names_before = actual_table_names(connection)
+        objects_before = actual_schema_objects(connection)
+        names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         marker_metadata = sqlalchemy.MetaData()
         metadata_table_for(marker_metadata)
         if METADATA_TABLE_NAME in names_before:
@@ -235,11 +234,10 @@ class SqlStore:
             self._open_marked_layout(connection, stored, supplied)
             return
 
-        if supplied is None:
-            raise TypeError("entry_backings is required when opening an uninitialized or unversioned database")
-        expected = expected_metadata(supplied)
-        configured_names = frozenset(expected.tables) - {METADATA_TABLE_NAME}
-        if not names_before:
+        if not objects_before:
+            if supplied is None:
+                raise TypeError("entry_backings is required when opening an uninitialized database")
+            expected = expected_metadata(supplied)
             if not write:
                 raise StorageLayoutUpgradeRequiredError(
                     {
@@ -255,39 +253,31 @@ class SqlStore:
             self._install_layout(supplied, expected, ())
             return
 
-        unexpected_reserved = tuple(
-            sorted(name for name in names_before if name.startswith("_httk_") and name not in configured_names)
+        schema: dict[str, object] = {METADATA_TABLE_NAME: {"missing": True}}
+        for name, kinds in sorted(objects_before.items()):
+            object_type = _schema_object_type(kinds)
+            if name.startswith("_httk_"):
+                schema[name] = {
+                    "reserved": True,
+                    "object_type": object_type,
+                    "message": "unexpected schema object uses the SqlStore-reserved _httk_ prefix",
+                }
+            else:
+                schema[name] = {
+                    "unversioned": True,
+                    "object_type": object_type,
+                    "message": "a nonempty database without SqlStore metadata cannot be adopted",
+                }
+        raise StorageLayoutUpgradeRequiredError(
+            {
+                "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
+                "declaration": {
+                    "expected": declaration_json(supplied) if supplied is not None else "explicit entry_backings",
+                    "actual": None,
+                },
+                "schema": schema,
+            }
         )
-        if unexpected_reserved:
-            raise StorageLayoutUpgradeRequiredError(
-                {
-                    "schema": {
-                        name: {
-                            "reserved": True,
-                            "message": "unexpected table uses the SqlStore-reserved _httk_ prefix",
-                        }
-                        for name in unexpected_reserved
-                    }
-                }
-            )
-        configured_schema = validate_expected_tables(connection, expected, table_names=tuple(sorted(configured_names)))
-        if configured_schema:
-            raise StorageLayoutUpgradeRequiredError({"schema": configured_schema})
-        self._audit_adopted_content_ids(connection, supplied, expected)
-        self._audit_dispatch_data(connection, supplied, expected)
-        unclaimed = tuple(sorted(names_before - configured_names))
-        if not write:
-            raise StorageLayoutUpgradeRequiredError(
-                {
-                    "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
-                    "declaration": {"expected": declaration_json(supplied), "actual": None},
-                    "schema": {METADATA_TABLE_NAME: {"missing": True}},
-                }
-            )
-        metadata_table_for(sqlalchemy.MetaData()).create(connection, checkfirst=False)
-        self._initialization_metadata_created = True
-        self._stamp_layout(connection, supplied, unclaimed)
-        self._install_layout(supplied, expected, unclaimed)
 
     def _open_marked_layout(
         self,
@@ -339,25 +329,21 @@ class SqlStore:
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None and expected is not None
-        unexpected_reserved = tuple(
-            sorted(
-                name
-                for name in actual_table_names(connection)
-                if name.startswith("_httk_") and name not in expected.tables
-            )
-        )
-        if unexpected_reserved:
-            raise StorageLayoutUpgradeRequiredError(
-                {
-                    "schema": {
-                        name: {
-                            "reserved": True,
-                            "message": "unexpected table uses the SqlStore-reserved _httk_ prefix",
-                        }
-                        for name in unexpected_reserved
-                    }
+        object_problems: dict[str, object] = {}
+        for name, kinds in actual_schema_objects(connection).items():
+            if name in expected.tables and kinds != frozenset(("table",)):
+                object_problems[name] = {
+                    "object_type": _schema_object_type(kinds),
+                    "message": "a managed table name is also used by an unexpected schema object",
                 }
-            )
+            elif name.startswith("_httk_") and name not in expected.tables:
+                object_problems[name] = {
+                    "reserved": True,
+                    "object_type": _schema_object_type(kinds),
+                    "message": "unexpected schema object uses the SqlStore-reserved _httk_ prefix",
+                }
+        if object_problems:
+            raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
         schema_difference = validate_expected_tables(connection, expected)
         if schema_difference:
             raise StorageLayoutUpgradeRequiredError({"schema": schema_difference})
@@ -432,92 +418,6 @@ class SqlStore:
             # still has no marker and will be refused as unversioned.
             return
 
-    def _cleanup_metadata_table(self) -> None:
-        try:
-            with self._database.engine.begin() as cleanup:
-                table = metadata_table_for(sqlalchemy.MetaData())
-                cleanup.execute(sqlalchemy.schema.DropTable(table, if_exists=True))
-        except BaseException:
-            return
-
-    def _audit_adopted_content_ids(
-        self,
-        connection: sqlalchemy.Connection,
-        layout: StorageLayout,
-        metadata: sqlalchemy.MetaData,
-    ) -> None:
-        """Refuse unversioned content-addressed records whose stored identity is stale.
-
-        The audit uses the normal exact hydrator, so a root identity also
-        validates all transitive exact codecs and reference reconstruction. A
-        record graph that cannot be hydrated safely is refused rather than
-        stamped with an identity claim the current implementation cannot prove.
-        """
-        classes: set[type] = set()
-
-        def visit(record: type) -> None:
-            if record in classes:
-                return
-            classes.add(record)
-            for target in resolve_schema(record).referenced_classes():
-                visit(target)
-
-        for family in layout.families:
-            for backing in family.backings:
-                visit(backing)
-        previous_metadata = self._metadata
-        previous_layout = self._layout
-        previous_managed = self._managed_table_names
-        previous_validated = self._validated_table_names
-        self._metadata = metadata
-        self._layout = layout
-        self._managed_table_names = frozenset(metadata.tables)
-        self._validated_table_names = set(metadata.tables)
-        self._initializing = True
-        try:
-            for record in sorted(classes, key=lambda item: resolve_schema(item).table_name):
-                schema = resolve_schema(record)
-                if schema.dedup != "content_id":
-                    continue
-                table = self._table(schema.table_name)
-                rows = connection.execute(sqlalchemy.select(table.c[SID_COLUMN], table.c[CONTENT_ID_COLUMN])).all()
-                for sid, stored_content_id in rows:
-                    try:
-                        hydrated = self._fetch(connection, record, int(sid))
-                        current_content_id = content_id(hydrated)
-                    except BaseException as error:
-                        raise StorageLayoutUpgradeRequiredError(
-                            {
-                                "schema": {
-                                    schema.table_name: {
-                                        "identity_audit": "could not hydrate safely",
-                                        "record": record.__name__,
-                                        "error": str(error),
-                                    }
-                                }
-                            }
-                        ) from error
-                    if current_content_id != stored_content_id:
-                        raise StorageLayoutUpgradeRequiredError(
-                            {
-                                "schema": {
-                                    schema.table_name: {
-                                        "identity_audit": "content_id mismatch",
-                                        "sid": int(sid),
-                                        "expected": current_content_id,
-                                        "actual": stored_content_id,
-                                    }
-                                }
-                            }
-                        )
-        finally:
-            self._initializing = False
-            self._metadata = previous_metadata
-            self._layout = previous_layout
-            self._managed_table_names = previous_managed
-            self._validated_table_names = previous_validated
-            self._clear_identity_caches()
-
     @staticmethod
     def _audit_dispatch_data(
         connection: sqlalchemy.Connection,
@@ -530,7 +430,7 @@ class SqlStore:
         backing, but they cannot enforce the inverse: a backing may be saved
         without a dispatch row or a valid foreign key may point at a backing
         whose content id differs.  Both conditions make entry lookup
-        incomplete or wrong, so opening/adopting a store refuses them.
+        incomplete or wrong, so opening a store refuses them.
         """
         problems: dict[str, object] = {}
         for family in layout.families:
@@ -715,11 +615,9 @@ class SqlStore:
         Configured entry tables are installed at construction.  Every other
         class is private storage: an existing table is always compared to the
         SQLAlchemy-derived layout before use, and a missing one is created
-        only by an ``ensure`` store.  Tables observed during unversioned
-        adoption remain explicitly unclaimed, so an old private content-id
-        table can never be silently accepted as current storage.
+        only by an ``ensure`` store.
         """
-        if not self._initialized and not self._initializing:
+        if not self._initialized:
             raise RuntimeError("SqlStore layout has not been initialized")
         if connection is None:
             # RowHydrator calls this helper before it obtains its own nested

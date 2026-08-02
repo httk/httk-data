@@ -12,6 +12,9 @@ nearest ``float`` (comparisons on it are documented float-approximate), while a
 companion ``*_exact`` text column holds a canonical exact form that is the
 round-trip source of truth. The canonical text formats are:
 
+- ``float.hex()`` — the exact finite IEEE-754 binary64 value, including the
+  sign of zero. Used for scalar ``float`` fields and float sequence elements;
+  the accompanying SQL ``DOUBLE`` remains the query/sort presentation.
 - :data:`FRACTION_EXACT_FORMAT` — a reduced fraction as ``"p/q"``, always with
   the ``/q`` part (``"1/1"`` for one), denominator positive. Used for
   :class:`fractions.Fraction` and :class:`~httk.core.FracScalar`.
@@ -313,6 +316,15 @@ def _decode_surdscalar(values: tuple[Any, ...]) -> Any:
     return decode_surdscalar_exact(values[1])
 
 
+def _encode_float(value: Any) -> tuple[Any, ...]:
+    exact = float(value)
+    return (exact, exact.hex())
+
+
+def _decode_float(values: tuple[Any, ...]) -> Any:
+    return float.fromhex(values[1])
+
+
 def _encode_datetime(value: Any) -> tuple[Any, ...]:
     if value.tzinfo is not None and value.utcoffset() is not None:
         value = value.astimezone(datetime.UTC)
@@ -325,6 +337,15 @@ def _decode_datetime(values: tuple[Any, ...]) -> Any:
 
 _EXACT_COLUMNS: Final[tuple[tuple[str, ScalarKind], ...]] = (("", "float"), ("_exact", "str"))
 
+register_value_codec(
+    ValueCodec(
+        name="float",
+        python_type=float,
+        columns=_EXACT_COLUMNS,
+        encode=_encode_float,
+        decode=_decode_float,
+    )
+)
 register_value_codec(
     ValueCodec(
         name="fraction",

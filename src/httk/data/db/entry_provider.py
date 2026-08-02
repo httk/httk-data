@@ -86,6 +86,7 @@ _SCALAR_FULLTYPES: Final[dict[str, str]] = {
 
 #: How a built-in value codec maps onto an OPTIMADE fulltype (custom codecs have none).
 _CODEC_FULLTYPES: Final[dict[str, str]] = {
+    "float": "float",
     "fraction": "float",
     "fracscalar": "float",
     "surdscalar": "float",
