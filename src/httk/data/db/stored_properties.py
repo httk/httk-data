@@ -141,6 +141,9 @@ class _SqlScope:
                     f"{self.scalar_child.field!r} is a scalar child scope; use field('value')"
                 )
             return self.context._child_scalar_value(self, self.scalar_child)
+        for spec in self.schema.fields:
+            if spec.role == "child" and spec.optional and name == f"{spec.field}_present":
+                return self.context._scoped_scalar(self, _SqlValue(self.alias.c[name], scope=self))
         try:
             spec = self.schema.field(name)
         except SchemaError as error:
@@ -514,7 +517,7 @@ class StoredPropertySqlPlan:
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[StoredPropertySqlCandidateStream] = []
-        for backing, backing_name in zip(self._backings, self.layout.backing_names, strict=True):
+        for backing, backing_name in zip(self._backings, self.layout.record_names, strict=True):
             searcher, variable, sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix)
             searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
             searcher.output(SqlColumn(searcher, variable._alias.c[CONTENT_ID_COLUMN]), "content_id")
@@ -696,7 +699,7 @@ def stored_property_sql_plan(store: SqlStore, family: type) -> StoredPropertySql
 
     backing_plans: list[_BackingPlan] = []
     definition_names = set(definition.properties)
-    for backing in layout.backings:
+    for backing in layout.records:
         projections = stored_property_projections(backing)
         reserved = sorted(_CORE_PROPERTIES & set(projections))
         if reserved:

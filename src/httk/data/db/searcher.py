@@ -540,6 +540,9 @@ class SqlVariable:
             # The store-managed integer primary key ('sid' is a reserved field
             # name, so this never shadows a stored field).
             return SqlColumn(self._searcher, self._alias.c[SID_COLUMN])
+        for spec in self._schema.fields:
+            if spec.role == "child" and spec.optional and name == f"{spec.field}_present":
+                return SqlColumn(self._searcher, self._alias.c[name])
         try:
             spec = self._schema.field(name)
         except SchemaError:
@@ -651,15 +654,16 @@ class SqlSearcher:
         self._grouped = False
         self._limit: int | None = None
         self.offset: int = 0
+        self._vacuous = False
         """Row offset applied when iterating; mutable (:meth:`add_offset` adds to it)."""
 
     def variable(self, target: type) -> SqlVariable:
         """A new query variable over ``target``'s table (a fresh alias; self-joins allowed).
 
-        The class's tables are created on first use (via
-        :meth:`~httk.data.db.store.SqlStore.ensure_tables`).
+        A missing table makes this variable a vacuous search; reads never
+        create tables.
         """
-        self._store.ensure_tables(target)
+        self._vacuous |= self._store._missing_tables_for_read((target,))
         schema = resolve_schema(target)
         alias = self._store._table(schema.table_name).alias()
         variable = SqlVariable(self, target, schema, alias)
@@ -798,6 +802,8 @@ class SqlSearcher:
 
     def count(self) -> int:
         """The number of matches, disregarding any limit and offset (grouped: one per group)."""
+        if self._vacuous:
+            return 0
         sids = [cast("sqlalchemy.ColumnElement[Any]", v._alias.c[SID_COLUMN]) for v in self._variables]
         statement = self._base_select(sids, sids)
         count_statement = sqlalchemy.select(sqlalchemy.func.count()).select_from(statement.subquery())
@@ -812,6 +818,8 @@ class SqlSearcher:
         """
         if not self._outputs:
             raise ValueError("this searcher has no outputs; call output() before iterating")
+        if self._vacuous:
+            return iter(())
         columns = [output.element for output in self._outputs]
         group_columns = [cast("sqlalchemy.ColumnElement[Any]", v._alias.c[SID_COLUMN]) for v in self._variables]
         group_columns += [output.element for output in self._outputs if output.target is None and not output.from_child]

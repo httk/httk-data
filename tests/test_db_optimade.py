@@ -45,7 +45,7 @@ MAT_3 = Material("gamma oxide", Fraction(7, 2), ["O"], None)
 
 @pytest.fixture()
 def store():
-    store = SqlStore(Database.sqlite(":memory:"), entry_backings={})
+    store = SqlStore(Database.sqlite(":memory:"), entry_records={})
     for material in (MAT_1, MAT_2, MAT_3):
         store.save(material)
     return store
@@ -147,9 +147,7 @@ def test_child_of_storable_target(store):
     assembly_2 = Assembly("hinge", [part_a])
     store.save(assembly_1)
     store.save(assembly_2)
-    searcher = optimade_filter_searcher(
-        store, Assembly, "parts._httk_val > 2", related_classes={"parts": Part}
-    )
+    searcher = optimade_filter_searcher(store, Assembly, "parts._httk_val > 2", related_classes={"parts": Part})
     assert results(searcher) == [assembly_1]
     part_a_sid = store.sid_of(part_a)
     searcher = optimade_filter_searcher(
@@ -160,9 +158,7 @@ def test_child_of_storable_target(store):
 
 def test_nested_dotted_path_not_implemented(store):
     with pytest.raises(FilterTranslationError) as excinfo:
-        optimade_filter_searcher(
-            store, Material, "refs.other._httk_x = 1", related_classes={"refs": Publication}
-        )
+        optimade_filter_searcher(store, Material, "refs.other._httk_x = 1", related_classes={"refs": Publication})
     assert excinfo.value.category == "not-implemented"
 
 
@@ -193,6 +189,4 @@ def test_unknown_unprefixed_property_matches_nothing(store):
 
 def test_unmatched_related_class_raises_value_error(store):
     with pytest.raises(ValueError):
-        optimade_filter_searcher(
-            store, Material, 'parts.id HAS "parts-1"', related_classes={"parts": Part}
-        )
+        optimade_filter_searcher(store, Material, 'parts.id HAS "parts-1"', related_classes={"parts": Part})

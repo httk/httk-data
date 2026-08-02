@@ -265,6 +265,8 @@ class SqlResultSet:
     def _execute(self, *, limit: int | None = None) -> tuple[tuple[Any, ...], ...]:
         if not self._plan._outputs:
             raise ValueError("this search has no outputs; declare outputs or pass them to results()")
+        if self._plan._vacuous:
+            return ()
         with self._plan._store._read_connection() as connection:
             return tuple(tuple(row) for row in connection.execute(self._statement(limit=limit)).fetchall())
 
@@ -436,6 +438,8 @@ class SqlResultSet:
         decoded: _DecodedContinuation | None = None
         if cursor is not None:
             decoded = _decode_continuation(cursor, fingerprint=fingerprint, anchors=len(keys))
+        if self._plan._vacuous:
+            return ResultPage((), None, None, total=0 if include_total else None)
 
         statement, raw_width = self._page_statement(keys, decoded, size)
         with self._plan._store._read_connection() as connection:

@@ -85,7 +85,7 @@ BOOK_2 = Book(
 @pytest.fixture()
 def store():
     with Database.sqlite() as database:
-        sql_store = SqlStore(database, entry_backings={})
+        sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
             # Writers first, in a known order, so their sids are 1, 2, 3.
             for writer in (ADA, BOOLE, CARA):
@@ -380,7 +380,7 @@ class Simulation:
 @contextlib.contextmanager
 def sqlite_store(*objects):
     with Database.sqlite() as database:
-        sql_store = SqlStore(database, entry_backings={})
+        sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
             for obj in objects:
                 sql_store.save(obj)
@@ -435,8 +435,20 @@ def test_served_class_link_with_none_target_is_field_inverse():
             "compounds-1": (RelatedEntry("simulations", "simulations-1", role="output"),)
         }
         # The forward 'compound' reference field still serves as usual (no meta declared):
-        assert provider.relationships("simulations") == {
-            "simulations-1": (RelatedEntry("compounds", "compounds-1"),)
+        assert provider.relationships("simulations") == {"simulations-1": (RelatedEntry("compounds", "compounds-1"),)}
+
+
+def test_missing_link_class_does_not_hide_direct_relationships():
+    compound = Compound("NaCl")
+    with sqlite_store(compound, Simulation("run-1", compound)) as store:
+        provider = StoreEntryProvider(
+            store,
+            {"compounds": Compound, "simulations": Simulation, "citations": Citation},
+            link_classes=[CompoundTag],
+        )
+
+        assert provider.relationships("compounds") == {
+            "compounds-1": (RelatedEntry("simulations", "simulations-1", role="output"),)
         }
 
 
@@ -447,9 +459,7 @@ def test_link_ordering_and_dedup():
     # dedup="none": saving the same tag twice stores two rows; each row expresses
     # both declared links, so without dedup compounds-1 would get four entries.
     with sqlite_store(c1, z1, tag, CompoundTag(c1, z1)) as store:
-        provider = StoreEntryProvider(
-            store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundTag]
-        )
+        provider = StoreEntryProvider(store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundTag])
         # Exact duplicates collapse (first occurrence wins); entries differing
         # only in meta are both kept, in link declaration order.
         assert provider.relationships("compounds") == {
@@ -488,9 +498,7 @@ def test_custom_id_of_used_on_link_paths():
             store, {"compounds": Compound, "citations": Citation}, link_classes=[CompoundCitation], id_of=id_of
         )
         assert provider.relationships("compounds") == {
-            "compounds/NaCl": (
-                RelatedEntry("citations", "citations/10.1/a", description="Cited by", role="citation"),
-            )
+            "compounds/NaCl": (RelatedEntry("citations", "citations/10.1/a", description="Cited by", role="citation"),)
         }
 
 
@@ -524,13 +532,9 @@ def test_optimade_adapter_end_to_end(provider):
     assert results[0].values["_httk_title"] == "Analytical Engines"
 
     results = list(
-        execute_query(
-            adapter, ["books"], ["id"], [], 100, 0, parse_optimade_filter('_httk_keywords HAS "history"')
-        )
+        execute_query(adapter, ["books"], ["id"], [], 100, 0, parse_optimade_filter('_httk_keywords HAS "history"'))
     )
     assert [r.values["id"] for r in results] == ["books-1"]
 
-    results = list(
-        execute_query(adapter, ["writers"], ["id"], [], 100, 0, parse_optimade_filter("_httk_born = 1820"))
-    )
+    results = list(execute_query(adapter, ["writers"], ["id"], [], 100, 0, parse_optimade_filter("_httk_born = 1820")))
     assert [r.values["id"] for r in results] == ["writers-3"]

@@ -134,6 +134,30 @@ class CycleRecord:
 
 
 @dataclass(frozen=True)
+class RecursiveMetadataRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_recursive_metadata")
+
+    value: int
+    child: "RecursiveMetadataRecord | None" = None
+    note: Annotated[str, IdentitySkip()] = "stored"
+
+
+@dataclass(frozen=True)
+class RecursiveNoMetadataRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_recursive_no_metadata")
+
+    value: int
+    child: "RecursiveNoMetadataRecord | None" = None
+
+
+@dataclass(frozen=True)
+class IdentityChildContainer:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_identity_child_container")
+
+    children: Annotated[list[RecursiveNoMetadataRecord], IdentitySkip()]
+
+
+@dataclass(frozen=True)
 class NoDedupLeaf:
     __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_no_dedup_leaf", dedup="none")
 
@@ -166,6 +190,50 @@ class SummaryReference:
 class FoldMetadata:
     value: str
     instants: Annotated[tuple[datetime.datetime, ...], IdentitySkip()]
+
+
+@dataclass(frozen=True)
+class MetadataProbeRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_metadata_probe")
+
+    value: int
+    metadata: Annotated[str, IdentitySkip()]
+    constructed: ClassVar[int] = 0
+
+    def __post_init__(self) -> None:
+        type(self).constructed += 1
+
+
+@dataclass(frozen=True)
+class NoMetadataProbeRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_no_metadata_probe")
+
+    value: int
+
+
+@dataclass(frozen=True)
+class ValidationProbeView:
+    value: int
+
+
+@dataclass(frozen=True)
+class ValidationProbeRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_validation_probe")
+    __httk_canonical_source__: ClassVar[type] = ValidationProbeView
+
+    value: int
+    calls: ClassVar[list[int]] = []
+
+    @classmethod
+    def __httk_project__(cls, source: ValidationProbeView) -> Mapping[str, object]:
+        return {"value": source.value}
+
+    @classmethod
+    def __httk_validate__(cls, source: "ValidationProbeRecord") -> None:
+        cls.calls.append(source.value)
+
+
+ValidationProbeView.__httk_storage_record__ = ValidationProbeRecord
 
 
 @dataclass(frozen=True)
@@ -219,7 +287,7 @@ def test_projected_nested_save_calls_each_projection_once():
     _calls.clear()
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(source)
         fetched = store.fetch(RootRecord, sid)
 
@@ -238,8 +306,8 @@ def test_projected_nested_save_calls_each_projection_once():
 def test_same_content_identity_has_store_local_sids():
     source = _root()
     with Database.sqlite() as first_database, Database.sqlite() as second_database:
-        first = SqlStore(first_database, entry_backings={})
-        second = SqlStore(second_database, entry_backings={})
+        first = SqlStore(first_database, entry_records={})
+        second = SqlStore(second_database, entry_records={})
         first_sid = first.save(source)
         second.save(_root("other"))
         second_sid = second.save(source)
@@ -255,7 +323,7 @@ def test_sid_of_queries_reopened_database(tmp_path):
     path = tmp_path / "projection.sqlite"
     source = _root()
     database = Database.sqlite(path)
-    sid = SqlStore(database, entry_backings={}).save(source)
+    sid = SqlStore(database, entry_records={}).save(source)
     database.dispose()
 
     with Database.sqlite(path) as reopened:
@@ -265,7 +333,7 @@ def test_sid_of_queries_reopened_database(tmp_path):
 def test_identity_skipped_metadata_is_stored_and_checked():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(source)
         same_instant = replace(source, modified=source.modified.astimezone(datetime.UTC))
         assert store.save(same_instant) == sid
@@ -279,10 +347,118 @@ def test_identity_skipped_metadata_is_stored_and_checked():
             store.save(replace(source, primary=replace(source.primary, note="changed")))
 
 
+def test_recursive_metadata_plan_descends_a_finite_chain():
+    leaf = RecursiveMetadataRecord(3, note="stored")
+    middle = RecursiveMetadataRecord(2, leaf)
+    root = RecursiveMetadataRecord(1, middle)
+    conflicting = replace(root, child=replace(middle, child=replace(leaf, note="changed")))
+
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        store.save(root)
+        with pytest.raises(EntryMetadataConflictError, match="child.child.note"):
+            store.save(conflicting)
+
+
+def test_recursive_metadata_free_type_has_no_dedup_metadata_query():
+    leaf = RecursiveNoMetadataRecord(3)
+    middle = RecursiveNoMetadataRecord(2, leaf)
+    root = RecursiveNoMetadataRecord(1, middle)
+
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        root_sid = store.save(root)
+        statements: list[str] = []
+
+        def count_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", count_select)
+        try:
+            assert store.save(root) == root_sid
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", count_select)
+
+    assert len(statements) == 1
+
+
+def test_identity_skipped_child_length_conflict_keeps_parent_detail():
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        store.save(IdentityChildContainer([RecursiveNoMetadataRecord(1)]))
+        with pytest.raises(EntryMetadataConflictError, match=r"children: stored .*received \[\]"):
+            store.save(IdentityChildContainer([]))
+
+
+def test_dedup_hit_checks_metadata_without_reconstructing_or_selecting_the_graph():
+    MetadataProbeRecord.constructed = 0
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        store.save(MetadataProbeRecord(1, "metadata"))
+        second = MetadataProbeRecord(1, "metadata")
+        statements: list[str] = []
+
+        def count_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", count_select)
+        try:
+            assert store.save(second) == 1
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", count_select)
+
+    assert MetadataProbeRecord.constructed == 2
+    assert len(statements) == 2  # content-id lookup plus the one planned metadata column
+    assert all("projection_metadata_probe.value" not in statement for statement in statements)
+
+
+def test_dedup_hit_with_no_identity_skip_has_no_metadata_query():
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        store.save(NoMetadataProbeRecord(1))
+        statements: list[str] = []
+
+        def count_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", count_select)
+        try:
+            assert store.save(NoMetadataProbeRecord(1)) == 1
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", count_select)
+
+    assert len(statements) == 1
+
+
+def test_validate_hook_runs_once_for_an_exact_record_save():
+    ValidationProbeRecord.calls.clear()
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        record = ValidationProbeRecord(1)
+        store.save(record)
+
+    assert ValidationProbeRecord.calls == [1]
+
+
+def test_validate_hook_skips_domain_sources_and_fetches():
+    ValidationProbeRecord.calls.clear()
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        sid = store.save(ValidationProbeRecord(1))
+        ValidationProbeRecord.calls.clear()
+        store.fetch(ValidationProbeRecord, sid)
+        store.save(ValidationProbeView(2))
+
+    assert ValidationProbeRecord.calls == []
+
+
 def test_insert_race_winner_still_checks_metadata(monkeypatch):
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         store.save(source)
         original_execute = sqlalchemy.Connection.execute
         missed_preflight = False
@@ -309,7 +485,7 @@ def test_insert_race_winner_still_checks_metadata(monkeypatch):
 
 @pytest.mark.parametrize("explicit_transaction", [False, True])
 def test_by_value_reuse_discards_nested_no_dedup_insert(projection_database, monkeypatch, explicit_transaction):
-    store = SqlStore(projection_database, entry_backings={})
+    store = SqlStore(projection_database, entry_records={})
     leaf = NoDedupLeaf("same")
     winner = ByValueHolder(leaf, "holder")
     winner_sid = store.save(winner)
@@ -332,7 +508,7 @@ def test_by_value_reuse_discards_nested_no_dedup_insert(projection_database, mon
 
 @pytest.mark.parametrize("explicit_transaction", [False, True])
 def test_content_race_loss_discards_nested_no_dedup_insert(projection_database, monkeypatch, explicit_transaction):
-    store = SqlStore(projection_database, entry_backings={})
+    store = SqlStore(projection_database, entry_records={})
     winner = RaceHolder(NoDedupLeaf("same"), "holder")
     winner_sid = store.save(winner)
     original_execute = sqlalchemy.Connection.execute
@@ -362,7 +538,7 @@ def test_content_race_loss_discards_nested_no_dedup_insert(projection_database, 
 def test_explicit_alternate_record_projection():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(source, as_record=SummaryRecord)
         assert store.fetch(SummaryRecord, sid) == SummaryRecord("one", 1)
         assert store.sid_of(_root(), as_record=SummaryRecord) == sid
@@ -371,7 +547,7 @@ def test_explicit_alternate_record_projection():
 def test_reference_comparison_uses_declared_record_target():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         default_sid = store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
         target_sid = store.save(source, as_record=SummaryRecord)
@@ -389,7 +565,7 @@ def test_reference_comparison_uses_declared_record_target():
 def test_alternate_record_sids_are_cached_per_record_type():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         default_sid = store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
         summary_sid = store.save(source, as_record=SummaryRecord)
@@ -402,7 +578,7 @@ def test_alternate_record_sids_are_cached_per_record_type():
 
 def test_projected_stored_property_is_read_from_source():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(DerivedView(4), as_record=DerivedRecord)
         assert store.fetch(DerivedRecord, sid).doubled == 8
 
@@ -414,13 +590,13 @@ def test_projected_source_must_expose_record_stored_properties():
             raise AttributeError
 
     with Database.sqlite() as database, pytest.raises(TypeError, match="expose derived stored property 'doubled'"):
-        SqlStore(database, entry_backings={}).save(IncompleteDerivedView(4), as_record=DerivedRecord)
+        SqlStore(database, entry_records={}).save(IncompleteDerivedView(4), as_record=DerivedRecord)
 
 
 def test_non_weakrefable_projected_source_uses_database_sid_lookup():
     source = (7,)
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(source, as_record=TupleRecord)
 
         assert store.fetch(TupleRecord, sid) == TupleRecord(7)
@@ -432,7 +608,7 @@ def test_identity_skipped_recursive_link_reports_traversal_path():
     object.__setattr__(record, "link", record)
 
     with Database.sqlite() as database, pytest.raises(StorageProjectionCycleError) as caught:
-        SqlStore(database, entry_backings={}).save(record)
+        SqlStore(database, entry_records={}).save(record)
 
     assert caught.value.path == "link"
 
@@ -444,7 +620,7 @@ def test_datetime_metadata_containers_compare_utc_instants_live_and_reopened(tmp
     second = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
     source = FoldMetadata("fold", (first,))
     database = Database.sqlite(path)
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     sid = store.save(source)
     assert store.save(FoldMetadata("fold", (first.astimezone(datetime.UTC),))) == sid
     with pytest.raises(EntryMetadataConflictError, match="instants"):
@@ -457,7 +633,7 @@ def test_datetime_metadata_containers_compare_utc_instants_live_and_reopened(tmp
 
 def test_lazy_row_alternate_sid_uses_requested_record_target():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         source_sid = store.save(LazySourceRecord(7))
         store.save(LazySourceRecord(8), as_record=LazyAlternateRecord)
         searcher = store.searcher()
@@ -480,7 +656,7 @@ def test_concrete_record_save_still_round_trips():
         datetime.datetime(2026, 8, 1, tzinfo=datetime.UTC),
     )
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         sid = store.save(record)
         assert store.fetch(RootRecord, sid) is record
         assert SqlStore(database).fetch(RootRecord, sid) == record

@@ -62,7 +62,7 @@ Against records `NaCl`, `CaTiO3` and `NaTiO2`, `has_any` matches `NaCl` and
 
 | httk v1 | *httk₂* |
 | --- | --- |
-| `httk.db.backend.Sqlite(path)` then `httk.db.store.SqlStore(backend)` | `Database.sqlite(path)` then `SqlStore(database, entry_backings={})` for first use, `SqlStore(database)` when reopening |
+| `httk.db.backend.Sqlite(path)` then `httk.db.store.SqlStore(backend)` | `Database.sqlite(path)` then `SqlStore(database, entry_records={})` for first use, `SqlStore(database)` when reopening |
 | `httk.db.backend.Duckdb(path)` | `Database.duckdb(path)` |
 | `store.delay_commit()` … `store.commit()` | `with store.transaction():` |
 | subclass `httk.HttkObject`, `@httk.httk_typed_init({...}, index=[...], skip=[...])` | plain frozen dataclass with `Annotated` markers (`Indexed`, `Unique`, `Skip`, `Shape`, `Related`) and an optional `__httk_storage__: ClassVar[StorageInfo]` |
@@ -142,7 +142,7 @@ class StructureTag:
     value: str
 
 
-store = SqlStore(Database.sqlite("example.sqlite"), entry_backings={})
+store = SqlStore(Database.sqlite("example.sqlite"), entry_records={})
 
 tablesalt = Structure("NaCl", ("Na", "Cl"))
 arsenic = Structure("As", ("As",))
@@ -238,7 +238,7 @@ class TotalEnergyResult:
     total_energy: float
 
 
-store = SqlStore(Database.sqlite("results.sqlite"), entry_backings={})
+store = SqlStore(Database.sqlite("results.sqlite"), entry_records={})
 
 vasp = Computation("VASP", "5.4.4")
 runs = [

@@ -47,7 +47,7 @@ class IntRecord:
 @pytest.fixture
 def store():
     with Database.sqlite() as database:
-        value = SqlStore(database, entry_backings={})
+        value = SqlStore(database, entry_records={})
         for index in range(6):
             value.save(ResultRecord(str(index), Fraction(index, 3)))
         yield value
@@ -92,7 +92,7 @@ def test_slices_keep_their_own_scope_for_rows_columns_and_one(store):
 
 def test_reference_exact_projection_is_pinned_in_outer_statement():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         child = EnergyRecord(Fraction(7, 11))
         store.save(child)
         store.save(ParentRecord(child))
@@ -115,7 +115,7 @@ def test_reference_exact_projection_is_pinned_in_outer_statement():
 
 def test_child_projection_is_rejected_at_declaration():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         searcher = store.searcher()
         record = searcher.variable(ChildListRecord)
         with pytest.raises(TypeError, match="variable-length child"):
@@ -124,7 +124,7 @@ def test_child_projection_is_rejected_at_declaration():
 
 def test_integer_columns_are_rational_vectors():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         store.save(IntRecord(1))
         searcher = store.searcher()
         record = searcher.variable(IntRecord)
@@ -211,7 +211,7 @@ def test_column_iteration_does_not_hydrate_records(store, monkeypatch):
 def test_perf_smoke_statement_bound_and_cursor_proxy_count():
     rows = _profile_rows()
     with Database.sqlite() as database:
-        value = SqlStore(database, entry_backings={})
+        value = SqlStore(database, entry_records={})
         with value.transaction():
             for index in range(rows):
                 value.save(ResultRecord(str(index), Fraction(index, 7)))
@@ -226,7 +226,9 @@ def test_perf_smoke_statement_bound_and_cursor_proxy_count():
 
         sqlalchemy.event.listen(database.engine, "before_cursor_execute", count_select)
         try:
-            assert sum(row.energy.numerator for row in results) == sum(Fraction(index, 7).numerator for index in range(rows))
+            assert sum(row.energy.numerator for row in results) == sum(
+                Fraction(index, 7).numerator for index in range(rows)
+            )
         finally:
             sqlalchemy.event.remove(database.engine, "before_cursor_execute", count_select)
         assert len(statements) <= 1 + 2 * ((rows + 499) // 500) + 2

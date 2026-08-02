@@ -124,7 +124,7 @@ TAGS = [
 
 def populate() -> SqlStore:
     """An in-memory store holding the structures and their tags."""
-    store = SqlStore(Database.sqlite(), entry_backings={})
+    store = SqlStore(Database.sqlite(), entry_records={})
     with store.transaction():  # one transaction for the whole load
         for structure in STRUCTURES:
             store.save(structure)

@@ -34,6 +34,8 @@ __all__ = [
 
 
 _AUDIT_BATCH_SIZE: Final = 1_000
+_CONTENT_ID_LENGTH: Final = 64
+_CONTENT_ID_CHARACTERS: Final = frozenset("0123456789abcdef")
 
 
 @dataclass(frozen=True)
@@ -207,11 +209,37 @@ class StoredEntryFederation:
         ):
             raise ValueError("StoredEntryFederation sources must use equal entry type and definition")
         self._sources = resolved_sources
+        stream_groups: dict[str, list[tuple[int, int]]] = {}
+        for source in resolved_sources:
+            for backing_index in range(len(source.plan.backings)):
+                stream_groups.setdefault(source.source.public_id_prefix, []).append(
+                    (source.source_index, backing_index)
+                )
+        self._page_colliding_streams = {
+            prefix: frozenset(streams)
+            for prefix, streams in stream_groups.items()
+            if len({source_index for source_index, _backing_index in streams}) > 1
+        }
+        self._audit_streams = {
+            prefix: frozenset(streams) for prefix, streams in stream_groups.items() if len(streams) > 1
+        }
 
     @property
     def sources(self) -> tuple[StoredEntrySource, ...]:
         """The immutable declared source order."""
         return tuple(item.source for item in self._sources)
+
+    @property
+    def _colliding_streams(self) -> Mapping[str, frozenset[tuple[int, int]]]:
+        """Cross-source stream groups requiring page-time duplicate probes.
+
+        Page serving intentionally does not detect duplicates between record
+        classes in one source: the store write path maintains dispatch
+        consistency, and such duplicates require out-of-band modification.
+        :meth:`audit_duplicate_ids` is the designed detector for that
+        corruption class.
+        """
+        return self._page_colliding_streams
 
     def query(
         self,
@@ -244,12 +272,12 @@ class StoredEntryFederation:
         # The ID-only sentinel is deliberately excluded, especially for
         # limit=0 metadata calls.
         for candidate in visible:
-            self._probe_public_id(candidate.public_id)
+            self._probe_candidate(candidate)
         rows = tuple(self._row(candidate) for candidate in visible)
         return StoredEntryPage(rows, total_count, more)
 
     def fetch(self, public_id: str) -> Mapping[str, Any] | None:
-        """Fetch one public id, probing every backing/source for a collision."""
+        """Fetch one public id and detect a collision among its possible origins."""
         if not isinstance(public_id, str):
             raise TypeError("StoredEntryFederation.fetch public_id must be a string")
         matches = self._probe_public_id(public_id)
@@ -263,7 +291,10 @@ class StoredEntryFederation:
             raise TypeError("audit_duplicate_ids batch_size must be an integer")
         if batch_size < 1:
             raise ValueError("audit_duplicate_ids batch_size must be positive")
-        streams = self._streams(None, (("id", False),))
+        stream_keys = frozenset(stream for group in self._audit_streams.values() for stream in group)
+        if not stream_keys:
+            return
+        streams = self._streams(None, (("id", False),), stream_keys)
         iterators = [_BatchedCandidateIterator(stream, batch_size) for stream in streams]
         heap: list[tuple[tuple[Any, ...], int, _Candidate]] = []
         for index, iterator in enumerate(iterators):
@@ -289,6 +320,7 @@ class StoredEntryFederation:
         self,
         filter_string: str | FilterAst | None,
         sort: Sequence[tuple[str, bool]],
+        stream_keys: frozenset[tuple[int, int]] | None = None,
     ) -> tuple[_Stream, ...]:
         streams: list[_Stream] = []
         for source in self._sources:
@@ -298,6 +330,8 @@ class StoredEntryFederation:
                 public_id_prefix=source.source.public_id_prefix,
             )
             for backing_index, candidate in enumerate(candidates):
+                if stream_keys is not None and (source.source_index, backing_index) not in stream_keys:
+                    continue
                 streams.append(_Stream(source, candidate.backing, candidate.backing_name, backing_index, candidate))
         return tuple(streams)
 
@@ -359,10 +393,31 @@ class StoredEntryFederation:
                 heapq.heappush(heap, (_sort_key(following, sort), index, following))
         return result[offset:]
 
+    def _probe_candidate(self, candidate: _Candidate) -> None:
+        colliding = self._colliding_streams.get(candidate.stream.source.source.public_id_prefix)
+        if colliding is None:
+            return
+        matches = [candidate]
+        filter_string = "id = " + json.dumps(candidate.public_id)
+        candidate_key = (candidate.stream.source.source_index, candidate.stream.backing_index)
+        for stream in self._streams(filter_string, (), colliding - {candidate_key}):
+            stream.candidate_stream.searcher.set_limit(1)
+            matches.extend(_candidates(stream))
+        if len(matches) > 1:
+            raise DuplicateEntryIdError(candidate.public_id, tuple(item.origin for item in matches))
+
     def _probe_public_id(self, public_id: str) -> tuple[_Candidate, ...]:
+        stream_keys = frozenset(
+            (source.source_index, backing_index)
+            for source in self._sources
+            if _content_id_for_public_id(public_id, source.source.public_id_prefix) is not None
+            for backing_index in range(len(source.plan.backings))
+        )
+        if not stream_keys:
+            return ()
         filter_string = "id = " + json.dumps(public_id)
         matches: list[_Candidate] = []
-        for stream in self._streams(filter_string, ()):
+        for stream in self._streams(filter_string, (), stream_keys):
             stream.candidate_stream.searcher.set_limit(1)
             matches.extend(_candidates(stream))
         if len(matches) > 1:
@@ -383,7 +438,7 @@ class _BatchedCandidateIterator:
     def __init__(self, stream: _Stream, batch_size: int) -> None:
         self._stream = stream
         self._batch_size = batch_size
-        self._offset = 0
+        self._last_public_id: str | None = None
         self._rows: Iterator[_Candidate] = iter(())
         self._done = False
 
@@ -397,12 +452,12 @@ class _BatchedCandidateIterator:
                 return candidate
             if self._done:
                 raise StopIteration
+            filter_string = None if self._last_public_id is None else "id > " + json.dumps(self._last_public_id)
             fresh = self._stream.source.plan.candidate_searchers(
-                None,
+                filter_string,
                 sort=(("id", False),),
                 public_id_prefix=self._stream.source.source.public_id_prefix,
             )[self._stream.backing_index]
-            fresh.searcher.add_offset(self._offset)
             fresh.searcher.set_limit(self._batch_size)
             batch_stream = _Stream(
                 self._stream.source,
@@ -412,7 +467,8 @@ class _BatchedCandidateIterator:
                 fresh,
             )
             values = tuple(_candidates(batch_stream))
-            self._offset += len(values)
+            if values:
+                self._last_public_id = values[-1].public_id
             self._done = len(values) < self._batch_size
             self._rows = iter(values)
 
@@ -433,6 +489,16 @@ def _next_or_none(iterator: Iterator[_Candidate]) -> _Candidate | None:
         return next(iterator)
     except StopIteration:
         return None
+
+
+def _content_id_for_public_id(public_id: str, prefix: str) -> str | None:
+    """Return the canonical content-id suffix when ``public_id`` has ``prefix``."""
+    if not public_id.startswith(prefix):
+        return None
+    value = public_id[len(prefix) :]
+    if len(value) != _CONTENT_ID_LENGTH or not all(character in _CONTENT_ID_CHARACTERS for character in value):
+        return None
+    return value
 
 
 def _definition_id(plan: StoredPropertySqlPlan) -> str | None:

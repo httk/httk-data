@@ -244,7 +244,7 @@ def plan(request):
     with database:
         store = SqlStore(
             database,
-            entry_backings={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
+            entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
         )
         store.save(FIRST)
         store.save(SECOND)
@@ -382,18 +382,18 @@ def test_timestamp_filters_reject_non_rfc3339_iso_forms(plan, literal):
 
 def test_unconfigured_family_and_missing_nonnullable_response_are_configuration_errors():
     with Database.sqlite() as database:
-        unconfigured = SqlStore(database, entry_backings={})
+        unconfigured = SqlStore(database, entry_records={})
         with pytest.raises(StoredPropertySqlConfigurationError, match="not configured"):
             stored_property_sql_plan(unconfigured, CalculationEntry)
 
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={FileEntry: IncompleteFile})
+        store = SqlStore(database, entry_records={FileEntry: IncompleteFile})
         with pytest.raises(StoredPropertySqlConfigurationError, match="name"):
             stored_property_sql_plan(store, FileEntry)
 
 
 def test_backings_cannot_override_intrinsic_id_or_type():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={BadFamily: BadCalculation})
+        store = SqlStore(database, entry_records={BadFamily: BadCalculation})
         with pytest.raises(StoredPropertySqlConfigurationError, match="intrinsic"):
             stored_property_sql_plan(store, BadFamily)

@@ -133,7 +133,7 @@ REJECTED_FILTERS = [
 
 
 def populate() -> SqlStore:
-    store = SqlStore(Database.sqlite(), entry_backings={})
+    store = SqlStore(Database.sqlite(), entry_records={})
     with store.transaction():
         for material in MATERIALS:
             store.save(material)

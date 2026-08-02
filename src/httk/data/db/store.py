@@ -27,21 +27,20 @@ instance maps to the existing row (children are not re-inserted); under
 table contents are *not* part of the match, mirroring v1 which matched key
 columns only; under ``"none"`` every save inserts a new row.
 
-One small, documented liberty: an optional child-table field saved as
-``None`` comes back as an empty container (the relational layout cannot tell
-the two apart). Identity caches are best-effort; content-addressed
-:meth:`SqlStore.sid_of` lookups fall back to the database.
+Identity caches are best-effort; content-addressed :meth:`SqlStore.sid_of`
+lookups fall back to the database.
 """
 
 import contextlib
 import datetime
-import json
+import functools
 import threading
 import types
 import typing
 import weakref
 from collections.abc import Iterable, Iterator, Mapping
-from typing import Annotated, Any, Literal, cast
+from dataclasses import dataclass
+from typing import Annotated, Any, cast
 
 import sqlalchemy
 from httk.core import (
@@ -57,6 +56,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from httk.data.db.codecs import (
     codec_named,
+    decode_fracvector_exact,
     encode_fracvector_exact,
     encode_fracvector_floats,
 )
@@ -72,18 +72,18 @@ from httk.data.db.layout import (
     declaration_json,
     expected_metadata,
     metadata_table_for,
-    normalize_entry_backings,
+    normalize_entry_records,
     read_store_metadata,
-    validate_expected_tables,
 )
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
     SID_COLUMN,
     backing_dispatch_column_name,
+    dispatch_table_for,
     table_for,
 )
-from httk.data.db.rows import RowHydrator, StaleResultError, is_lazy_row, lazy_row_identity
+from httk.data.db.rows import RowHydrator, StaleResultError, decode_field, is_lazy_row, lazy_row_identity
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlSearcher
 
@@ -107,6 +107,10 @@ class _Projection:
 
     def __init__(self) -> None:
         self.values_by_source: dict[tuple[type, int], Mapping[str, object]] = {}
+        self.validated: set[tuple[type, int]] = set()
+        self.metadata_rows: dict[tuple[type, int], Mapping[str, Any]] = {}
+        self.metadata_children: dict[tuple[type, int, str], Any] = {}
+        self.metadata_content_ids: dict[tuple[type, int], str] = {}
         self.active: set[tuple[type, int]] = set()
         self.inserted: list[tuple[type, int]] = []
 
@@ -122,6 +126,65 @@ class _Projection:
         return content_id(source, as_record=record_type, projector=self.projector)
 
 
+@dataclass(frozen=True)
+class _MetadataPlan:
+    skipped_specs: tuple[FieldSpec, ...]
+    skipped_nested: tuple[FieldSpec, ...]
+    descend_specs: tuple[FieldSpec, ...]
+
+
+_MISSING_METADATA = object()
+
+
+@functools.cache
+def _metadata_reachable_types(record_type: type) -> frozenset[type]:
+    reachable: set[type] = set()
+    pending = [record_type]
+    while pending:
+        current = pending.pop()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        pending.extend(
+            spec.target for spec in resolve_schema(current).fields if not spec.derived and spec.target is not None
+        )
+    return frozenset(reachable)
+
+
+def _metadata_has_plan(record_type: type) -> bool:
+    for reachable_type in _metadata_reachable_types(record_type):
+        hints = typing.get_type_hints(reachable_type, include_extras=True)
+        if any(
+            not spec.derived and _has_identity_skip(hints.get(spec.field))
+            for spec in resolve_schema(reachable_type).fields
+        ):
+            return True
+    return False
+
+
+@functools.cache
+def _metadata_plan(record_type: type) -> _MetadataPlan | None:
+    schema = resolve_schema(record_type)
+    hints = typing.get_type_hints(record_type, include_extras=True)
+    skipped_specs: list[FieldSpec] = []
+    skipped_nested: list[FieldSpec] = []
+    descend_specs: list[FieldSpec] = []
+    for spec in schema.fields:
+        if spec.derived:
+            continue
+        identity_skipped = _has_identity_skip(hints.get(spec.field))
+        if identity_skipped:
+            if spec.role in {"scalar", "encoded", "fixed_array"}:
+                skipped_specs.append(spec)
+            else:
+                skipped_nested.append(spec)
+        elif spec.target is not None and _metadata_has_plan(spec.target):
+            descend_specs.append(spec)
+    if not skipped_specs and not skipped_nested and not descend_specs:
+        return None
+    return _MetadataPlan(tuple(skipped_specs), tuple(skipped_nested), tuple(descend_specs))
+
+
 def _schema_object_type(kinds: frozenset[str]) -> object:
     return next(iter(kinds)) if len(kinds) == 1 else tuple(sorted(kinds))
 
@@ -131,27 +194,21 @@ class SqlStore:
 
     A store starts with an explicit, versioned entry declaration. Ordinary
     unconfigured frozen-dataclass tables remain on-demand, but only after the
-    layout marker has been initialized on a physically empty database.
+    layout marker has been initialized on a physically empty database. Schemas
+    edited out-of-band fail at use time with the database's own errors.
     """
 
     def __init__(
         self,
         database: Database,
         *,
-        entry_backings: Mapping[type, type | tuple[type, ...]] | None = None,
-        layout_mode: Literal["ensure", "verify"] = "ensure",
+        entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
     ) -> None:
-        if not isinstance(layout_mode, str):
-            raise TypeError("layout_mode must be 'ensure' or 'verify'")
-        if layout_mode not in {"ensure", "verify"}:
-            raise ValueError("layout_mode must be 'ensure' or 'verify'")
         self._database = database
-        self._layout_mode: Literal["ensure", "verify"] = layout_mode
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
         self._managed_table_names: frozenset[str] = frozenset()
-        self._unclaimed_table_names: frozenset[str] = frozenset()
-        self._validated_table_names: set[str] = set()
+        self._tables_present: set[str] = set()
         self._initialized = False
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
         self._instances: weakref.WeakValueDictionary[tuple[type, int], Any] = weakref.WeakValueDictionary()
@@ -163,7 +220,7 @@ class SqlStore:
         instance dies, so a recycled id can never resolve to a stale sid.
         """
         self._local = threading.local()
-        self._initialize_layout(entry_backings)
+        self._initialize_layout(entry_records)
 
     @property
     def layout(self) -> StorageLayout:
@@ -177,19 +234,15 @@ class SqlStore:
         return self.layout.families
 
     @property
-    def entry_backings(self) -> Mapping[type, tuple[type, ...]]:
-        """Configured entry-family classes mapped to ordered concrete record backings."""
-        return self.layout.entry_backings
+    def entry_records(self) -> Mapping[type, tuple[type, ...]]:
+        """Configured entry-family classes mapped to ordered concrete records."""
+        return self.layout.entry_records
 
-    def _initialize_layout(self, entry_backings: Mapping[type, type | tuple[type, ...]] | None) -> None:
-        supplied = normalize_entry_backings(entry_backings) if entry_backings is not None else None
-        if self._layout_mode == "verify":
-            with self._database.engine.connect() as connection:
-                self._initialize_layout_on_connection(connection, supplied, write=False)
-            return
+    def _initialize_layout(self, entry_records: Mapping[type, type | tuple[type, ...]] | None) -> None:
+        supplied = normalize_entry_records(entry_records) if entry_records is not None else None
         try:
             with self._database.engine.begin() as connection:
-                self._initialize_layout_on_connection(connection, supplied, write=True)
+                self._initialize_layout_on_connection(connection, supplied)
         except BaseException:
             created_tables = tuple(self._initialization_ddl_journal)
             self._initialization_ddl_journal.clear()
@@ -202,8 +255,7 @@ class SqlStore:
             self._metadata = sqlalchemy.MetaData()
             self._layout = None
             self._managed_table_names = frozenset()
-            self._unclaimed_table_names = frozenset()
-            self._validated_table_names.clear()
+            self._tables_present.clear()
             self._initialized = False
             self._clear_identity_caches()
             raise
@@ -213,17 +265,10 @@ class SqlStore:
         self,
         connection: sqlalchemy.Connection,
         supplied: StorageLayout | None,
-        *,
-        write: bool,
     ) -> None:
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
-        marker_metadata = sqlalchemy.MetaData()
-        metadata_table_for(marker_metadata)
         if METADATA_TABLE_NAME in names_before:
-            marker_schema = validate_expected_tables(connection, marker_metadata)
-            if marker_schema:
-                raise StorageLayoutUpgradeRequiredError({"schema": marker_schema})
             try:
                 stored = read_store_metadata(connection)
             except (ValueError, SQLAlchemyError) as error:
@@ -236,21 +281,12 @@ class SqlStore:
 
         if not objects_before:
             if supplied is None:
-                raise TypeError("entry_backings is required when opening an uninitialized database")
+                raise TypeError("entry_records is required when opening an uninitialized database")
             expected = expected_metadata(supplied)
-            if not write:
-                raise StorageLayoutUpgradeRequiredError(
-                    {
-                        "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
-                        "declaration": {"expected": declaration_json(supplied), "actual": None},
-                        "schema": {name: {"missing": True} for name in expected.tables},
-                    }
-                )
-            for table in expected.sorted_tables:
-                table.create(connection, checkfirst=False)
-                self._initialization_ddl_journal.append(table)
-            self._stamp_layout(connection, supplied, ())
-            self._install_layout(supplied, expected, ())
+            expected.tables[METADATA_TABLE_NAME].create(connection, checkfirst=False)
+            self._initialization_ddl_journal.append(expected.tables[METADATA_TABLE_NAME])
+            self._stamp_layout(connection, supplied)
+            self._install_layout(supplied, expected, names_before | {METADATA_TABLE_NAME})
             return
 
         schema: dict[str, object] = {METADATA_TABLE_NAME: {"missing": True}}
@@ -272,7 +308,7 @@ class SqlStore:
             {
                 "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
                 "declaration": {
-                    "expected": declaration_json(supplied) if supplied is not None else "explicit entry_backings",
+                    "expected": declaration_json(supplied) if supplied is not None else "explicit entry_records",
                     "actual": None,
                 },
                 "schema": schema,
@@ -285,7 +321,7 @@ class SqlStore:
         stored: Mapping[str, str],
         supplied: StorageLayout | None,
     ) -> None:
-        required_keys = {"protocol", "entry_declaration", "unclaimed_tables"}
+        required_keys = {"protocol", "entry_declaration"}
         diff: dict[str, object] = {}
         if set(stored) != required_keys:
             diff["declaration"] = {
@@ -302,41 +338,23 @@ class SqlStore:
                 "actual": stored.get("entry_declaration"),
                 "error": str(error),
             }
-        unclaimed: tuple[str, ...] = ()
-        try:
-            unclaimed = self._unclaimed_from_stored_value(stored.get("unclaimed_tables"))
-        except (TypeError, ValueError) as error:
-            diff["declaration"] = {
-                "expected": "canonical unclaimed-table list",
-                "actual": stored.get("unclaimed_tables"),
-                "error": str(error),
-            }
         if persisted is not None and supplied is not None and declaration_json(persisted) != declaration_json(supplied):
             diff["declaration"] = {
                 "expected": declaration_json(persisted),
                 "actual": declaration_json(supplied),
             }
-        expected: sqlalchemy.MetaData | None = None
-        if persisted is not None:
-            expected = expected_metadata(persisted)
-            overlap = tuple(sorted(set(unclaimed) & set(expected.tables)))
-            if overlap:
-                diff["declaration"] = {
-                    "unclaimed_tables": {
-                        "overlap_with_protocol_tables": overlap,
-                    }
-                }
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
-        assert persisted is not None and expected is not None
+        assert persisted is not None
+        objects_before = actual_schema_objects(connection)
+        names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
+        declaration_owned = {
+            METADATA_TABLE_NAME,
+            *(family.dispatch_table_name for family in persisted.families if family.dispatch_table_name is not None),
+        }
         object_problems: dict[str, object] = {}
-        for name, kinds in actual_schema_objects(connection).items():
-            if name in expected.tables and kinds != frozenset(("table",)):
-                object_problems[name] = {
-                    "object_type": _schema_object_type(kinds),
-                    "message": "a managed table name is also used by an unexpected schema object",
-                }
-            elif name.startswith("_httk_") and name not in expected.tables:
+        for name, kinds in objects_before.items():
+            if name.startswith("_httk_") and (name not in declaration_owned or kinds != {"table"}):
                 object_problems[name] = {
                     "reserved": True,
                     "object_type": _schema_object_type(kinds),
@@ -344,11 +362,7 @@ class SqlStore:
                 }
         if object_problems:
             raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
-        schema_difference = validate_expected_tables(connection, expected)
-        if schema_difference:
-            raise StorageLayoutUpgradeRequiredError({"schema": schema_difference})
-        self._audit_dispatch_data(connection, persisted, expected)
-        self._install_layout(persisted, expected, unclaimed)
+        self._install_layout(persisted, expected_metadata(persisted), names_before)
 
     @staticmethod
     def _layout_from_stored_declaration(value: str | None) -> StorageLayout:
@@ -360,26 +374,10 @@ class SqlStore:
             raise ValueError("metadata is missing entry_declaration")
         return _layout_from_declaration(value)
 
-    @staticmethod
-    def _unclaimed_from_stored_value(value: str | None) -> tuple[str, ...]:
-        if value is None:
-            raise ValueError("metadata is missing unclaimed_tables")
-        parsed = json.loads(value)
-        if not isinstance(parsed, list) or any(not isinstance(name, str) for name in parsed):
-            raise ValueError("unclaimed_tables must be a JSON string list")
-        names = tuple(parsed)
-        if names != tuple(sorted(set(names))):
-            raise ValueError("unclaimed_tables is not canonically sorted and unique")
-        reserved = tuple(name for name in names if name.startswith("_httk_"))
-        if reserved:
-            raise ValueError("unclaimed_tables may not include SqlStore-reserved _httk_ names")
-        return names
-
     def _stamp_layout(
         self,
         connection: sqlalchemy.Connection,
         layout: StorageLayout,
-        unclaimed: tuple[str, ...],
     ) -> None:
         table = metadata_table_for(sqlalchemy.MetaData())
         connection.execute(
@@ -387,7 +385,6 @@ class SqlStore:
             (
                 {"key": "protocol", "value": STORAGE_PROTOCOL_VERSION},
                 {"key": "entry_declaration", "value": declaration_json(layout)},
-                {"key": "unclaimed_tables", "value": json.dumps(list(unclaimed), separators=(",", ":"))},
             ),
         )
 
@@ -395,13 +392,12 @@ class SqlStore:
         self,
         layout: StorageLayout,
         metadata: sqlalchemy.MetaData,
-        unclaimed: tuple[str, ...],
+        table_names: Iterable[str],
     ) -> None:
         self._layout = layout
         self._metadata = metadata
         self._managed_table_names = frozenset(metadata.tables)
-        self._unclaimed_table_names = frozenset(unclaimed)
-        self._validated_table_names = set(metadata.tables)
+        self._tables_present = set(table_names)
         self._initialized = True
 
     def _cleanup_initialization_tables(self, created_tables: tuple[sqlalchemy.Table, ...]) -> None:
@@ -418,121 +414,15 @@ class SqlStore:
             # still has no marker and will be refused as unversioned.
             return
 
-    @staticmethod
-    def _audit_dispatch_data(
-        connection: sqlalchemy.Connection,
-        layout: StorageLayout,
-        metadata: sqlalchemy.MetaData,
-    ) -> None:
-        """Verify that every configured multi-backing row has one exact dispatch row.
-
-        The dispatch constraints ensure a row selects at most one concrete
-        backing, but they cannot enforce the inverse: a backing may be saved
-        without a dispatch row or a valid foreign key may point at a backing
-        whose content id differs.  Both conditions make entry lookup
-        incomplete or wrong, so opening a store refuses them.
-        """
-        problems: dict[str, object] = {}
-        for family in layout.families:
-            if len(family.backings) < 2:
-                continue
-            assert family.dispatch_table_name is not None
-            dispatch = metadata.tables[family.dispatch_table_name]
-            data: dict[str, object] = {}
-            dispatch_columns = tuple(
-                dispatch.c[backing_dispatch_column_name(backing_name)] for backing_name in family.backing_names
-            )
-            cardinality = sum(
-                (sqlalchemy.case((column.is_not(None), 1), else_=0) for column in dispatch_columns),
-                sqlalchemy.literal(0),
-            )
-            invalid = (
-                connection.execute(
-                    sqlalchemy.select(dispatch.c[DISPATCH_CONTENT_ID_COLUMN], *dispatch_columns)
-                    .where(cardinality != 1)
-                    .limit(1)
-                )
-                .mappings()
-                .first()
-            )
-            if invalid is not None:
-                data["invalid_dispatch_rows"] = (
-                    {
-                        "content_id": str(invalid[DISPATCH_CONTENT_ID_COLUMN]),
-                        "populated_backings": tuple(
-                            backing_name
-                            for backing_name, column in zip(family.backing_names, dispatch_columns, strict=True)
-                            if invalid[column.name] is not None
-                        ),
-                    },
-                )
-
-            for backing_name, backing in zip(family.backing_names, family.backings, strict=True):
-                backing_table = metadata.tables[resolve_schema(backing).table_name]
-                dispatch_column = dispatch.c[backing_dispatch_column_name(backing_name)]
-                matching_dispatch = sqlalchemy.exists(
-                    sqlalchemy.select(sqlalchemy.literal(1))
-                    .select_from(dispatch)
-                    .where(
-                        dispatch.c[DISPATCH_CONTENT_ID_COLUMN] == backing_table.c[CONTENT_ID_COLUMN],
-                        dispatch_column == backing_table.c[SID_COLUMN],
-                    )
-                )
-                missing = connection.execute(
-                    sqlalchemy.select(backing_table.c[SID_COLUMN], backing_table.c[CONTENT_ID_COLUMN])
-                    .where(~matching_dispatch)
-                    .limit(1)
-                ).first()
-                if missing is not None and "missing_dispatch_rows" not in data:
-                    data["missing_dispatch_rows"] = (
-                        {"content_id": str(missing[1]), "backing": backing_name, "sid": int(missing[0])},
-                    )
-
-                matching_backing = sqlalchemy.exists(
-                    sqlalchemy.select(sqlalchemy.literal(1))
-                    .select_from(backing_table)
-                    .where(
-                        backing_table.c[SID_COLUMN] == dispatch_column,
-                        backing_table.c[CONTENT_ID_COLUMN] == dispatch.c[DISPATCH_CONTENT_ID_COLUMN],
-                    )
-                )
-                mismatch = connection.execute(
-                    sqlalchemy.select(dispatch.c[DISPATCH_CONTENT_ID_COLUMN], dispatch_column)
-                    .where(dispatch_column.is_not(None), ~matching_backing)
-                    .limit(1)
-                ).first()
-                if mismatch is not None and "orphaned_or_mismatched_dispatch_rows" not in data:
-                    data["orphaned_or_mismatched_dispatch_rows"] = (
-                        {"content_id": str(mismatch[0]), "backing": backing_name, "sid": int(mismatch[1])},
-                    )
-
-            if data:
-                problems[family.dispatch_table_name] = {"data": data}
-        if problems:
-            raise StorageLayoutUpgradeRequiredError({"schema": problems})
-
     # ------------------------------------------------------------------ tables and transactions
 
     def ensure_tables(self, *classes: type) -> None:
-        """Resolve each class's schema and create its tables (and those it references, transitively).
-
-        Existing tables are validated and left alone. Saving or fetching calls
-        this implicitly, but calling it up front is useful to establish and
-        validate the physical layout before a data transaction.
-        """
-        self._ensure_tables(self._current_connection(), classes)
+        """Create the requested tables; this explicit API is a write operation."""
+        with self._write_connection() as connection:
+            self._create_tables_for_write(connection, classes)
 
     def transaction(self) -> contextlib.AbstractContextManager[None]:
-        """Scope the operations of a ``with`` block into one database transaction.
-
-        Every :meth:`save`/:meth:`fetch` (on this thread) inside the block runs
-        on the same open connection; the transaction commits when the block
-        exits normally and rolls back if it raises. On a rollback the identity
-        caches are flushed, since they may name rows that no longer exist.
-        Nesting is flat: an inner ``transaction()`` block simply joins the
-        outer transaction. Outside any transaction block, each operation runs
-        (and autocommits) on its own.
-        """
+        """Scope several store operations into one database transaction."""
         return self._transaction_scope()
 
     @contextlib.contextmanager
@@ -541,6 +431,7 @@ class SqlStore:
         if stack:
             yield
             return
+        pending = self._pending_table_names()
         try:
             with self._database.engine.begin() as connection:
                 stack.append(connection)
@@ -548,10 +439,14 @@ class SqlStore:
                     yield
                 finally:
                     stack.pop()
+            self._tables_present.update(pending)
         except BaseException:
-            self._invalidate_private_table_validations()
+            pending.clear()
+            self._tables_present.clear()
             self._clear_identity_caches()
             raise
+        finally:
+            pending.clear()
 
     def _connection_stack(self) -> list[sqlalchemy.Connection]:
         stack = getattr(self._local, "stack", None)
@@ -570,6 +465,7 @@ class SqlStore:
         if current is not None:
             yield current
             return
+        pending = self._pending_table_names()
         try:
             with self._database.engine.begin() as connection:
                 stack = self._connection_stack()
@@ -578,10 +474,21 @@ class SqlStore:
                     yield connection
                 finally:
                     stack.pop()
+            self._tables_present.update(pending)
         except BaseException:
-            self._invalidate_private_table_validations()
+            pending.clear()
+            self._tables_present.clear()
             self._clear_identity_caches()
             raise
+        finally:
+            pending.clear()
+
+    def _pending_table_names(self) -> set[str]:
+        pending = getattr(self._local, "pending_tables", None)
+        if pending is None:
+            pending = set()
+            self._local.pending_tables = pending
+        return cast(set[str], pending)
 
     @contextlib.contextmanager
     def _read_connection(self) -> Iterator[sqlalchemy.Connection]:
@@ -589,97 +496,95 @@ class SqlStore:
         if current is not None:
             yield current
             return
-        try:
-            # A read path can establish a missing private table in ``ensure``
-            # mode. Commit that DDL on success; on failure DuckDB rolls it back
-            # and the validation cache must forget it.
-            with self._database.engine.begin() as connection:
-                stack = self._connection_stack()
-                stack.append(connection)
-                try:
-                    yield connection
-                finally:
-                    stack.pop()
-        except BaseException:
-            self._invalidate_private_table_validations()
-            self._clear_identity_caches()
-            raise
+        with self._database.engine.connect() as connection:
+            stack = self._connection_stack()
+            stack.append(connection)
+            try:
+                yield connection
+            finally:
+                stack.pop()
 
-    def _invalidate_private_table_validations(self) -> None:
-        """Keep only initialization-validated protocol tables after a transaction failure."""
-        self._validated_table_names.intersection_update(self._managed_table_names)
-
-    def _ensure_tables(self, connection: sqlalchemy.Connection | None, classes: Iterable[type]) -> None:
-        """Validate or create ordinary record tables after protocol initialization.
-
-        Configured entry tables are installed at construction.  Every other
-        class is private storage: an existing table is always compared to the
-        SQLAlchemy-derived layout before use, and a missing one is created
-        only by an ``ensure`` store.
-        """
-        if not self._initialized:
-            raise RuntimeError("SqlStore layout has not been initialized")
-        if connection is None:
-            # RowHydrator calls this helper before it obtains its own nested
-            # read scope. Reuse the caller's connection when one is active:
-            # DuckDB permits only one transaction on its shared in-memory
-            # connection, and this also preserves transaction visibility.
-            connection = self._current_connection()
+    def _candidate_metadata(self, classes: Iterable[type]) -> sqlalchemy.MetaData:
         candidate = sqlalchemy.MetaData()
-        for cls in classes:
+        requested = tuple(classes)
+        for cls in requested:
             table_for(resolve_schema(cls), candidate)
-        candidate_names = frozenset(candidate.tables)
+        for family in self.layout.families:
+            if not any(record in family.records for record in requested):
+                continue
+            schemas = tuple(resolve_schema(record) for record in family.records)
+            for schema in schemas:
+                table_for(schema, candidate)
+            if len(schemas) > 1:
+                dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), candidate)
+        return candidate
+
+    def _register_tables(self, classes: Iterable[type]) -> sqlalchemy.MetaData:
+        requested = tuple(classes)
+        candidate = self._candidate_metadata(requested)
+        for cls in requested:
+            table_for(resolve_schema(cls), self._metadata)
+        for family in self.layout.families:
+            if not any(record in family.records for record in requested):
+                continue
+            schemas = tuple(resolve_schema(record) for record in family.records)
+            for schema in schemas:
+                table_for(schema, self._metadata)
+            if len(schemas) > 1:
+                dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), self._metadata)
+        return candidate
+
+    def _validate_table_names(self, names: Iterable[str]) -> None:
         forbidden = sorted(
-            name for name in candidate_names if name.startswith("_httk_") and name not in self._managed_table_names
+            name for name in names if name.startswith("_httk_") and name not in self._managed_table_names
         )
         if forbidden:
             raise ValueError(f"ordinary records may not claim reserved SqlStore table names: {', '.join(forbidden)}")
-        collisions = tuple(sorted(candidate_names & self._unclaimed_table_names))
-        if collisions:
-            raise StorageLayoutUpgradeRequiredError(
-                {
-                    "schema": {
-                        name: {
-                            "unversioned": True,
-                            "message": "pre-existing unclaimed table cannot be adopted as private storage",
-                        }
-                        for name in collisions
-                    }
-                }
-            )
-        pending_validation = candidate_names - self._validated_table_names
-        if not pending_validation:
-            for cls in classes:
-                table_for(resolve_schema(cls), self._metadata)
-            return
 
-        def ensure_on(active: sqlalchemy.Connection) -> None:
-            names = actual_table_names(active)
-            existing = tuple(sorted(pending_validation & names))
-            difference = validate_expected_tables(active, candidate, table_names=existing)
-            if difference:
-                raise StorageLayoutUpgradeRequiredError({"schema": difference})
-            missing = tuple(sorted(pending_validation - names))
-            if missing:
-                if self._layout_mode == "verify":
-                    raise StorageLayoutUpgradeRequiredError({"schema": {name: {"missing": True} for name in missing}})
-                # The candidate contains all transitive targets. ``checkfirst``
-                # is safe only after the explicit validation above, and lets
-                # SQLAlchemy order foreign-key creation for each dialect.
-                candidate.create_all(active, checkfirst=True)
+    def _create_tables_for_write(self, connection: sqlalchemy.Connection, classes: Iterable[type]) -> None:
+        """Register and create missing record tables for the caller's write operation.
 
-        if connection is not None:
-            ensure_on(connection)
-        else:
-            if self._layout_mode == "verify":
-                with self._database.engine.connect() as active:
-                    ensure_on(active)
+        SQLite's legacy transaction mode may commit DDL eagerly, so a failed
+        save can leave empty or partial declaration-shaped tables. Stamp trust
+        accepts that residue; the next write's ``checkfirst`` completes it.
+        """
+        candidate = self._register_tables(classes)
+        candidate_names = frozenset(candidate.tables)
+        self._validate_table_names(candidate_names)
+        pending = self._pending_table_names()
+        missing = candidate_names - self._tables_present - pending
+        if missing:
+            pending.update(actual_table_names(connection))
+            missing = candidate_names - self._tables_present - pending
+        if missing:
+            candidate.create_all(connection, checkfirst=True)
+            # Publish only after the owning transaction commits. SQLite may
+            # retain empty or partial declaration-shaped tables after rollback;
+            # stamp trust accepts that residue and the next write completes it.
+            self._pending_table_names().update(missing)
+
+    def _missing_tables_for_read(self, classes: Iterable[type]) -> bool:
+        """Register tables and report absence without issuing DDL."""
+        candidate = self._register_tables(classes)
+        candidate_names = frozenset(candidate.tables)
+        self._validate_table_names(candidate_names)
+        pending = self._pending_table_names()
+        missing = candidate_names - self._tables_present - pending
+        if missing:
+            current = self._current_connection()
+            if current is not None:
+                # Keep transaction-local catalog observations in the overlay;
+                # publishing them before commit would make rollback unsafe.
+                pending.update(actual_table_names(current))
             else:
-                with self._database.engine.begin() as active:
-                    ensure_on(active)
-        self._validated_table_names.update(candidate_names)
-        for cls in classes:
-            table_for(resolve_schema(cls), self._metadata)
+                self._refresh_committed_table_names()
+            missing = candidate_names - self._tables_present - pending
+        return bool(missing)
+
+    def _refresh_committed_table_names(self) -> None:
+        """Refresh the shared table cache from a connection outside this transaction."""
+        with self._database.engine.connect() as connection:
+            self._tables_present.update(actual_table_names(connection))
 
     def _table(self, name: str) -> sqlalchemy.Table:
         return self._metadata.tables[name]
@@ -700,6 +605,7 @@ class SqlStore:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = _Projection()
         with self._write_connection() as connection:
+            self._create_tables_for_write(connection, (record_type,))
             sid = self._save(connection, record_type, obj, projection, "")
             family = self._family_for_backing(record_type)
             if family is not None:
@@ -732,9 +638,14 @@ class SqlStore:
         path: str,
     ) -> int:
         schema = resolve_schema(record_type)
-        self._ensure_tables(connection, (record_type,))
         table = self._table(schema.table_name)
         projected = projection.projector(record_type, source)
+        validation_key = (record_type, id(source))
+        if type(source) is record_type and validation_key not in projection.validated:
+            validator = vars(record_type).get("__httk_validate__")
+            if validator is not None:
+                record_type.__httk_validate__(source)
+            projection.validated.add(validation_key)
 
         key: str | None = None
         if schema.dedup == "content_id":
@@ -841,6 +752,10 @@ class SqlStore:
         values: dict[str, Any] = {}
         for spec in schema.fields:
             if spec.role == "child":
+                if spec.optional:
+                    values[f"{spec.field}_present"] = (
+                        self._projected_value(schema.cls, source, projected, spec) is not None
+                    )
                 continue
             value = self._projected_value(schema.cls, source, projected, spec)
             if value is None:
@@ -945,7 +860,8 @@ class SqlStore:
                 f"'content_id' policy have a content identity column"
             )
         with self._read_connection() as connection:
-            self._ensure_tables(connection, (cls,))
+            if self._missing_tables_for_read((cls,)):
+                return None
             table = self._table(schema.table_name)
             found = connection.execute(
                 sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
@@ -955,20 +871,21 @@ class SqlStore:
             return cast(T, self._fetch(connection, cls, int(found[0])))
 
     def fetch_entry(self, family_cls: type, content_id: str) -> object | None:
-        """Return the concrete configured backing for an entry-family content identity.
+        """Return the concrete configured record for an entry-family content identity.
 
         The result is the actual frozen record class, not the family protocol.
-        A single-backing family can query that backing directly; only
-        multi-backing families need their reserved one-of-many dispatch table.
+        A single-record family can query that record directly; only
+        multi-record families need their reserved one-of-many dispatch table.
         """
         family = next((item for item in self.layout.families if item.family is family_cls), None)
         if family is None:
             raise ValueError(f"{family_cls.__name__} is not a configured entry family in this SqlStore")
         with self._read_connection() as connection:
-            if len(family.backings) == 1:
-                backing = family.backings[0]
+            if self._missing_tables_for_read(family.records):
+                return None
+            if len(family.records) == 1:
+                backing = family.records[0]
                 schema = resolve_schema(backing)
-                self._ensure_tables(connection, (backing,))
                 table = self._table(schema.table_name)
                 sid = connection.execute(
                     sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == content_id)
@@ -982,7 +899,7 @@ class SqlStore:
                 .one_or_none()
             )
             if row is None:
-                for backing in family.backings:
+                for backing in family.records:
                     backing_table = self._table(resolve_schema(backing).table_name)
                     found = connection.execute(
                         sqlalchemy.select(backing_table.c[SID_COLUMN])
@@ -1027,7 +944,8 @@ class SqlStore:
         projection = _Projection()
         key = projection.content_id(record_type, obj)
         with self._read_connection() as connection:
-            self._ensure_tables(connection, (record_type,))
+            if self._missing_tables_for_read((record_type,)):
+                return None
             table = self._table(schema.table_name)
             found = connection.execute(
                 sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
@@ -1067,7 +985,8 @@ class SqlStore:
         if sid is None:
             raise ValueError(f"the {type(to).__name__} instance has not been stored or fetched through this store")
         with self._read_connection() as connection:
-            self._ensure_tables(connection, (cls,))
+            if self._missing_tables_for_read((cls,)):
+                return []
             table = self._table(schema.table_name)
             found = connection.execute(
                 sqlalchemy.select(table.c[SID_COLUMN])
@@ -1092,7 +1011,7 @@ class SqlStore:
 
     def _family_for_backing(self, record_type: type) -> EntryFamilyLayout | None:
         for family in self.layout.families:
-            if any(backing is record_type for backing in family.backings):
+            if any(backing is record_type for backing in family.records):
                 return family
         return None
 
@@ -1104,11 +1023,11 @@ class SqlStore:
         sid: int,
         key: str,
     ) -> None:
-        if len(family.backings) == 1:
+        if len(family.records) == 1:
             return
         assert family.dispatch_table_name is not None
         table = self._table(family.dispatch_table_name)
-        column_name = backing_dispatch_column_name(family.backing_names[family.backings.index(backing)])
+        column_name = backing_dispatch_column_name(family.record_names[family.records.index(backing)])
         existing = (
             connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == key))
             .mappings()
@@ -1182,7 +1101,7 @@ class SqlStore:
         content_id: str,
     ) -> tuple[type, int]:
         populated: list[tuple[type, int]] = []
-        for backing_name, backing in zip(family.backing_names, family.backings, strict=True):
+        for backing_name, backing in zip(family.record_names, family.records, strict=True):
             value = row[backing_dispatch_column_name(backing_name)]
             if value is not None:
                 populated.append((backing, int(value)))
@@ -1200,85 +1119,250 @@ class SqlStore:
         source: Any,
         projection: _Projection,
     ) -> None:
-        stored = self._fetch(connection, record_type, sid)
-        self._check_record_metadata(record_type, source, stored, projection, record_type.__name__)
+        plan = _metadata_plan(record_type)
+        if plan is None:
+            return
+        self._check_metadata_at(connection, record_type, sid, source, projection, record_type.__name__, plan)
 
-    def _check_record_metadata(
+    def _check_metadata_at(
         self,
+        connection: sqlalchemy.Connection,
         record_type: type,
+        sid: int,
         source: Any,
-        stored: Any,
         projection: _Projection,
         path: str,
+        plan: _MetadataPlan | None = None,
     ) -> None:
+        plan = _metadata_plan(record_type) if plan is None else plan
+        if plan is None:
+            return
+        schema = resolve_schema(record_type)
+        row = self._metadata_parent_row(connection, record_type, sid, plan, projection)
         values = projection.projector(record_type, source)
-        hints = typing.get_type_hints(record_type, include_extras=True)
-        for spec in resolve_schema(record_type).fields:
+        skipped_specs = {spec.field for spec in plan.skipped_specs}
+        skipped_nested = {spec.field for spec in plan.skipped_nested}
+        descend_specs = {spec.field for spec in plan.descend_specs}
+        for spec in schema.fields:
             if spec.derived:
                 continue
-            incoming = values[spec.field]
-            existing = getattr(stored, spec.field)
-            field_path = f"{path}.{spec.field}"
-            identity_skipped = _has_identity_skip(hints[spec.field])
-            if identity_skipped and not self._metadata_value_equal(spec, incoming, existing, projection, field_path):
-                raise EntryMetadataConflictError(
-                    f"metadata conflict for {field_path}: stored {existing!r}, received {incoming!r}"
+            field_path = _field_path(path, spec.field)
+            if spec.field in skipped_specs:
+                incoming = values[spec.field]
+                existing = decode_field(self, schema, spec, sid, row)
+                if not _metadata_scalar_equal(incoming, existing):
+                    raise EntryMetadataConflictError(
+                        f"metadata conflict for {field_path}: stored {existing!r}, received {incoming!r}"
+                    )
+            elif spec.field in skipped_nested:
+                self._check_metadata_nested(
+                    connection, schema, row, sid, spec, values[spec.field], projection, field_path, True
                 )
-            if not identity_skipped and spec.target is not None:
-                self._check_nested_metadata(spec, incoming, existing, projection, field_path)
+            elif spec.field in descend_specs:
+                self._check_metadata_nested(
+                    connection, schema, row, sid, spec, values[spec.field], projection, field_path, False
+                )
 
-    def _metadata_value_equal(
+    def _metadata_parent_row(
         self,
-        spec: FieldSpec,
-        incoming: Any,
-        existing: Any,
+        connection: sqlalchemy.Connection,
+        record_type: type,
+        sid: int,
+        plan: _MetadataPlan,
         projection: _Projection,
-        path: str,
-    ) -> bool:
-        if spec.role == "child" and (
-            (incoming is None and isinstance(existing, list | tuple) and not existing)
-            or (existing is None and isinstance(incoming, list | tuple) and not incoming)
-        ):
-            return True
-        if incoming is None or existing is None:
-            return incoming is existing
-        if spec.target is not None:
-            try:
-                self._check_nested_metadata(spec, incoming, existing, projection, path, compare_content=True)
-            except EntryMetadataConflictError:
-                return False
-            return True
-        return _metadata_scalar_equal(incoming, existing)
+    ) -> Mapping[str, Any]:
+        key = (record_type, int(sid))
+        cached = projection.metadata_rows.get(key)
+        if cached is not None:
+            return cached
+        schema = resolve_schema(record_type)
+        table = self._table(schema.table_name)
+        specs = (*plan.skipped_specs, *plan.skipped_nested, *plan.descend_specs)
+        columns: list[sqlalchemy.Column[Any]] = []
+        seen: set[str] = set()
+        for spec in specs:
+            if spec.role == "child":
+                if spec.optional:
+                    name = f"{spec.field}_present"
+                    if name not in seen:
+                        columns.append(table.c[name])
+                        seen.add(name)
+                continue
+            for column in spec.columns:
+                if column.name not in seen:
+                    columns.append(table.c[column.name])
+                    seen.add(column.name)
+        if not columns:
+            row: Mapping[str, Any] = {}
+            projection.metadata_rows[key] = row
+            return row
+        result = connection.execute(sqlalchemy.select(*columns).where(table.c[SID_COLUMN] == sid)).mappings().first()
+        if result is None:
+            raise KeyError(record_type, sid)
+        row = cast(Mapping[str, Any], result)
+        projection.metadata_rows[key] = row
+        return row
 
-    def _check_nested_metadata(
+    def _metadata_child_value(
         self,
+        connection: sqlalchemy.Connection,
+        schema: TableSchema,
+        sid: int,
         spec: FieldSpec,
-        incoming: Any,
-        existing: Any,
+        parent_row: Mapping[str, Any],
         projection: _Projection,
-        path: str,
-        *,
-        compare_content: bool = False,
-    ) -> None:
+    ) -> Any:
+        key = (schema.cls, int(sid), spec.field)
+        cached = projection.metadata_children.get(key, _MISSING_METADATA)
+        if cached is not _MISSING_METADATA:
+            return cached
+        if spec.optional and not parent_row[f"{spec.field}_present"]:
+            projection.metadata_children[key] = None
+            return None
+        assert spec.child is not None
+        table = self._table(spec.child.table_name)
+        parent_column = f"{schema.table_name}_sid"
+        index_column = f"{spec.field}_index"
+        columns = tuple(table.c[column.name] for column in spec.child.element_columns)
+        rows = connection.execute(
+            sqlalchemy.select(*columns).where(table.c[parent_column] == sid).order_by(table.c[index_column])
+        ).mappings()
+        decoded = [self._metadata_child_element(spec, cast(Mapping[str, Any], row)) for row in rows]
+        if spec.shape is not None:
+            value: Any = FracVector.create(decoded)
+        elif typing.get_origin(spec.python_type) is tuple:
+            value = tuple(decoded)
+        else:
+            value = decoded
+        projection.metadata_children[key] = value
+        return value
+
+    def _metadata_child_records(
+        self,
+        connection: sqlalchemy.Connection,
+        spec: FieldSpec,
+        stored: Any,
+    ) -> Any:
+        if stored is None:
+            return None
         assert spec.target is not None
-        if incoming is None or existing is None:
-            if incoming is not existing:
+        records = [self._fetch(connection, spec.target, int(stored_sid)) for stored_sid in stored]
+        return tuple(records) if typing.get_origin(spec.python_type) is tuple else records
+
+    @staticmethod
+    def _metadata_child_element(spec: FieldSpec, row: Mapping[str, Any]) -> Any:
+        assert spec.child is not None
+        if spec.target is not None:
+            return int(row[spec.child.element_columns[0].name])
+        if spec.shape is not None:
+            assert spec.shape is not None
+            return decode_fracvector_exact(row[f"{spec.field}_exact"], 1, spec.shape.cols).to_fractions()[0]
+        if spec.codec_name is not None:
+            return codec_named(spec.codec_name).decode(tuple(row[column.name] for column in spec.child.element_columns))
+        return row[spec.child.element_columns[0].name]
+
+    def _check_metadata_nested(
+        self,
+        connection: sqlalchemy.Connection,
+        schema: TableSchema,
+        parent_row: Mapping[str, Any],
+        sid: int,
+        spec: FieldSpec,
+        incoming: Any,
+        projection: _Projection,
+        path: str,
+        compare_content: bool,
+    ) -> None:
+        if spec.role == "reference":
+            assert spec.target is not None
+            stored_sid = parent_row[spec.columns[0].name]
+            if incoming is None or stored_sid is None:
+                if incoming is not None or stored_sid is not None:
+                    if compare_content:
+                        stored = None if stored_sid is None else self._fetch(connection, spec.target, int(stored_sid))
+                        raise EntryMetadataConflictError(
+                            f"metadata conflict for {path}: stored {stored!r}, received {incoming!r}"
+                        )
+                    raise EntryMetadataConflictError(f"metadata conflict for {path}")
+                return
+            self._check_metadata_target(
+                connection, spec.target, int(stored_sid), incoming, projection, path, compare_content
+            )
+            return
+
+        stored = self._metadata_child_value(connection, schema, sid, spec, parent_row, projection)
+        if spec.target is None:
+            if not _metadata_scalar_equal(incoming, stored):
+                raise EntryMetadataConflictError(
+                    f"metadata conflict for {path}: stored {stored!r}, received {incoming!r}"
+                )
+            return
+        if incoming is None or stored is None:
+            if incoming is not stored:
+                if compare_content:
+                    existing = self._metadata_child_records(connection, spec, stored)
+                    raise EntryMetadataConflictError(
+                        f"metadata conflict for {path}: stored {existing!r}, received {incoming!r}"
+                    )
                 raise EntryMetadataConflictError(f"metadata conflict for {path}")
             return
-        pairs: Iterable[tuple[Any, Any]]
-        if spec.role == "reference":
-            pairs = ((incoming, existing),)
+        if len(incoming) != len(stored):
+            if compare_content:
+                existing = self._metadata_child_records(connection, spec, stored)
+                raise EntryMetadataConflictError(
+                    f"metadata conflict for {path}: stored {existing!r}, received {incoming!r}"
+                )
+            raise EntryMetadataConflictError(f"metadata conflict for {path}")
+        for index, (incoming_item, stored_sid) in enumerate(zip(incoming, stored, strict=True)):
+            item_path = f"{path}[{index}]"
+            self._check_metadata_target(
+                connection, spec.target, int(stored_sid), incoming_item, projection, item_path, compare_content
+            )
+
+    def _check_metadata_target(
+        self,
+        connection: sqlalchemy.Connection,
+        record_type: type,
+        sid: int,
+        source: Any,
+        projection: _Projection,
+        path: str,
+        compare_content: bool,
+    ) -> None:
+        if compare_content:
+            stored_content_id = self._metadata_content_id(connection, record_type, sid, projection)
+            incoming_content_id = projection.content_id(record_type, source)
+            if incoming_content_id != stored_content_id:
+                stored = self._fetch(connection, record_type, sid)
+                raise EntryMetadataConflictError(
+                    f"metadata conflict for {path}: stored {stored!r}, received {source!r}"
+                )
+        plan = _metadata_plan(record_type)
+        if plan is not None:
+            self._check_metadata_at(connection, record_type, sid, source, projection, path, plan)
+
+    def _metadata_content_id(
+        self,
+        connection: sqlalchemy.Connection,
+        record_type: type,
+        sid: int,
+        projection: _Projection,
+    ) -> str:
+        key = (record_type, int(sid))
+        cached = projection.metadata_content_ids.get(key)
+        if cached is not None:
+            return cached
+        schema = resolve_schema(record_type)
+        table = self._table(schema.table_name)
+        if schema.dedup == "content_id":
+            stored_content_id = connection.execute(
+                sqlalchemy.select(table.c[CONTENT_ID_COLUMN]).where(table.c[SID_COLUMN] == sid)
+            ).scalar_one()
+            result = str(stored_content_id)
         else:
-            if len(incoming) != len(existing):
-                raise EntryMetadataConflictError(f"metadata conflict for {path}")
-            pairs = zip(incoming, existing, strict=True)
-        for index, (incoming_item, existing_item) in enumerate(pairs):
-            item_path = path if spec.role == "reference" else f"{path}[{index}]"
-            if compare_content and projection.content_id(spec.target, incoming_item) != projection.content_id(
-                spec.target, existing_item
-            ):
-                raise EntryMetadataConflictError(f"metadata conflict for {item_path}")
-            self._check_record_metadata(spec.target, incoming_item, existing_item, projection, item_path)
+            result = projection.content_id(record_type, self._fetch(connection, record_type, sid))
+        projection.metadata_content_ids[key] = result
+        return result
 
     # ------------------------------------------------------------------ identity caches
 

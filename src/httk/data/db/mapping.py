@@ -207,6 +207,8 @@ def _build_parent_table(schema: TableSchema, metadata: sqlalchemy.MetaData) -> s
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))
     for spec in schema.fields:
         if spec.role == "child":
+            if spec.optional:
+                items.append(sqlalchemy.Column(f"{spec.field}_present", sqlalchemy.Boolean, nullable=False))
             continue
         foreign_key = _reference_target(spec)
         for column_spec in spec.columns:

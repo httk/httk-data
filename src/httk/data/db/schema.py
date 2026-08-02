@@ -322,6 +322,14 @@ def _build_schema(cls: type, override: StorageInfo | None) -> TableSchema:
             field_names.add(name)
 
     composite_indexes = _resolve_composite_indexes(cls, info, specs)
+    declared_names = {field.name for field in dataclasses.fields(cls)}
+    declared_names.update(name for name, _prop in _stored_properties(cls))
+    for spec in specs:
+        if spec.role == "child" and spec.optional and f"{spec.field}_present" in declared_names:
+            raise SchemaError(
+                f"{cls.__name__}.{spec.field}_present collides with the store-managed presence column "
+                f"for optional child field {spec.field!r}"
+            )
     _validate_links(cls, info.links, specs)
     return TableSchema(
         cls=cls,

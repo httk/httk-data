@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import pytest
+import sqlalchemy
 from httk.core import (
     PropertyDefinition,
     StorageInfo,
@@ -157,11 +158,11 @@ def _federation(
     first_database, second_database = databases
     first_store = SqlStore(
         first_database,
-        entry_backings={FederatedCalculation: (FederationFirst, FederationSecond)},
+        entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
     )
     second_store = SqlStore(
         second_database,
-        entry_backings={FederatedCalculation: (FederationFirst, FederationSecond)},
+        entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
     )
     for record in first_records:
         first_store.save(record)
@@ -210,6 +211,82 @@ def test_unsorted_page_preserves_source_backing_native_order_and_hydrates_only_v
                 statement = statement.order_by(column._element.desc() if descending else column._element.asc())
             rendered = str(statement.compile(dialect=source.plan.store._database.engine.dialect)).upper()
             assert "ORDER BY" not in rendered
+
+
+def test_unique_prefix_page_has_no_duplicate_probe_queries() -> None:
+    managers = (Database.sqlite(), Database.sqlite(), Database.sqlite())
+    with managers[0] as first_database, managers[1] as second_database, managers[2] as third_database:
+        records = (_record("first"), _record("second"), _record("third"))
+        stores = tuple(
+            SqlStore(database, entry_records={FederatedCalculation: FederationFirst})
+            for database in (first_database, second_database, third_database)
+        )
+        for store, record in zip(stores, records, strict=True):
+            store.save(record)
+        federation = StoredEntryFederation(
+            tuple(
+                StoredEntrySource(store, FederatedCalculation, name, f"{name}:")
+                for store, name in zip(stores, ("alpha", "beta", "gamma"), strict=True)
+            )
+        )
+        statements: list[str] = []
+
+        def count_select(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        for store in stores:
+            sqlalchemy.event.listen(store._database.engine, "before_cursor_execute", count_select)
+        try:
+            page = federation.query(limit=3)
+        finally:
+            for store in stores:
+                sqlalchemy.event.remove(store._database.engine, "before_cursor_execute", count_select)
+
+    assert len(page.rows) == 3
+    assert len(statements) == 6  # Three count queries plus three candidate queries; no duplicate probes.
+
+
+def test_single_source_page_skips_probes_but_audit_detects_corrupt_cross_backing_ids() -> None:
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={FederatedCalculation: (FederationFirst, FederationSecond)})
+        first = _record("first")
+        second = _record("second", second=True)
+        store.save(first)
+        second_sid = store.save(second)
+        key = content_id(first)
+        with database.engine.begin() as connection:
+            connection.execute(
+                sqlalchemy.text("UPDATE stored_federation_second SET content_id = :content_id WHERE sid = :sid"),
+                {"content_id": key, "sid": second_sid},
+            )
+        federation = StoredEntryFederation((StoredEntrySource(store, FederatedCalculation, "only", "same:"),))
+        statements: list[str] = []
+
+        def count_select(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        sqlalchemy.event.listen(database.engine, "before_cursor_execute", count_select)
+        try:
+            page = federation.query(limit=1)
+        finally:
+            sqlalchemy.event.remove(database.engine, "before_cursor_execute", count_select)
+
+        # Page serving intentionally returns this duplicated id without raising;
+        # audit_duplicate_ids() detects same-source out-of-band corruption.
+        assert len(page.rows) == 1
+        assert page.total_count == 2
+        assert [row["id"] for row in page.rows] == [f"same:{key}"]
+        assert len(statements) == 4  # Two counts plus two page candidates; no duplicate probes.
+        with pytest.raises(DuplicateEntryIdError) as caught:
+            federation.audit_duplicate_ids()
+
+    assert caught.value.public_id == f"same:{key}"
+    assert {origin.backing for origin in caught.value.origins} == {
+        "test-stored-federation-first",
+        "test-stored-federation-second",
+    }
 
 
 def test_limit_zero_uses_an_id_only_sentinel_without_duplicate_probe_or_hydration(databases):
@@ -314,7 +391,7 @@ def test_registered_definition_prefixes_reject_unknown_properties_but_filter_dec
 
 def test_constructor_rejects_mixed_entry_families_before_querying(databases):
     database, _unused = databases
-    store = SqlStore(database, entry_backings={FederatedCalculation: (FederationFirst,)})
+    store = SqlStore(database, entry_records={FederatedCalculation: (FederationFirst,)})
     incompatible_family = type("IncompatibleFederationFamily", (), {})
 
     with pytest.raises(ValueError, match="one exact entry_family"):
@@ -338,14 +415,22 @@ def test_audit_scans_bounded_id_only_batches_without_hydration(databases, monkey
         )
     _RESPONSES.clear()
     limits: list[int] = []
+    offsets: list[int] = []
     original = SqlSearcher.set_limit
+    add_offset = SqlSearcher.add_offset
 
     def tracked(self, value: int) -> None:
         limits.append(value)
         original(self, value)
 
+    def tracked_offset(self, value: int) -> None:
+        offsets.append(value)
+        add_offset(self, value)
+
     monkeypatch.setattr(SqlSearcher, "set_limit", tracked)
+    monkeypatch.setattr(SqlSearcher, "add_offset", tracked_offset)
     with pytest.raises(DuplicateEntryIdError):
         federation.audit_duplicate_ids(batch_size=1)
     assert limits and set(limits) == {1}
+    assert offsets == []
     assert _RESPONSES == []

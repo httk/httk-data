@@ -102,7 +102,7 @@ def _object_results(store: SqlStore, target: type, expression):
 
 def test_source_resources_round_trip_deduplicate_and_query_offline(database):
     first, second = _resources()
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     first_sid = store.save(first)
     second_sid = store.save(second)
 
@@ -165,7 +165,7 @@ def test_source_resources_round_trip_deduplicate_and_query_offline(database):
 def test_typed_reference_round_trip_query_and_view_offline(database):
     first, _second = _resources()
     backend = OptimadeReference(first)
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     sid = store.save(backend)
     columns = set(store._table("optimade_reference").c.keys())
     assert {"id", "type", "immutable_id", "last_modified"} <= columns

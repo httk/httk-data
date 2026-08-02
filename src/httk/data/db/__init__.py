@@ -74,7 +74,7 @@ from .schema import (
     snake_case,
 )
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.0.2"
+STORAGE_PROTOCOL_VERSION: Final = "v2.0.3"
 """The current persisted ``SqlStore`` physical-layout protocol."""
 
 __all__ = [

@@ -49,7 +49,7 @@ def store(request):
     else:
         manager = Database.sqlite()
     with manager as database:
-        value = SqlStore(database, entry_backings={})
+        value = SqlStore(database, entry_records={})
         with value.transaction():
             for row in ROWS:
                 value.save(row)
@@ -70,6 +70,21 @@ def results(store: SqlStore, *, common_only: bool = False):
 
 def labels(page) -> list[str]:
     return [row.label for row in page.rows]
+
+
+def test_paging_a_fresh_store_returns_an_empty_page():
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_records={})
+        searcher = store.searcher()
+        record = searcher.variable(PageRecord)
+        result = searcher.results(record=record)
+
+        page = result.page(size=2, order_by=(), include_total=True)
+
+        assert page.rows == ()
+        assert page.next is None
+        assert page.previous is None
+        assert page.total == 0
 
 
 def all_pages(result, order: tuple[PageOrder, ...], size: int = 2) -> list[str]:
@@ -205,7 +220,7 @@ def test_token_rejects_changed_filter_order_and_corruption(store):
 def test_token_rejects_changed_schema_and_dialect():
     order = (PageOrder("bucket"),)
     with Database.sqlite() as sqlite_database:
-        sqlite_store = SqlStore(sqlite_database, entry_backings={})
+        sqlite_store = SqlStore(sqlite_database, entry_records={})
         with sqlite_store.transaction():
             for row in ROWS:
                 sqlite_store.save(row)
@@ -220,7 +235,7 @@ def test_token_rejects_changed_schema_and_dialect():
 
         pytest.importorskip("duckdb_engine")
         with Database.duckdb() as duckdb_database:
-            duckdb_store = SqlStore(duckdb_database, entry_backings={})
+            duckdb_store = SqlStore(duckdb_database, entry_records={})
             with duckdb_store.transaction():
                 for row in ROWS:
                     duckdb_store.save(row)
@@ -307,7 +322,7 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
 
 def test_deep_page_stays_seek_based_and_returns_only_requested_rows():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         with store.transaction():
             for index in range(2_000):
                 store.save(PageRecord(index, index, f"r-{index}", ["common"]))
@@ -324,7 +339,7 @@ def test_deep_page_stays_seek_based_and_returns_only_requested_rows():
 @pytest.mark.extended
 def test_extended_deep_page_has_a_bounded_seek_statement():
     with Database.sqlite() as database:
-        store = SqlStore(database, entry_backings={})
+        store = SqlStore(database, entry_records={})
         with store.transaction():
             for index in range(10_000):
                 store.save(PageRecord(index, index, f"r-{index}", ["common"]))

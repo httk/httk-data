@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated
 
-from httk.core import FracScalar, FracVector, Shape, SurdScalar, check_record_matches_definition
+from httk.core import FracScalar, FracVector, Shape, SurdScalar
+from httk.core.schema_check import check_record_matches_definition
 
 from httk.data.db import resolve_schema
 from httk.data.db.entry_provider import _fulltype_of, auto_definition

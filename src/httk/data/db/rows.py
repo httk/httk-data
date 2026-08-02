@@ -57,7 +57,8 @@ class _Chunk:
 
         store = hydrator._store
         schema = hydrator._schema
-        store._ensure_tables(None, (hydrator._cls,))
+        if store._missing_tables_for_read((hydrator._cls,)):
+            raise StaleResultError(f"{schema.cls.__name__} table is not present")
         table = store._table(schema.table_name)
         with store._read_connection() as connection:
             result = connection.execute(sqlalchemy.select(table).where(table.c[SID_COLUMN].in_(sids))).fetchall()
@@ -141,6 +142,8 @@ class _Chunk:
         return targets
 
     def _child_value(self, sid: int, spec: FieldSpec, *, eager: bool) -> Any:
+        if spec.optional and not self.parent_rows[sid][self.columns[f"{spec.field}_present"]]:
+            return None
         grouped, columns = self._child_rows(spec)
         entries = grouped.get(sid, [])
         assert spec.child is not None

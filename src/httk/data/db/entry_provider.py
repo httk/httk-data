@@ -381,7 +381,9 @@ class StoreEntryProvider(EntryProvider):
         if not relation_specs and not link_scans:
             return {}
         store = self._store
-        store.ensure_tables(cls, *(scan.declaring for scan in link_scans))
+        if store._missing_tables_for_read((cls,)):
+            return {}
+        link_scans = [scan for scan in link_scans if not store._missing_tables_for_read((scan.declaring,))]
         schema = self._schemas[entry_type]
         table = store._table(schema.table_name)
         reference_specs = [(spec, related) for spec, related in relation_specs if spec.role == "reference"]

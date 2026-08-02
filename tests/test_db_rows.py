@@ -75,6 +75,12 @@ class CycleRecord:
 
 
 @dataclass(frozen=True)
+class PresenceCollision:
+    values: list[str] | None = None
+    values_present: bool = False
+
+
+@dataclass(frozen=True)
 class CustomEqRecord:
     value: int
 
@@ -111,7 +117,7 @@ def _row(store: SqlStore, cls: type, name: str = "A"):
 
 
 def test_equality_is_symmetric(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     store.save(eager)
     row = _row(store, ParityRecord)
@@ -120,8 +126,13 @@ def test_equality_is_symmetric(database):
     assert row != ParityRecord("B", 1)
 
 
+def test_optional_child_presence_name_collision_is_rejected():
+    with pytest.raises(SchemaError, match="values_present.*presence column"):
+        resolve_schema(PresenceCollision)
+
+
 def test_hash_parity(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     store.save(eager)
     assert hash(_row(store, ParityRecord)) == hash(eager)
@@ -132,7 +143,7 @@ def test_hash_parity(database):
 
 
 def test_dataclass_compare_hash_and_repr_flags_are_preserved(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = FidelityRecord(1, 2)
     store.save(eager)
     row = _row(store, FidelityRecord)
@@ -152,7 +163,7 @@ def test_custom_eq_and_hash_are_rejected():
 
 
 def test_schema_and_content_id_parity(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     store.save(eager)
     row = _row(store, ParityRecord)
@@ -162,7 +173,7 @@ def test_schema_and_content_id_parity(database):
 
 def test_dataclass_replace_runs_init_and_post_init(database):
     ValidatedRecord.calls.clear()
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ValidatedRecord("A")
     store.save(eager)
     row = _row(store, ValidatedRecord)
@@ -175,7 +186,7 @@ def test_dataclass_replace_runs_init_and_post_init(database):
 
 
 def test_repr_matches_base_dataclass(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     store.save(eager)
     assert repr(_row(store, ParityRecord)) == repr(eager)
@@ -183,7 +194,7 @@ def test_repr_matches_base_dataclass(database):
 
 @pytest.mark.parametrize("operation", [copy.copy, copy.deepcopy, pickle.dumps])
 def test_copy_deepcopy_and_pickle_are_explicitly_rejected(database, operation):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     store.save(eager)
     with pytest.raises(TypeError, match="materialize"):
@@ -191,7 +202,7 @@ def test_copy_deepcopy_and_pickle_are_explicitly_rejected(database, operation):
 
 
 def test_save_lazy_row_deduplicates_like_eager(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     eager = ParityRecord("A", 1)
     sid = store.save(eager)
     row = _row(store, ParityRecord)
@@ -201,7 +212,7 @@ def test_save_lazy_row_deduplicates_like_eager(database):
 
 
 def test_eager_materialization_reuses_live_nested_identity(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     child = IdentityChild("child")
     child_sid = store.save(child)
     parent_sid = store.save(IdentityParent(child))
@@ -211,7 +222,7 @@ def test_eager_materialization_reuses_live_nested_identity(database):
 
 
 def test_skip_default_factory_is_available_on_lazy_rows(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     store.save(SkippedRecord("A"))
     row = _row(store, SkippedRecord)
     assert row.ignored == []
@@ -223,7 +234,7 @@ def test_skip_default_factory_is_available_on_lazy_rows(database):
 def test_eager_cycles_raise_instead_of_returning_lazy_rows(database):
     if database.engine.dialect.name == "duckdb":
         pytest.skip("DuckDB rejects the self-referencing foreign-key fixture")
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     store.ensure_tables(CycleRecord)
     schema = resolve_schema(CycleRecord)
     table = store._table(schema.table_name)
@@ -235,7 +246,7 @@ def test_eager_cycles_raise_instead_of_returning_lazy_rows(database):
 
 
 def test_sid_of_lazy_row_is_store_local(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     other = SqlStore(database)
     sid = store.save(ParityRecord("A", 1))
     row = _row(store, ParityRecord)
@@ -249,7 +260,7 @@ def test_slots_dataclasses_are_rejected():
 
 
 def test_iteration_has_no_child_query_until_field_access(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     for index in range(3):
         store.save(BatchRecord(str(index), ["x", "y"]))
     statements: list[str] = []
@@ -272,7 +283,7 @@ def test_iteration_has_no_child_query_until_field_access(database):
 
 
 def test_child_batches_once_per_chunk(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     for index in range(1500):
         store.save(BatchRecord(str(index), [str(index)]))
     statements: list[str] = []
@@ -295,7 +306,7 @@ def test_child_batches_once_per_chunk(database):
 
 
 def test_stale_result_is_reported_at_hydration(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     sid = store.save(ParityRecord("A", 1))
     searcher = store.searcher()
     variable = searcher.variable(ParityRecord)
@@ -308,7 +319,7 @@ def test_stale_result_is_reported_at_hydration(database):
 
 
 def test_weak_chunk_is_rehydrated(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     for index in range(501):
         store.save(BatchRecord(str(index), [str(index)]))
     statements: list[str] = []
@@ -334,7 +345,7 @@ def test_weak_chunk_is_rehydrated(database):
 
 
 def test_fetch_one_without_child_or_reference_uses_one_statement(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     sid = store.save(ParityRecord("A", 1))
     statements: list[str] = []
 
@@ -351,7 +362,7 @@ def test_fetch_one_without_child_or_reference_uses_one_statement(database):
 
 
 def test_fetch_one_with_child_uses_at_most_two_statements(database):
-    store = SqlStore(database, entry_backings={})
+    store = SqlStore(database, entry_records={})
     sid = store.save(BatchRecord("A", ["x"]))
     statements: list[str] = []
 
