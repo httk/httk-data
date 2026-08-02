@@ -443,7 +443,8 @@ class SqlReference:
         return self._variable._alias.c[self._spec.columns[0].name]
 
     def _target_sid(self, other: Any) -> int:
-        sid = self._variable._searcher._store.sid_of(other)
+        assert self._spec.target is not None
+        sid = self._variable._searcher._store.sid_of(other, as_record=self._spec.target)
         if sid is None:
             raise ValueError(
                 f"the {type(other).__name__} instance compared against "

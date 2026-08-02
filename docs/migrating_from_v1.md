@@ -285,9 +285,9 @@ sid = store.sid_of(nacl)                                  # was nacl.db.sid
 found = store.fetch_by_content_id(Structure, content_id(nacl))   # was the hexhash lookup
 ```
 
-`sid_of` consults the store's in-memory cache only — it answers for instances
-that passed through `save()` or `fetch()` and are still alive — while
-`fetch_by_content_id` queries the database.
+For content-addressed records, `sid_of` queries the database when its local
+cache has no answer, so an equal object and a reopened store resolve the same
+store-local sid. `fetch_by_content_id` retrieves the corresponding record.
 
 ## No longer available
 

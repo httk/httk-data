@@ -10,7 +10,7 @@ The pure-Python foundation lives here:
   selects, and reconstruction;
 - :mod:`httk.data.db.codecs` — the :class:`ValueCodec` registry with exact,
   round-trippable encodings for rationals, surds, and datetimes;
-- :mod:`httk.data.db.identity` — :func:`canonical_form` and :func:`content_id`,
+- :mod:`httk.data.db.identity` — ``canonical_form`` and ``content_id``,
   the content identity used for deduplication.
 
 These modules import cleanly without sqlalchemy. The SQL layer proper builds
@@ -81,6 +81,7 @@ __all__ = [
     "ChildTableSpec",
     "ColumnSpec",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "FieldRole",
     "FieldSpec",
@@ -122,6 +123,7 @@ __all__ = [
 
 _SQL_EXPORTS = {
     "Database": ".engine",
+    "EntryMetadataConflictError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",
     "SqlVariable": ".searcher",

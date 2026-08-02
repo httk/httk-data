@@ -83,6 +83,12 @@ with store.transaction():
 same_record = store.fetch(StructureRecord, sid)   # reconstructed exactly
 ```
 
+A source object with an exact `__httk_storage_binding__` can be saved directly;
+`save(source, as_record=OtherRecord)` selects another declared projection.
+Nested record fields are projected recursively. A projected source must expose
+any derived `stored_property` declared by its target record because storage
+does not construct an intermediate record merely to evaluate that property.
+
 While a saved or fetched instance is alive, fetching its sid again returns the
 very same object. Join-objects pointing at a stored instance are found with
 `store.referring(TagClass, field="structure", to=record)`.

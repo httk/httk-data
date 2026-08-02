@@ -2,7 +2,7 @@
 
 A *storable* class is a plain **frozen dataclass** declared with the stdlib-only
 marker vocabulary from httk-core (:class:`~httk.core.Indexed`,
-:class:`~httk.core.Unique`, :class:`~httk.core.Skip`, :class:`~httk.core.Shape`,
+:class:`~httk.core.Unique`, :class:`~httk.core.Skip`, ``IdentitySkip``, :class:`~httk.core.Shape`,
 :class:`~httk.core.StorageInfo`, :class:`~httk.core.stored_property`).
 :func:`resolve_schema` reads the class once — dataclass fields, ``Annotated``
 markers, stored properties, and the optional class-level or externally
@@ -32,6 +32,8 @@ Resolution rules (field annotation, then the resulting relational shape):
   one ``name_sid`` foreign-key column.
 - ``Annotated[..., Skip()]`` — omitted from storage (the field must have a
   default so instances can be reconstructed without it).
+- ``Annotated[..., IdentitySkip()]`` — stored normally but omitted from
+  representation identity.
 - ``Annotated[..., Related(...)]`` — relationship metadata carried on the
   resolved :class:`FieldSpec`; valid only on reference fields and on
   lists/tuples of storable classes.

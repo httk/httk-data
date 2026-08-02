@@ -367,6 +367,7 @@ def row_class(cls: type) -> type:
 
     attrs: dict[str, Any] = {
         "__module__": cls.__module__,
+        "__httk_storage_binding__": cls,
         "__httk_row_base__": cls,
         _ROW_BASE: cls,
         "__eq__": eq,

@@ -1,0 +1,494 @@
+"""Representation-aware SQL persistence without intermediate Record objects."""
+
+import contextlib
+import datetime
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from typing import Annotated, ClassVar
+from zoneinfo import ZoneInfo
+
+import pytest
+import sqlalchemy
+from httk.core import IdentitySkip, StorageInfo, StorageProjectionCycleError, content_id, stored_property
+
+from httk.data.db import Database, EntryMetadataConflictError, SqlStore
+
+_calls: dict[tuple[str, int], int] = {}
+
+
+@dataclass(frozen=True)
+class LeafView:
+    value: int
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class RootView:
+    name: str
+    primary: LeafView
+    related: list[LeafView]
+    history: tuple[LeafView, ...]
+    modified: datetime.datetime
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class LeafRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="projection_leaf", identity_name="tests.projection.LeafRecord"
+    )
+    __httk_canonical_source__: ClassVar[type] = LeafView
+
+    value: int
+    note: Annotated[str | None, IdentitySkip()] = None
+
+    @classmethod
+    def __httk_project__(cls, source: LeafView) -> Mapping[str, object]:
+        key = ("leaf", id(source))
+        _calls[key] = _calls.get(key, 0) + 1
+        return {"value": source.value, "note": source.note}
+
+
+@dataclass(frozen=True)
+class RootRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="projection_root", identity_name="tests.projection.RootRecord"
+    )
+    __httk_canonical_source__: ClassVar[type] = RootView
+
+    name: str
+    primary: LeafRecord
+    related: list[LeafRecord]
+    history: tuple[LeafRecord, ...]
+    modified: Annotated[datetime.datetime, IdentitySkip()]
+    note: Annotated[str | None, IdentitySkip()] = None
+
+    @classmethod
+    def __httk_project__(cls, source: RootView) -> Mapping[str, object]:
+        key = ("root", id(source))
+        _calls[key] = _calls.get(key, 0) + 1
+        return {
+            "name": source.name,
+            "primary": source.primary,
+            "related": source.related,
+            "history": source.history,
+            "modified": source.modified,
+            "note": source.note,
+        }
+
+
+@dataclass(frozen=True)
+class SummaryRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="projection_summary", identity_name="tests.projection.SummaryRecord"
+    )
+    __httk_canonical_source__: ClassVar[type] = RootView
+
+    name: str
+    primary_value: int
+
+    @classmethod
+    def __httk_project__(cls, source: RootView) -> Mapping[str, object]:
+        return {"name": source.name, "primary_value": source.primary.value}
+
+
+@dataclass(frozen=True)
+class DerivedView:
+    value: int
+
+    @property
+    def doubled(self) -> int:
+        return self.value * 2
+
+
+@dataclass(frozen=True)
+class DerivedRecord:
+    __httk_canonical_source__: ClassVar[type] = DerivedView
+
+    value: int
+
+    @stored_property
+    def doubled(self) -> int:
+        return self.value * 2
+
+    @classmethod
+    def __httk_project__(cls, source: DerivedView) -> Mapping[str, object]:
+        return {"value": source.value}
+
+
+@dataclass(frozen=True)
+class TupleRecord:
+    __httk_canonical_source__: ClassVar[type] = tuple
+
+    value: int
+
+    @classmethod
+    def __httk_project__(cls, source: tuple[int, ...]) -> Mapping[str, object]:
+        return {"value": source[0]}
+
+
+@dataclass(frozen=True)
+class CycleRecord:
+    name: str
+    link: Annotated["CycleRecord | None", IdentitySkip()] = None
+
+
+@dataclass(frozen=True)
+class NoDedupLeaf:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="projection_no_dedup_leaf", dedup="none"
+    )
+
+    value: str
+
+
+@dataclass(frozen=True)
+class ByValueHolder:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="projection_by_value_holder", dedup="by_value"
+    )
+
+    leaf: NoDedupLeaf
+    value: str
+
+
+@dataclass(frozen=True)
+class RaceHolder:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="projection_race_holder")
+
+    leaf: NoDedupLeaf
+    value: str
+
+
+@dataclass(frozen=True)
+class SummaryReference:
+    target: SummaryRecord
+    value: str
+
+
+@dataclass(frozen=True)
+class FoldMetadata:
+    value: str
+    instants: Annotated[tuple[datetime.datetime, ...], IdentitySkip()]
+
+
+@dataclass(frozen=True)
+class LazySourceRecord:
+    value: int
+
+
+@dataclass(frozen=True)
+class LazyAlternateRecord:
+    __httk_canonical_source__: ClassVar[type] = LazySourceRecord
+
+    value: int
+
+    @classmethod
+    def __httk_project__(cls, source: LazySourceRecord) -> Mapping[str, object]:
+        return {"value": source.value}
+
+
+LeafView.__httk_storage_binding__ = LeafRecord
+RootView.__httk_storage_binding__ = RootRecord
+
+
+def _root(name: str = "one") -> RootView:
+    shared = LeafView(1, "leaf metadata")
+    return RootView(
+        name,
+        shared,
+        [shared, LeafView(2)],
+        (LeafView(3),),
+        datetime.datetime(2026, 8, 1, 12, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
+    )
+
+
+@pytest.fixture(params=["sqlite", "duckdb"])
+def projection_database(request):
+    if request.param == "duckdb":
+        pytest.importorskip("duckdb_engine")
+        manager = Database.duckdb()
+    else:
+        manager = Database.sqlite()
+    with manager as database:
+        yield database
+
+
+def _count(database: Database, table_name: str) -> int:
+    with database.engine.connect() as connection:
+        return connection.execute(sqlalchemy.text(f"SELECT COUNT(*) FROM {table_name}")).scalar_one()
+
+
+def test_projected_nested_save_calls_each_projection_once():
+    _calls.clear()
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(source)
+        fetched = store.fetch(RootRecord, sid)
+
+    assert fetched.name == source.name
+    assert fetched.primary == LeafRecord(1, "leaf metadata")
+    assert fetched.related == [LeafRecord(1, "leaf metadata"), LeafRecord(2)]
+    assert fetched.history == (LeafRecord(3),)
+    assert _calls == {
+        ("root", id(source)): 1,
+        ("leaf", id(source.primary)): 1,
+        ("leaf", id(source.related[1])): 1,
+        ("leaf", id(source.history[0])): 1,
+    }
+
+
+def test_same_content_identity_has_store_local_sids():
+    source = _root()
+    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+        first = SqlStore(first_database)
+        second = SqlStore(second_database)
+        first_sid = first.save(source)
+        second.save(_root("other"))
+        second_sid = second.save(source)
+
+        assert content_id(source) == content_id(second.fetch(RootRecord, second_sid))
+        assert first_sid == 1
+        assert second_sid == 2
+        assert first.sid_of(source) == first_sid
+        assert second.sid_of(source) == second_sid
+
+
+def test_sid_of_queries_reopened_database(tmp_path):
+    path = tmp_path / "projection.sqlite"
+    source = _root()
+    database = Database.sqlite(path)
+    sid = SqlStore(database).save(source)
+    database.dispose()
+
+    with Database.sqlite(path) as reopened:
+        assert SqlStore(reopened).sid_of(_root()) == sid
+
+
+def test_identity_skipped_metadata_is_stored_and_checked():
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(source)
+        same_instant = replace(source, modified=source.modified.astimezone(datetime.UTC))
+        assert store.save(same_instant) == sid
+        assert store.fetch(RootRecord, sid).modified == source.modified.astimezone(datetime.UTC)
+
+        with pytest.raises(EntryMetadataConflictError, match="modified"):
+            store.save(replace(source, modified=source.modified + datetime.timedelta(seconds=1)))
+        with pytest.raises(EntryMetadataConflictError, match="note"):
+            store.save(replace(source, note="new metadata"))
+        with pytest.raises(EntryMetadataConflictError, match="primary.note"):
+            store.save(replace(source, primary=replace(source.primary, note="changed")))
+
+
+def test_insert_race_winner_still_checks_metadata(monkeypatch):
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        store.save(source)
+        original_execute = sqlalchemy.Connection.execute
+        missed_preflight = False
+
+        class NoRow:
+            @staticmethod
+            def first():
+                return None
+
+        def miss_root_once(connection, statement, *args, **kwargs):
+            nonlocal missed_preflight
+            tables = statement.get_final_froms() if isinstance(statement, sqlalchemy.sql.Select) else ()
+            if not missed_preflight and any(table.name == "projection_root" for table in tables):
+                missed_preflight = True
+                return NoRow()
+            return original_execute(connection, statement, *args, **kwargs)
+
+        monkeypatch.setattr(sqlalchemy.Connection, "execute", miss_root_once)
+        with pytest.raises(EntryMetadataConflictError, match="note"):
+            store.save(replace(source, note="racing metadata"))
+
+        assert missed_preflight
+
+
+@pytest.mark.parametrize("explicit_transaction", [False, True])
+def test_by_value_reuse_discards_nested_no_dedup_insert(
+    projection_database, monkeypatch, explicit_transaction
+):
+    store = SqlStore(projection_database)
+    leaf = NoDedupLeaf("same")
+    winner = ByValueHolder(leaf, "holder")
+    winner_sid = store.save(winner)
+    leaf_sid = store.sid_of(leaf)
+    assert leaf_sid is not None
+    original_parent_row = store._parent_row
+
+    def reuse_original_leaf(connection, schema, source, projected, projection, path):
+        values = original_parent_row(connection, schema, source, projected, projection, path)
+        if schema.cls is ByValueHolder:
+            values["leaf_sid"] = leaf_sid
+        return values
+
+    monkeypatch.setattr(store, "_parent_row", reuse_original_leaf)
+    context = store.transaction() if explicit_transaction else contextlib.nullcontext()
+    with context:
+        assert store.save(ByValueHolder(leaf, "holder")) == winner_sid
+    assert _count(projection_database, "projection_no_dedup_leaf") == 1
+
+
+@pytest.mark.parametrize("explicit_transaction", [False, True])
+def test_content_race_loss_discards_nested_no_dedup_insert(
+    projection_database, monkeypatch, explicit_transaction
+):
+    store = SqlStore(projection_database)
+    winner = RaceHolder(NoDedupLeaf("same"), "holder")
+    winner_sid = store.save(winner)
+    original_execute = sqlalchemy.Connection.execute
+    missed_preflight = False
+
+    class NoRow:
+        @staticmethod
+        def first():
+            return None
+
+    def miss_root_once(connection, statement, *args, **kwargs):
+        nonlocal missed_preflight
+        tables = statement.get_final_froms() if isinstance(statement, sqlalchemy.sql.Select) else ()
+        if not missed_preflight and any(table.name == "projection_race_holder" for table in tables):
+            missed_preflight = True
+            return NoRow()
+        return original_execute(connection, statement, *args, **kwargs)
+
+    monkeypatch.setattr(sqlalchemy.Connection, "execute", miss_root_once)
+    context = store.transaction() if explicit_transaction else contextlib.nullcontext()
+    with context:
+        assert store.save(RaceHolder(NoDedupLeaf("same"), "holder")) == winner_sid
+    assert _count(projection_database, "projection_no_dedup_leaf") == 1
+    assert missed_preflight
+
+
+def test_explicit_alternate_record_projection():
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(source, as_record=SummaryRecord)
+        assert store.fetch(SummaryRecord, sid) == SummaryRecord("one", 1)
+        assert store.sid_of(_root(), as_record=SummaryRecord) == sid
+
+
+def test_reference_comparison_uses_declared_record_target():
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        default_sid = store.save(source)
+        store.save(_root("other"), as_record=SummaryRecord)
+        target_sid = store.save(source, as_record=SummaryRecord)
+        store.save(SummaryReference(source, "match"))
+        assert default_sid != target_sid
+
+        searcher = store.searcher()
+        reference = searcher.variable(SummaryReference)
+        searcher.add(reference.target == source)
+        searcher.output(reference, "reference")
+
+        assert [row[0][0].value for row in searcher] == ["match"]
+
+
+def test_alternate_record_sids_are_cached_per_record_type():
+    source = _root()
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        default_sid = store.save(source)
+        store.save(_root("other"), as_record=SummaryRecord)
+        summary_sid = store.save(source, as_record=SummaryRecord)
+
+        assert default_sid == 1
+        assert summary_sid == 2
+        assert store.sid_of(source) == default_sid
+        assert store.sid_of(source, as_record=SummaryRecord) == summary_sid
+
+
+def test_projected_stored_property_is_read_from_source():
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(DerivedView(4), as_record=DerivedRecord)
+        assert store.fetch(DerivedRecord, sid).doubled == 8
+
+
+def test_projected_source_must_expose_record_stored_properties():
+    class IncompleteDerivedView(DerivedView):
+        @property
+        def doubled(self) -> int:
+            raise AttributeError
+
+    with Database.sqlite() as database, pytest.raises(TypeError, match="expose derived stored property 'doubled'"):
+        SqlStore(database).save(IncompleteDerivedView(4), as_record=DerivedRecord)
+
+
+def test_non_weakrefable_projected_source_uses_database_sid_lookup():
+    source = (7,)
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(source, as_record=TupleRecord)
+
+        assert store.fetch(TupleRecord, sid) == TupleRecord(7)
+        assert store.sid_of(source, as_record=TupleRecord) == sid
+
+
+def test_identity_skipped_recursive_link_reports_traversal_path():
+    record = CycleRecord("cycle")
+    object.__setattr__(record, "link", record)
+
+    with Database.sqlite() as database, pytest.raises(StorageProjectionCycleError) as caught:
+        SqlStore(database).save(record)
+
+    assert caught.value.path == "link"
+
+
+def test_datetime_metadata_containers_compare_utc_instants_live_and_reopened(tmp_path):
+    path = tmp_path / "fold.sqlite"
+    zone = ZoneInfo("America/New_York")
+    first = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=0)
+    second = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
+    source = FoldMetadata("fold", (first,))
+    database = Database.sqlite(path)
+    store = SqlStore(database)
+    sid = store.save(source)
+    assert store.save(FoldMetadata("fold", (first.astimezone(datetime.UTC),))) == sid
+    with pytest.raises(EntryMetadataConflictError, match="instants"):
+        store.save(FoldMetadata("fold", (second,)))
+    database.dispose()
+
+    with Database.sqlite(path) as reopened, pytest.raises(EntryMetadataConflictError, match="instants"):
+        SqlStore(reopened).save(FoldMetadata("fold", (second,)))
+
+
+def test_lazy_row_alternate_sid_uses_requested_record_target():
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        source_sid = store.save(LazySourceRecord(7))
+        store.save(LazySourceRecord(8), as_record=LazyAlternateRecord)
+        searcher = store.searcher()
+        source = searcher.variable(LazySourceRecord)
+        searcher.output(source, "source")
+        row = next(iter(searcher))[0][0]
+        alternate_sid = store.save(row, as_record=LazyAlternateRecord)
+
+        assert source_sid != alternate_sid
+        assert store.sid_of(row) == source_sid
+        assert store.sid_of(row, as_record=LazyAlternateRecord) == alternate_sid
+
+
+def test_concrete_record_save_still_round_trips():
+    record = RootRecord(
+        "record",
+        LeafRecord(4),
+        [LeafRecord(5)],
+        (LeafRecord(6),),
+        datetime.datetime(2026, 8, 1, tzinfo=datetime.UTC),
+    )
+    with Database.sqlite() as database:
+        store = SqlStore(database)
+        sid = store.save(record)
+        assert store.fetch(RootRecord, sid) is record
+        assert SqlStore(database).fetch(RootRecord, sid) == record

@@ -197,6 +197,7 @@ def test_save_lazy_row_deduplicates_like_eager(database):
     row = _row(store, ParityRecord)
     assert store.save(row) == sid
     assert content_id(row) == content_id(eager)
+    assert type(store.fetch(ParityRecord, sid)) is ParityRecord
 
 
 def test_eager_materialization_reuses_live_nested_identity(database):

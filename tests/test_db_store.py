@@ -12,9 +12,9 @@ from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import FracScalar, FracVector, Indexed, Shape, Skip, StorageInfo, Unique, stored_property
+from httk.core import FracScalar, FracVector, IdentitySkip, Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 
-from httk.data.db import Database, SchemaError, SqlStore, content_id, resolve_schema
+from httk.data.db import Database, EntryMetadataConflictError, SchemaError, SqlStore, content_id, resolve_schema
 from httk.data.db.mapping import sqlalchemy_metadata, table_for
 
 
@@ -43,6 +43,23 @@ class LogEvent:
 @dataclass(frozen=True)
 class UniqueName:
     name: Annotated[str, Unique()]
+
+
+@dataclass(frozen=True)
+class RollbackChild:
+    name: str
+
+
+@dataclass(frozen=True)
+class RollbackParent:
+    child: RollbackChild
+    name: Annotated[str, Unique()]
+
+
+@dataclass(frozen=True)
+class OptionalChildMetadata:
+    value: str
+    notes: Annotated[list[str] | None, IdentitySkip()] = None
 
 
 @dataclass(frozen=True)
@@ -361,7 +378,7 @@ def test_sid_of_tracks_unhashable_instances(database):
 
     sid = store.save(sample)
     assert store.sid_of(sample) == sid
-    assert store.sid_of(make_sample()) is None  # an equal but never-saved instance
+    assert store.sid_of(make_sample()) == sid  # content identity is resolved through the database
 
     # The identity entry must not outlive the instance, or a recycled id()
     # could resolve to a stale sid.
@@ -371,6 +388,30 @@ def test_sid_of_tracks_unhashable_instances(database):
     del throwaway
     gc.collect()
     assert len(store._sids_by_identity) < tracked_with_throwaway
+
+
+def test_implicit_rollback_clears_recursively_saved_child_caches(database):
+    store = SqlStore(database)
+    store.save(RollbackParent(RollbackChild("kept"), "unique"))
+    rolled_back = RollbackChild("rolled back")
+
+    with pytest.raises(sqlalchemy.exc.IntegrityError):
+        store.save(RollbackParent(rolled_back, "unique"))
+
+    assert store.sid_of(rolled_back) is None
+    with pytest.raises(KeyError):
+        store.fetch(RollbackChild, 2)
+
+
+def test_optional_identity_metadata_none_matches_freshly_loaded_empty_child(database):
+    source = OptionalChildMetadata("same")
+    sid = SqlStore(database).save(source)
+    fresh = SqlStore(database)
+
+    assert fresh.fetch(OptionalChildMetadata, sid).notes == []
+    assert fresh.save(source) == sid
+    with pytest.raises(EntryMetadataConflictError, match="notes"):
+        fresh.save(OptionalChildMetadata("same", ["different"]))
 
 
 def test_fetch_missing_sid_raises_keyerror(database):

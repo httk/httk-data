@@ -28,13 +28,14 @@ imported unconditionally; nothing in this module needs sqlalchemy.
 """
 
 import datetime
+import decimal
 import fractions
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from httk.core import FracScalar, FracVector, SurdScalar
+from httk.core import FracScalar, FracVector, SurdScalar, SurdVector, register_canonical_encoder
 
 __all__ = [
     "FRACTION_EXACT_FORMAT",
@@ -100,6 +101,23 @@ class ValueCodec:
 
 _codecs_by_name: dict[str, ValueCodec] = {}
 _codecs_by_type: dict[type, ValueCodec] = {}
+_CORE_CANONICAL_TYPES = frozenset(
+    {
+        bool,
+        bytes,
+        datetime.date,
+        datetime.datetime,
+        decimal.Decimal,
+        float,
+        fractions.Fraction,
+        FracScalar,
+        FracVector,
+        int,
+        str,
+        SurdScalar,
+        SurdVector,
+    }
+)
 
 
 def register_value_codec(codec: ValueCodec) -> None:
@@ -113,6 +131,20 @@ def register_value_codec(codec: ValueCodec) -> None:
         )
     _codecs_by_name[codec.name] = codec
     _codecs_by_type[codec.python_type] = codec
+    try:
+        if codec.python_type not in _CORE_CANONICAL_TYPES:
+            register_canonical_encoder(codec.python_type, lambda value: _canonical_codec_value(codec, value))
+    except BaseException:
+        del _codecs_by_name[codec.name]
+        del _codecs_by_type[codec.python_type]
+        raise
+
+
+def _canonical_codec_value(codec: ValueCodec, value: Any) -> list[Any]:
+    return [
+        part.hex() if kind == "bytes" else part
+        for part, (_, kind) in zip(codec.encode(value), codec.columns, strict=True)
+    ]
 
 
 def known_value_codecs() -> list[str]:
@@ -123,9 +155,9 @@ def known_value_codecs() -> list[str]:
 def codec_for(python_type: Any) -> ValueCodec | None:
     """Return the codec for ``python_type``, or None if no codec covers it.
 
-    An exact type match wins; otherwise the registered codecs are scanned once
-    in registration order and the first whose ``python_type`` is a base class of
-    ``python_type`` is returned (deterministic by registration order).
+    An exact type match wins. Subclasses reuse only codecs for core-native
+    canonical types; custom codec registrations are exact-type only so SQL
+    encoding and content identity cannot disagree.
     """
     if not isinstance(python_type, type):
         return None
@@ -133,7 +165,7 @@ def codec_for(python_type: Any) -> ValueCodec | None:
     if exact is not None:
         return exact
     for codec in _codecs_by_name.values():
-        if issubclass(python_type, codec.python_type):
+        if codec.python_type in _CORE_CANONICAL_TYPES and issubclass(python_type, codec.python_type):
             return codec
     return None
 

@@ -2,12 +2,16 @@
 
 import datetime
 import random
+from dataclasses import dataclass
 from fractions import Fraction
 
 import pytest
-from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
+from httk.core import FracScalar, FracVector, SurdScalar, SurdVector, content_id, register_canonical_encoder
 
 from httk.data.db import (
+    Database,
+    SchemaError,
+    SqlStore,
     ValueCodec,
     codec_for,
     codec_named,
@@ -178,3 +182,77 @@ def test_duplicate_codec_registration_is_rejected():
                 decode=lambda values: values[0],
             )
         )
+
+
+def test_custom_codec_registers_content_identity_encoder():
+    @dataclass(frozen=True)
+    class CustomValue:
+        text: str
+
+    @dataclass(frozen=True)
+    class CustomRecord:
+        value: CustomValue
+
+    register_value_codec(
+        ValueCodec(
+            name="test_custom_value",
+            python_type=CustomValue,
+            columns=(("", "str"),),
+            encode=lambda value: (value.text,),
+            decode=lambda values: CustomValue(values[0]),
+        )
+    )
+
+    assert content_id(CustomRecord(CustomValue("same"))) == content_id(CustomRecord(CustomValue("same")))
+    assert content_id(CustomRecord(CustomValue("same"))) != content_id(CustomRecord(CustomValue("other")))
+
+
+def test_failed_canonical_encoder_registration_rolls_back_codec():
+    @dataclass(frozen=True)
+    class AlreadyEncoded:
+        text: str
+
+    register_canonical_encoder(AlreadyEncoded, lambda value: value.text)
+    name = "test_already_encoded"
+
+    with pytest.raises(ValueError, match="canonical encoder is already registered"):
+        register_value_codec(
+            ValueCodec(
+                name=name,
+                python_type=AlreadyEncoded,
+                columns=(("", "str"),),
+                encode=lambda value: (value.text,),
+                decode=lambda values: AlreadyEncoded(values[0]),
+            )
+        )
+
+    assert name not in known_value_codecs()
+    assert codec_for(AlreadyEncoded) is None
+
+
+def test_custom_codec_does_not_apply_to_subclasses():
+    class CustomValue:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    class CustomSubclass(CustomValue):
+        pass
+
+    @dataclass(frozen=True)
+    class CustomSubclassRecord:
+        value: CustomSubclass
+
+    register_value_codec(
+        ValueCodec(
+            name="test_exact_custom_value",
+            python_type=CustomValue,
+            columns=(("", "str"),),
+            encode=lambda value: (value.text,),
+            decode=lambda values: CustomValue(values[0]),
+        )
+    )
+
+    assert codec_for(CustomValue) is not None
+    assert codec_for(CustomSubclass) is None
+    with Database.sqlite() as database, pytest.raises(SchemaError, match="CustomSubclass.*not storable"):
+        SqlStore(database).save(CustomSubclassRecord(CustomSubclass("value")))
