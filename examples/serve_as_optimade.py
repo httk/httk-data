@@ -132,7 +132,7 @@ QUERIES: list[tuple[str, list[str], str]] = [
 
 
 def populate() -> SqlStore:
-    store = SqlStore(Database.sqlite())
+    store = SqlStore(Database.sqlite(), entry_backings={})
     with store.transaction():
         for writer in (ADA, BOOLE, CARA):  # saved first, so their sids are 1, 2, 3
             store.save(writer)

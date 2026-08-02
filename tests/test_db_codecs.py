@@ -255,4 +255,4 @@ def test_custom_codec_does_not_apply_to_subclasses():
     assert codec_for(CustomValue) is not None
     assert codec_for(CustomSubclass) is None
     with Database.sqlite() as database, pytest.raises(SchemaError, match="CustomSubclass.*not storable"):
-        SqlStore(database).save(CustomSubclassRecord(CustomSubclass("value")))
+        SqlStore(database, entry_backings={}).save(CustomSubclassRecord(CustomSubclass("value")))

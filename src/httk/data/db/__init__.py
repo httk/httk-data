@@ -40,7 +40,7 @@ without sqlalchemy installed raises :class:`ImportError` naming the extra.
 """
 
 import importlib
-from typing import Any
+from typing import Any, Final
 
 from ..query import MultipleResultsError, NoResultError
 from .codecs import (
@@ -74,9 +74,13 @@ from .schema import (
     snake_case,
 )
 
+STORAGE_PROTOCOL_VERSION: Final = "v2.0.2"
+"""The current persisted ``SqlStore`` physical-layout protocol."""
+
 __all__ = [
     "FRACTION_EXACT_FORMAT",
     "FRACVECTOR_EXACT_FORMAT",
+    "STORAGE_PROTOCOL_VERSION",
     "SURD_EXACT_FORMAT",
     "ChildTableSpec",
     "ColumnSpec",
@@ -98,6 +102,7 @@ __all__ = [
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoredSchemaRebuildRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "TableSchema",
@@ -131,6 +136,7 @@ _SQL_EXPORTS = {
     "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
     "StoredSchemaRebuildRequiredError": ".entry_provider",
+    "StorageLayoutUpgradeRequiredError": ".layout",
     "optimade_filter_searcher": ".optimade",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",

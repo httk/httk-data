@@ -42,7 +42,11 @@ from httk.data.db.schema import (
 
 __all__ = [
     "CONTENT_ID_COLUMN",
+    "DISPATCH_CONTENT_ID_COLUMN",
     "SID_COLUMN",
+    "backing_dispatch_column_name",
+    "dispatch_table_for",
+    "entry_dispatch_table_name",
     "sqlalchemy_metadata",
     "table_for",
 ]
@@ -52,6 +56,9 @@ SID_COLUMN: Final = "sid"
 
 CONTENT_ID_COLUMN: Final = "content_id"
 """The store-managed content-identity column of tables with the ``"content_id"`` dedup policy."""
+
+DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
+"""The content identity primary key of an entry-family dispatch table."""
 
 _MAX_IDENTIFIER_LENGTH: Final = 63
 
@@ -74,6 +81,69 @@ def sqlalchemy_metadata(schemas: Iterable[TableSchema]) -> sqlalchemy.MetaData:
     for schema in schemas:
         table_for(schema, metadata)
     return metadata
+
+
+def _stable_identifier(prefix: str, value: str) -> str:
+    """Return a portable, readable identifier with a collision-resistant suffix."""
+    safe = "".join(character if character.isalnum() else "_" for character in value.lower()).strip("_") or "entry"
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+    body = f"{prefix}_{safe}_{digest}"
+    if len(body) <= _MAX_IDENTIFIER_LENGTH:
+        return body
+    return f"{body[: _MAX_IDENTIFIER_LENGTH - 9]}_{digest}"
+
+
+def entry_dispatch_table_name(family_name: str) -> str:
+    """The deterministic reserved table name for one registered entry family."""
+    return _stable_identifier("_httk_entry_dispatch", family_name)
+
+
+def backing_dispatch_column_name(backing_name: str) -> str:
+    """The deterministic nullable foreign-key column for one backing in a dispatch table."""
+    return f"{_stable_identifier('backing', backing_name)}_sid"
+
+
+def dispatch_table_for(
+    family_name: str,
+    backings: Sequence[tuple[str, TableSchema]],
+    metadata: sqlalchemy.MetaData,
+) -> sqlalchemy.Table:
+    """Build the one-of-many dispatch table for an entry family.
+
+    A single-backing family has no dispatch table and must not call this
+    helper. The primary key is the backing record's canonical content id;
+    every nullable backing sid is unique on its own, and the named check
+    constraint makes precisely one of them non-null.
+    """
+    if len(backings) < 2:
+        raise ValueError("an entry dispatch table requires at least two backings")
+    name = entry_dispatch_table_name(family_name)
+    existing = metadata.tables.get(name)
+    if existing is not None:
+        return existing
+    columns: list[Any] = [
+        sqlalchemy.Column(DISPATCH_CONTENT_ID_COLUMN, sqlalchemy.Text, primary_key=True, nullable=False),
+    ]
+    column_names: list[str] = []
+    for backing_name, schema in backings:
+        column_name = backing_dispatch_column_name(backing_name)
+        if column_name in column_names:
+            raise ValueError(
+                f"entry family {family_name!r} has colliding dispatch columns for backing {backing_name!r}"
+            )
+        column_names.append(column_name)
+        columns.append(
+            sqlalchemy.Column(
+                column_name,
+                sqlalchemy.Integer,
+                sqlalchemy.ForeignKey(f"{schema.table_name}.{SID_COLUMN}"),
+                nullable=True,
+                unique=True,
+            )
+        )
+    terms = " + ".join(f"CASE WHEN {column_name} IS NOT NULL THEN 1 ELSE 0 END" for column_name in column_names)
+    columns.append(sqlalchemy.CheckConstraint(f"({terms}) = 1", name=_index_name("ck", name, ("exactly_one",))))
+    return sqlalchemy.Table(name, metadata, *columns)
 
 
 def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData) -> sqlalchemy.Table:

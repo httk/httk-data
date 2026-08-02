@@ -75,13 +75,42 @@ operations into one database transaction:
 from httk.data.db import Database, SqlStore
 
 db = Database.sqlite("example.sqlite")   # or Database.sqlite() in memory,
-store = SqlStore(db)                     # or Database.duckdb("example.duckdb")
+store = SqlStore(db, entry_backings={})   # first-time custom-record store
+# Reopen an initialized database with: SqlStore(db)
 
 with store.transaction():
     sid = store.save(record)             # returns the integer sid; dedups; recurses
 
 same_record = store.fetch(StructureRecord, sid)   # reconstructed exactly
 ```
+
+Every database starts with a persisted, versioned layout declaration. Passing
+`entry_backings={}` says that this is a private/custom-record store with no
+queryable entry families. An entry store instead maps each registered logical
+family to the exact durable Record representation or representations it may
+contain:
+
+```python
+store = SqlStore(
+    db,
+    entry_backings={StructureEntry: UnitcellStructureRecord},
+)
+```
+
+A single backing is queried directly. A tuple of two or more backings creates
+a small family dispatch table, while the representation-specific data remains
+in its normalized Record tables. Saving an exact configured backing (including
+saving a naturally bound domain object) makes it discoverable through
+`fetch_entry(StructureEntry, content_id)`; that method returns the actual
+concrete Record.
+
+Later `SqlStore(db)` calls load the persisted declaration. Supplying a
+declaration again must match it exactly. `layout_mode="verify"` performs the
+same protocol and schema checks without metadata writes or DDL, which is useful
+for read-only prebuilt stores. Old, unversioned, or structurally different
+layouts raise `StorageLayoutUpgradeRequiredError`; its immutable `diff`
+describes protocol, declaration, and schema differences. This redesign does
+not migrate old stores: rebuild them explicitly.
 
 A source object with an exact `__httk_storage_binding__` can be saved directly;
 `save(source, as_record=OtherRecord)` selects another declared projection.

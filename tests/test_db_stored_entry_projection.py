@@ -190,7 +190,7 @@ def projected_store(request):
     else:
         manager = Database.sqlite()
     with manager as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         store.save(STRUCTURE_A)
         store.save(STRUCTURE_B)
         yield store
@@ -230,7 +230,7 @@ def test_projected_provider_materializes_presence_normalization(dialect):
     else:
         manager = Database.sqlite()
     with manager as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         store.save(PresenceProjectedStructure("absent", None, False))
         store.save(PresenceProjectedStructure("empty", (), True))
         provider = StoreEntryProvider(store, {"structures": PresenceProjectedStructure})
@@ -248,7 +248,7 @@ def test_projected_provider_batches_canonical_materialization(dialect):
     else:
         manager = Database.sqlite()
     with manager as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         for index in range(25):
             store.save(PresenceProjectedStructure(f"entry-{index}", None, False))
         provider = StoreEntryProvider(store, {"structures": PresenceProjectedStructure})
@@ -276,7 +276,7 @@ def test_projected_provider_batches_referenced_materialization(dialect):
     else:
         manager = Database.sqlite()
     with manager as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         for index in range(25):
             store.save(
                 ReferencedProjectedStructure(
@@ -368,7 +368,7 @@ def test_obsolete_projected_root_table_requires_rebuild_for_provider_and_filter(
     try:
         with database.engine.begin() as connection:
             connection.execute(sqlalchemy.text("CREATE TABLE generic_structures_v2 (sid INTEGER PRIMARY KEY)"))
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         with pytest.raises(StoredSchemaRebuildRequiredError, match="rebuild/reimport"):
             StoreEntryProvider(store, {"structures": ProjectedStructure})
         with pytest.raises(StoredSchemaRebuildRequiredError, match="rebuild/reimport"):

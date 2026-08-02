@@ -100,7 +100,7 @@ def store(request):
     else:
         database_manager = Database.sqlite()
     with database_manager as database:
-        sql_store = SqlStore(database)
+        sql_store = SqlStore(database, entry_backings={})
         with sql_store.transaction():
             for rec in RECORDS:
                 sql_store.save(rec)
@@ -663,7 +663,7 @@ def test_unknown_field_raises_attribute_error(store):
 
 def test_fixed_array_field_not_queryable():
     with Database.sqlite() as database:
-        sql_store = SqlStore(database)
+        sql_store = SqlStore(database, entry_backings={})
         searcher = sql_store.searcher()
         v = searcher.variable(Cell)
         with pytest.raises(SchemaError, match="basis"):
@@ -672,7 +672,7 @@ def test_fixed_array_field_not_queryable():
 
 def test_iteration_without_variables_raises():
     with Database.sqlite() as database:
-        searcher = SqlStore(database).searcher()
+        searcher = SqlStore(database, entry_backings={}).searcher()
         with pytest.raises(ValueError, match="variable"):
             searcher.count()
 

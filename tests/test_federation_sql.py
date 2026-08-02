@@ -19,7 +19,7 @@ class FederatedRecord:
 
 
 def _store(database: Database, records: tuple[FederatedRecord, ...]) -> SqlStore:
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     with store.transaction():
         for record in records:
             store.save(record)

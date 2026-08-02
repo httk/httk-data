@@ -223,7 +223,7 @@ def test_projected_nested_save_calls_each_projection_once():
     _calls.clear()
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(source)
         fetched = store.fetch(RootRecord, sid)
 
@@ -242,8 +242,8 @@ def test_projected_nested_save_calls_each_projection_once():
 def test_same_content_identity_has_store_local_sids():
     source = _root()
     with Database.sqlite() as first_database, Database.sqlite() as second_database:
-        first = SqlStore(first_database)
-        second = SqlStore(second_database)
+        first = SqlStore(first_database, entry_backings={})
+        second = SqlStore(second_database, entry_backings={})
         first_sid = first.save(source)
         second.save(_root("other"))
         second_sid = second.save(source)
@@ -259,7 +259,7 @@ def test_sid_of_queries_reopened_database(tmp_path):
     path = tmp_path / "projection.sqlite"
     source = _root()
     database = Database.sqlite(path)
-    sid = SqlStore(database).save(source)
+    sid = SqlStore(database, entry_backings={}).save(source)
     database.dispose()
 
     with Database.sqlite(path) as reopened:
@@ -269,7 +269,7 @@ def test_sid_of_queries_reopened_database(tmp_path):
 def test_identity_skipped_metadata_is_stored_and_checked():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(source)
         same_instant = replace(source, modified=source.modified.astimezone(datetime.UTC))
         assert store.save(same_instant) == sid
@@ -286,7 +286,7 @@ def test_identity_skipped_metadata_is_stored_and_checked():
 def test_insert_race_winner_still_checks_metadata(monkeypatch):
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         store.save(source)
         original_execute = sqlalchemy.Connection.execute
         missed_preflight = False
@@ -315,7 +315,7 @@ def test_insert_race_winner_still_checks_metadata(monkeypatch):
 def test_by_value_reuse_discards_nested_no_dedup_insert(
     projection_database, monkeypatch, explicit_transaction
 ):
-    store = SqlStore(projection_database)
+    store = SqlStore(projection_database, entry_backings={})
     leaf = NoDedupLeaf("same")
     winner = ByValueHolder(leaf, "holder")
     winner_sid = store.save(winner)
@@ -340,7 +340,7 @@ def test_by_value_reuse_discards_nested_no_dedup_insert(
 def test_content_race_loss_discards_nested_no_dedup_insert(
     projection_database, monkeypatch, explicit_transaction
 ):
-    store = SqlStore(projection_database)
+    store = SqlStore(projection_database, entry_backings={})
     winner = RaceHolder(NoDedupLeaf("same"), "holder")
     winner_sid = store.save(winner)
     original_execute = sqlalchemy.Connection.execute
@@ -370,7 +370,7 @@ def test_content_race_loss_discards_nested_no_dedup_insert(
 def test_explicit_alternate_record_projection():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(source, as_record=SummaryRecord)
         assert store.fetch(SummaryRecord, sid) == SummaryRecord("one", 1)
         assert store.sid_of(_root(), as_record=SummaryRecord) == sid
@@ -379,7 +379,7 @@ def test_explicit_alternate_record_projection():
 def test_reference_comparison_uses_declared_record_target():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         default_sid = store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
         target_sid = store.save(source, as_record=SummaryRecord)
@@ -397,7 +397,7 @@ def test_reference_comparison_uses_declared_record_target():
 def test_alternate_record_sids_are_cached_per_record_type():
     source = _root()
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         default_sid = store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
         summary_sid = store.save(source, as_record=SummaryRecord)
@@ -410,7 +410,7 @@ def test_alternate_record_sids_are_cached_per_record_type():
 
 def test_projected_stored_property_is_read_from_source():
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(DerivedView(4), as_record=DerivedRecord)
         assert store.fetch(DerivedRecord, sid).doubled == 8
 
@@ -422,13 +422,13 @@ def test_projected_source_must_expose_record_stored_properties():
             raise AttributeError
 
     with Database.sqlite() as database, pytest.raises(TypeError, match="expose derived stored property 'doubled'"):
-        SqlStore(database).save(IncompleteDerivedView(4), as_record=DerivedRecord)
+        SqlStore(database, entry_backings={}).save(IncompleteDerivedView(4), as_record=DerivedRecord)
 
 
 def test_non_weakrefable_projected_source_uses_database_sid_lookup():
     source = (7,)
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(source, as_record=TupleRecord)
 
         assert store.fetch(TupleRecord, sid) == TupleRecord(7)
@@ -440,7 +440,7 @@ def test_identity_skipped_recursive_link_reports_traversal_path():
     object.__setattr__(record, "link", record)
 
     with Database.sqlite() as database, pytest.raises(StorageProjectionCycleError) as caught:
-        SqlStore(database).save(record)
+        SqlStore(database, entry_backings={}).save(record)
 
     assert caught.value.path == "link"
 
@@ -452,7 +452,7 @@ def test_datetime_metadata_containers_compare_utc_instants_live_and_reopened(tmp
     second = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
     source = FoldMetadata("fold", (first,))
     database = Database.sqlite(path)
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid = store.save(source)
     assert store.save(FoldMetadata("fold", (first.astimezone(datetime.UTC),))) == sid
     with pytest.raises(EntryMetadataConflictError, match="instants"):
@@ -465,7 +465,7 @@ def test_datetime_metadata_containers_compare_utc_instants_live_and_reopened(tmp
 
 def test_lazy_row_alternate_sid_uses_requested_record_target():
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         source_sid = store.save(LazySourceRecord(7))
         store.save(LazySourceRecord(8), as_record=LazyAlternateRecord)
         searcher = store.searcher()
@@ -488,7 +488,7 @@ def test_concrete_record_save_still_round_trips():
         datetime.datetime(2026, 8, 1, tzinfo=datetime.UTC),
     )
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = store.save(record)
         assert store.fetch(RootRecord, sid) is record
         assert SqlStore(database).fetch(RootRecord, sid) == record

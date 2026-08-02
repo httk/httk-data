@@ -220,8 +220,8 @@ def test_table_for_is_idempotent_per_metadata():
 
 def test_round_trip_equality(database):
     sample = make_sample()
-    sid = SqlStore(database).save(sample)
-    fetched = SqlStore(database).fetch(Sample, sid)  # a fresh store: no identity cache involved
+    sid = SqlStore(database, entry_backings={}).save(sample)
+    fetched = SqlStore(database).fetch(Sample, sid)  # a reopened store: no identity cache involved
     assert fetched is not sample
     assert fetched == sample
     assert isinstance(fetched.symbols, list)
@@ -232,7 +232,9 @@ def test_round_trip_equality(database):
 
 def test_round_trip_exact_rationals(database):
     sample = make_sample()
-    fetched = SqlStore(database).fetch(Sample, SqlStore(database).save(sample))
+    store = SqlStore(database, entry_backings={})
+    sid = store.save(sample)
+    fetched = SqlStore(database).fetch(Sample, sid)
     assert fetched.ratio == Fraction(1, 3)
     assert fetched.scale.to_fraction() == Fraction(2, 7)
     assert fetched.cell == sample.cell
@@ -242,27 +244,31 @@ def test_round_trip_exact_rationals(database):
 
 def test_round_trip_optionals_present(database):
     sample = make_sample(note="a note", weight=1.25)
-    fetched = SqlStore(database).fetch(Sample, SqlStore(database).save(sample))
+    store = SqlStore(database, entry_backings={})
+    sid = store.save(sample)
+    fetched = SqlStore(database).fetch(Sample, sid)
     assert fetched.note == "a note"
     assert fetched.weight == 1.25
 
 
 def test_round_trip_optional_reference_none(database):
     sample = make_sample(reference=None)
-    fetched = SqlStore(database).fetch(Sample, SqlStore(database).save(sample))
+    store = SqlStore(database, entry_backings={})
+    sid = store.save(sample)
+    fetched = SqlStore(database).fetch(Sample, sid)
     assert fetched.reference is None
     assert fetched == sample
 
 
 def test_derived_property_is_stored_in_parent_table(database):
-    sid = SqlStore(database).save(make_sample())
+    sid = SqlStore(database, entry_backings={}).save(make_sample())
     with database.engine.connect() as connection:
         stored = connection.execute(sqlalchemy.text(f"SELECT natoms FROM sample WHERE sid = {sid}")).scalar_one()
     assert stored == 3
 
 
 def test_fixed_array_accepts_single_row_for_shape_1_n(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid = store.save(RowVector(FracVector.create([Fraction(1, 3), 1, 0])))
     fetched = SqlStore(database).fetch(RowVector, sid)
     assert fetched.vec == FracVector.create([[Fraction(1, 3), 1, 0]])
@@ -270,14 +276,14 @@ def test_fixed_array_accepts_single_row_for_shape_1_n(database):
 
 def test_fixed_array_wrong_shape_raises_naming_field(database):
     with pytest.raises(ValueError, match="cell"):
-        SqlStore(database).save(make_sample(cell=FracVector.create([[1, 0], [0, 1]])))
+        SqlStore(database, entry_backings={}).save(make_sample(cell=FracVector.create([[1, 0], [0, 1]])))
 
 
 # --------------------------------------------------------------------- dedup
 
 
 def test_dedup_content_id_reuses_row(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid1 = store.save(Author("Ada", 1852))
     sid2 = store.save(Author("Ada", 1852))
     assert sid1 == sid2
@@ -285,7 +291,7 @@ def test_dedup_content_id_reuses_row(database):
 
 
 def test_dedup_content_id_does_not_duplicate_children(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid1 = store.save(make_sample())
     sid2 = store.save(make_sample())
     assert sid1 == sid2
@@ -296,7 +302,7 @@ def test_dedup_content_id_does_not_duplicate_children(database):
 
 
 def test_dedup_by_value_matches_parent_columns(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid1 = store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
     sid2 = store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
     assert sid1 == sid2
@@ -307,7 +313,7 @@ def test_dedup_by_value_matches_parent_columns(database):
 
 
 def test_dedup_none_always_inserts(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid1 = store.save(LogEvent("started"))
     sid2 = store.save(LogEvent("started"))
     assert sid1 != sid2
@@ -318,7 +324,7 @@ def test_dedup_none_always_inserts(database):
 
 
 def test_transaction_rolls_back_on_exception(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     store.ensure_tables(Author)
     with pytest.raises(RuntimeError, match="boom"):
         with store.transaction():
@@ -328,7 +334,7 @@ def test_transaction_rolls_back_on_exception(database):
 
 
 def test_transaction_shares_connection_and_commits(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     with store.transaction():
         sid1 = store.save(Author("A", 1))
         with store.transaction():  # nesting is flat: joins the outer transaction
@@ -339,7 +345,7 @@ def test_transaction_shares_connection_and_commits(database):
 
 
 def test_save_outside_transaction_autocommits(database):
-    sid = SqlStore(database).save(Author("C", 3))
+    sid = SqlStore(database, entry_backings={}).save(Author("C", 3))
     assert SqlStore(database).fetch(Author, sid) == Author("C", 3)
 
 
@@ -347,13 +353,13 @@ def test_save_outside_transaction_autocommits(database):
 
 
 def test_fetch_returns_same_object_while_alive(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sid = store.save(Author("Ada", 1852))
     assert store.fetch(Author, sid) is store.fetch(Author, sid)
 
 
 def test_save_then_fetch_returns_saved_object(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     author = Author("Ada", 1852)
     sid = store.save(author)
     assert store.fetch(Author, sid) is author
@@ -361,7 +367,7 @@ def test_save_then_fetch_returns_saved_object(database):
 
 
 def test_sid_of_unknown_object_is_none(database):
-    assert SqlStore(database).sid_of(Author("New", 1900)) is None
+    assert SqlStore(database, entry_backings={}).sid_of(Author("New", 1900)) is None
 
 
 def test_sid_of_tracks_unhashable_instances(database):
@@ -371,7 +377,7 @@ def test_sid_of_tracks_unhashable_instances(database):
     support; without an identity-keyed fallback ``sid_of`` reported a
     just-saved instance as never stored, and ``referring`` then raised for it.
     """
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     sample = make_sample()  # its `symbols: list[str]` makes it unhashable
     with pytest.raises(TypeError):
         hash(sample)
@@ -391,7 +397,7 @@ def test_sid_of_tracks_unhashable_instances(database):
 
 
 def test_implicit_rollback_clears_recursively_saved_child_caches(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     store.save(RollbackParent(RollbackChild("kept"), "unique"))
     rolled_back = RollbackChild("rolled back")
 
@@ -405,7 +411,7 @@ def test_implicit_rollback_clears_recursively_saved_child_caches(database):
 
 def test_optional_identity_metadata_none_matches_freshly_loaded_empty_child(database):
     source = OptionalChildMetadata("same")
-    sid = SqlStore(database).save(source)
+    sid = SqlStore(database, entry_backings={}).save(source)
     fresh = SqlStore(database)
 
     assert fresh.fetch(OptionalChildMetadata, sid).notes == []
@@ -415,7 +421,7 @@ def test_optional_identity_metadata_none_matches_freshly_loaded_empty_child(data
 
 
 def test_fetch_missing_sid_raises_keyerror(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     store.ensure_tables(Author)
     with pytest.raises(KeyError):
         store.fetch(Author, 424242)
@@ -425,7 +431,7 @@ def test_fetch_missing_sid_raises_keyerror(database):
 
 
 def test_referring_returns_matching_join_objects(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     ada = Author("Ada", 1852)
     boole = Author("Boole", 1854)
     store.save(ada)
@@ -440,14 +446,14 @@ def test_referring_returns_matching_join_objects(database):
 
 
 def test_referring_rejects_unknown_object(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     store.ensure_tables(AuthorTag)
     with pytest.raises(ValueError, match="has not been stored"):
         store.referring(AuthorTag, field="author", to=Author("New", 1900))
 
 
 def test_referring_rejects_non_reference_field_and_wrong_target(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     ada = Author("Ada", 1852)
     store.save(ada)
     with pytest.raises(SchemaError):
@@ -460,7 +466,7 @@ def test_referring_rejects_non_reference_field_and_wrong_target(database):
 
 
 def test_fetch_by_content_id_found_and_missing(database):
-    store = SqlStore(database)
+    store = SqlStore(database, entry_backings={})
     ada = Author("Ada", 1852)
     store.save(ada)
     assert store.fetch_by_content_id(Author, content_id(ada)) is ada
@@ -469,7 +475,7 @@ def test_fetch_by_content_id_found_and_missing(database):
 
 def test_fetch_by_content_id_rejects_other_policies(database):
     with pytest.raises(SchemaError, match="content_id"):
-        SqlStore(database).fetch_by_content_id(LogEvent, "0" * 64)
+        SqlStore(database, entry_backings={}).fetch_by_content_id(LogEvent, "0" * 64)
 
 
 # --------------------------------------------------------------------- database lifecycle
@@ -477,14 +483,14 @@ def test_fetch_by_content_id_rejects_other_policies(database):
 
 def test_in_memory_database_is_shared_across_operations():
     with Database.sqlite() as database:
-        sid = SqlStore(database).save(Author("Ada", 1852))
+        sid = SqlStore(database, entry_backings={}).save(Author("Ada", 1852))
         assert SqlStore(database).fetch(Author, sid) == Author("Ada", 1852)
 
 
 def test_file_backed_database_persists_across_instances(tmp_path):
     path = tmp_path / "authors.sqlite"
     database = Database.sqlite(path)
-    sid = SqlStore(database).save(Author("Ada", 1852))
+    sid = SqlStore(database, entry_backings={}).save(Author("Ada", 1852))
     database.dispose()
     with Database.sqlite(path) as reopened:
         assert SqlStore(reopened).fetch(Author, sid) == Author("Ada", 1852)
@@ -494,7 +500,7 @@ def test_file_backed_duckdb_persists_and_continues_sids(tmp_path):
     pytest.importorskip("duckdb_engine")
     path = tmp_path / "authors.duckdb"
     database = Database.duckdb(path)
-    sid = SqlStore(database).save(Author("Ada", 1852))
+    sid = SqlStore(database, entry_backings={}).save(Author("Ada", 1852))
     database.dispose()
     with Database.duckdb(path) as reopened:
         store = SqlStore(reopened)

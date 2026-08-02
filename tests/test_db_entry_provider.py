@@ -85,7 +85,7 @@ BOOK_2 = Book(
 @pytest.fixture()
 def store():
     with Database.sqlite() as database:
-        sql_store = SqlStore(database)
+        sql_store = SqlStore(database, entry_backings={})
         with sql_store.transaction():
             # Writers first, in a known order, so their sids are 1, 2, 3.
             for writer in (ADA, BOOLE, CARA):
@@ -380,7 +380,7 @@ class Simulation:
 @contextlib.contextmanager
 def sqlite_store(*objects):
     with Database.sqlite() as database:
-        sql_store = SqlStore(database)
+        sql_store = SqlStore(database, entry_backings={})
         with sql_store.transaction():
             for obj in objects:
                 sql_store.save(obj)

@@ -35,12 +35,13 @@ the two apart). Identity caches are best-effort; content-addressed
 
 import contextlib
 import datetime
+import json
 import threading
 import types
 import typing
 import weakref
 from collections.abc import Iterable, Iterator, Mapping
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 import sqlalchemy
 from httk.core import (
@@ -52,6 +53,7 @@ from httk.core import (
     project_storage_record,
     resolve_storage_record,
 )
+from sqlalchemy.exc import SQLAlchemyError
 
 from httk.data.db.codecs import (
     codec_named,
@@ -59,12 +61,33 @@ from httk.data.db.codecs import (
     encode_fracvector_floats,
 )
 from httk.data.db.engine import Database
-from httk.data.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, table_for
+from httk.data.db.layout import (
+    METADATA_TABLE_NAME,
+    STORAGE_PROTOCOL_VERSION,
+    EntryFamilyLayout,
+    StorageLayout,
+    StorageLayoutUpgradeRequiredError,
+    actual_table_names,
+    declaration_json,
+    expected_metadata,
+    metadata_table_for,
+    normalize_entry_backings,
+    read_store_metadata,
+    validate_expected_tables,
+)
+from httk.data.db.mapping import (
+    CONTENT_ID_COLUMN,
+    DISPATCH_CONTENT_ID_COLUMN,
+    SID_COLUMN,
+    backing_dispatch_column_name,
+    table_for,
+)
 from httk.data.db.rows import RowHydrator, StaleResultError, is_lazy_row, lazy_row_identity
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlSearcher
 
 __all__ = [
+    "EntryDispatchIntegrityError",
     "EntryMetadataConflictError",
     "SqlStore",
 ]
@@ -72,6 +95,10 @@ __all__ = [
 
 class EntryMetadataConflictError(ValueError):
     """Stored identity-excluded metadata differs from a repeated save."""
+
+
+class EntryDispatchIntegrityError(RuntimeError):
+    """A persisted entry dispatch row does not name exactly its expected backing."""
 
 
 class _Projection:
@@ -97,15 +124,33 @@ class _Projection:
 class SqlStore:
     """Object storage for storable frozen dataclasses in a relational :class:`~httk.data.db.engine.Database`.
 
-    Tables are created on demand (first save/fetch of a class, or explicitly
-    via :meth:`ensure_tables`) unless ``create_tables=False``, in which case the
-    schema is expected to exist already.
+    A store starts with an explicit, versioned entry declaration. Ordinary
+    unconfigured frozen-dataclass tables remain on-demand, but only after the
+    layout marker has been initialized or adopted exactly.
     """
 
-    def __init__(self, database: Database, *, create_tables: bool = True) -> None:
+    def __init__(
+        self,
+        database: Database,
+        *,
+        entry_backings: Mapping[type, type | tuple[type, ...]] | None = None,
+        layout_mode: Literal["ensure", "verify"] = "ensure",
+    ) -> None:
+        if not isinstance(layout_mode, str):
+            raise TypeError("layout_mode must be 'ensure' or 'verify'")
+        if layout_mode not in {"ensure", "verify"}:
+            raise ValueError("layout_mode must be 'ensure' or 'verify'")
         self._database = database
-        self._create_tables = create_tables
+        self._layout_mode: Literal["ensure", "verify"] = layout_mode
         self._metadata = sqlalchemy.MetaData()
+        self._layout: StorageLayout | None = None
+        self._managed_table_names: frozenset[str] = frozenset()
+        self._unclaimed_table_names: frozenset[str] = frozenset()
+        self._validated_table_names: set[str] = set()
+        self._initialized = False
+        self._initializing = False
+        self._initialization_ddl_journal: list[sqlalchemy.Table] = []
+        self._initialization_metadata_created = False
         self._instances: weakref.WeakValueDictionary[tuple[type, int], Any] = weakref.WeakValueDictionary()
         self._sids: weakref.WeakKeyDictionary[Any, dict[type, int]] = weakref.WeakKeyDictionary()
         self._sids_by_identity: dict[tuple[type, int], int] = {}
@@ -115,16 +160,465 @@ class SqlStore:
         instance dies, so a recycled id can never resolve to a stale sid.
         """
         self._local = threading.local()
+        self._initialize_layout(entry_backings)
+
+    @property
+    def layout(self) -> StorageLayout:
+        """The immutable persisted entry declaration and its resolved classes."""
+        assert self._layout is not None
+        return self._layout
+
+    @property
+    def entry_layout(self) -> tuple[EntryFamilyLayout, ...]:
+        """Configured entry-family layouts in deterministic stable-name order."""
+        return self.layout.families
+
+    @property
+    def entry_backings(self) -> Mapping[type, tuple[type, ...]]:
+        """Configured entry-family classes mapped to ordered concrete record backings."""
+        return self.layout.entry_backings
+
+    def _initialize_layout(self, entry_backings: Mapping[type, type | tuple[type, ...]] | None) -> None:
+        supplied = normalize_entry_backings(entry_backings) if entry_backings is not None else None
+        if self._layout_mode == "verify":
+            with self._database.engine.connect() as connection:
+                self._initialize_layout_on_connection(connection, supplied, write=False)
+            return
+        try:
+            with self._database.engine.begin() as connection:
+                self._initialize_layout_on_connection(connection, supplied, write=True)
+        except BaseException:
+            created_tables = tuple(self._initialization_ddl_journal)
+            cleanup_marker = self._initialization_metadata_created
+            self._initialization_ddl_journal.clear()
+            self._initialization_metadata_created = False
+            # The transaction context has now unwound. This ordering matters
+            # for SQLite, whose DDL can survive SQLAlchemy's outer rollback;
+            # opening the cleanup transaction while the original one is still
+            # active would merely fail against its shared connection.
+            if created_tables:
+                self._cleanup_initialization_tables(created_tables)
+            elif cleanup_marker:
+                self._cleanup_metadata_table()
+            self._metadata = sqlalchemy.MetaData()
+            self._layout = None
+            self._managed_table_names = frozenset()
+            self._unclaimed_table_names = frozenset()
+            self._validated_table_names.clear()
+            self._initialized = False
+            self._clear_identity_caches()
+            raise
+        self._initialization_ddl_journal.clear()
+        self._initialization_metadata_created = False
+
+    def _initialize_layout_on_connection(
+        self,
+        connection: sqlalchemy.Connection,
+        supplied: StorageLayout | None,
+        *,
+        write: bool,
+    ) -> None:
+        names_before = actual_table_names(connection)
+        marker_metadata = sqlalchemy.MetaData()
+        metadata_table_for(marker_metadata)
+        if METADATA_TABLE_NAME in names_before:
+            marker_schema = validate_expected_tables(connection, marker_metadata)
+            if marker_schema:
+                raise StorageLayoutUpgradeRequiredError({"schema": marker_schema})
+            try:
+                stored = read_store_metadata(connection)
+            except (ValueError, SQLAlchemyError) as error:
+                raise StorageLayoutUpgradeRequiredError(
+                    {"declaration": {"metadata": "malformed", "error": str(error)}}
+                ) from error
+            assert stored is not None
+            self._open_marked_layout(connection, stored, supplied)
+            return
+
+        if supplied is None:
+            raise TypeError("entry_backings is required when opening an uninitialized or unversioned database")
+        expected = expected_metadata(supplied)
+        configured_names = frozenset(expected.tables) - {METADATA_TABLE_NAME}
+        if not names_before:
+            if not write:
+                raise StorageLayoutUpgradeRequiredError(
+                    {
+                        "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
+                        "declaration": {"expected": declaration_json(supplied), "actual": None},
+                        "schema": {name: {"missing": True} for name in expected.tables},
+                    }
+                )
+            for table in expected.sorted_tables:
+                table.create(connection, checkfirst=False)
+                self._initialization_ddl_journal.append(table)
+            self._stamp_layout(connection, supplied, ())
+            self._install_layout(supplied, expected, ())
+            return
+
+        unexpected_reserved = tuple(
+            sorted(name for name in names_before if name.startswith("_httk_") and name not in configured_names)
+        )
+        if unexpected_reserved:
+            raise StorageLayoutUpgradeRequiredError(
+                {
+                    "schema": {
+                        name: {
+                            "reserved": True,
+                            "message": "unexpected table uses the SqlStore-reserved _httk_ prefix",
+                        }
+                        for name in unexpected_reserved
+                    }
+                }
+            )
+        configured_schema = validate_expected_tables(connection, expected, table_names=tuple(sorted(configured_names)))
+        if configured_schema:
+            raise StorageLayoutUpgradeRequiredError({"schema": configured_schema})
+        self._audit_adopted_content_ids(connection, supplied, expected)
+        self._audit_dispatch_data(connection, supplied, expected)
+        unclaimed = tuple(sorted(names_before - configured_names))
+        if not write:
+            raise StorageLayoutUpgradeRequiredError(
+                {
+                    "protocol": {"expected": STORAGE_PROTOCOL_VERSION, "actual": None},
+                    "declaration": {"expected": declaration_json(supplied), "actual": None},
+                    "schema": {METADATA_TABLE_NAME: {"missing": True}},
+                }
+            )
+        metadata_table_for(sqlalchemy.MetaData()).create(connection, checkfirst=False)
+        self._initialization_metadata_created = True
+        self._stamp_layout(connection, supplied, unclaimed)
+        self._install_layout(supplied, expected, unclaimed)
+
+    def _open_marked_layout(
+        self,
+        connection: sqlalchemy.Connection,
+        stored: Mapping[str, str],
+        supplied: StorageLayout | None,
+    ) -> None:
+        required_keys = {"protocol", "entry_declaration", "unclaimed_tables"}
+        diff: dict[str, object] = {}
+        if set(stored) != required_keys:
+            diff["declaration"] = {
+                "metadata_keys": {"expected": tuple(sorted(required_keys)), "actual": tuple(sorted(stored))}
+            }
+        if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
+            diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
+        persisted: StorageLayout | None = None
+        try:
+            persisted = self._layout_from_stored_declaration(stored.get("entry_declaration"))
+        except (TypeError, ValueError) as error:
+            diff["declaration"] = {
+                "expected": "canonical registered declaration",
+                "actual": stored.get("entry_declaration"),
+                "error": str(error),
+            }
+        unclaimed: tuple[str, ...] = ()
+        try:
+            unclaimed = self._unclaimed_from_stored_value(stored.get("unclaimed_tables"))
+        except (TypeError, ValueError) as error:
+            diff["declaration"] = {
+                "expected": "canonical unclaimed-table list",
+                "actual": stored.get("unclaimed_tables"),
+                "error": str(error),
+            }
+        if persisted is not None and supplied is not None and declaration_json(persisted) != declaration_json(supplied):
+            diff["declaration"] = {
+                "expected": declaration_json(persisted),
+                "actual": declaration_json(supplied),
+            }
+        expected: sqlalchemy.MetaData | None = None
+        if persisted is not None:
+            expected = expected_metadata(persisted)
+            overlap = tuple(sorted(set(unclaimed) & set(expected.tables)))
+            if overlap:
+                diff["declaration"] = {
+                    "unclaimed_tables": {
+                        "overlap_with_protocol_tables": overlap,
+                    }
+                }
+        if diff:
+            raise StorageLayoutUpgradeRequiredError(diff)
+        assert persisted is not None and expected is not None
+        unexpected_reserved = tuple(
+            sorted(
+                name
+                for name in actual_table_names(connection)
+                if name.startswith("_httk_") and name not in expected.tables
+            )
+        )
+        if unexpected_reserved:
+            raise StorageLayoutUpgradeRequiredError(
+                {
+                    "schema": {
+                        name: {
+                            "reserved": True,
+                            "message": "unexpected table uses the SqlStore-reserved _httk_ prefix",
+                        }
+                        for name in unexpected_reserved
+                    }
+                }
+            )
+        schema_difference = validate_expected_tables(connection, expected)
+        if schema_difference:
+            raise StorageLayoutUpgradeRequiredError({"schema": schema_difference})
+        self._audit_dispatch_data(connection, persisted, expected)
+        self._install_layout(persisted, expected, unclaimed)
+
+    @staticmethod
+    def _layout_from_stored_declaration(value: str | None) -> StorageLayout:
+        # The canonical JSON parser is intentionally private to layout.py; a
+        # no-op explicit declaration round-trip uses the public normalizer.
+        from httk.data.db.layout import _layout_from_declaration
+
+        if value is None:
+            raise ValueError("metadata is missing entry_declaration")
+        return _layout_from_declaration(value)
+
+    @staticmethod
+    def _unclaimed_from_stored_value(value: str | None) -> tuple[str, ...]:
+        if value is None:
+            raise ValueError("metadata is missing unclaimed_tables")
+        parsed = json.loads(value)
+        if not isinstance(parsed, list) or any(not isinstance(name, str) for name in parsed):
+            raise ValueError("unclaimed_tables must be a JSON string list")
+        names = tuple(parsed)
+        if names != tuple(sorted(set(names))):
+            raise ValueError("unclaimed_tables is not canonically sorted and unique")
+        reserved = tuple(name for name in names if name.startswith("_httk_"))
+        if reserved:
+            raise ValueError("unclaimed_tables may not include SqlStore-reserved _httk_ names")
+        return names
+
+    def _stamp_layout(
+        self,
+        connection: sqlalchemy.Connection,
+        layout: StorageLayout,
+        unclaimed: tuple[str, ...],
+    ) -> None:
+        table = metadata_table_for(sqlalchemy.MetaData())
+        connection.execute(
+            sqlalchemy.insert(table),
+            (
+                {"key": "protocol", "value": STORAGE_PROTOCOL_VERSION},
+                {"key": "entry_declaration", "value": declaration_json(layout)},
+                {"key": "unclaimed_tables", "value": json.dumps(list(unclaimed), separators=(",", ":"))},
+            ),
+        )
+
+    def _install_layout(
+        self,
+        layout: StorageLayout,
+        metadata: sqlalchemy.MetaData,
+        unclaimed: tuple[str, ...],
+    ) -> None:
+        self._layout = layout
+        self._metadata = metadata
+        self._managed_table_names = frozenset(metadata.tables)
+        self._unclaimed_table_names = frozenset(unclaimed)
+        self._validated_table_names = set(metadata.tables)
+        self._initialized = True
+
+    def _cleanup_initialization_tables(self, created_tables: tuple[sqlalchemy.Table, ...]) -> None:
+        # SQLite DDL can escape SQLAlchemy's outer rollback helper. A fresh
+        # explicit cleanup transaction means a failed first initialization is
+        # never left with a usable partial marker/layout. DuckDB has already
+        # rolled it back at this point; IF EXISTS makes the same path harmless.
+        try:
+            with self._database.engine.begin() as cleanup:
+                for table in reversed(created_tables):
+                    cleanup.execute(sqlalchemy.schema.DropTable(table, if_exists=True))
+        except BaseException:
+            # Preserve the original initialization error. A remaining table
+            # still has no marker and will be refused as unversioned.
+            return
+
+    def _cleanup_metadata_table(self) -> None:
+        try:
+            with self._database.engine.begin() as cleanup:
+                table = metadata_table_for(sqlalchemy.MetaData())
+                cleanup.execute(sqlalchemy.schema.DropTable(table, if_exists=True))
+        except BaseException:
+            return
+
+    def _audit_adopted_content_ids(
+        self,
+        connection: sqlalchemy.Connection,
+        layout: StorageLayout,
+        metadata: sqlalchemy.MetaData,
+    ) -> None:
+        """Refuse unversioned content-addressed records whose stored identity is stale.
+
+        The audit uses the normal exact hydrator, so a root identity also
+        validates all transitive exact codecs and reference reconstruction. A
+        record graph that cannot be hydrated safely is refused rather than
+        stamped with an identity claim the current implementation cannot prove.
+        """
+        classes: set[type] = set()
+
+        def visit(record: type) -> None:
+            if record in classes:
+                return
+            classes.add(record)
+            for target in resolve_schema(record).referenced_classes():
+                visit(target)
+
+        for family in layout.families:
+            for backing in family.backings:
+                visit(backing)
+        previous_metadata = self._metadata
+        previous_layout = self._layout
+        previous_managed = self._managed_table_names
+        previous_validated = self._validated_table_names
+        self._metadata = metadata
+        self._layout = layout
+        self._managed_table_names = frozenset(metadata.tables)
+        self._validated_table_names = set(metadata.tables)
+        self._initializing = True
+        try:
+            for record in sorted(classes, key=lambda item: resolve_schema(item).table_name):
+                schema = resolve_schema(record)
+                if schema.dedup != "content_id":
+                    continue
+                table = self._table(schema.table_name)
+                rows = connection.execute(sqlalchemy.select(table.c[SID_COLUMN], table.c[CONTENT_ID_COLUMN])).all()
+                for sid, stored_content_id in rows:
+                    try:
+                        hydrated = self._fetch(connection, record, int(sid))
+                        current_content_id = content_id(hydrated)
+                    except BaseException as error:
+                        raise StorageLayoutUpgradeRequiredError(
+                            {
+                                "schema": {
+                                    schema.table_name: {
+                                        "identity_audit": "could not hydrate safely",
+                                        "record": record.__name__,
+                                        "error": str(error),
+                                    }
+                                }
+                            }
+                        ) from error
+                    if current_content_id != stored_content_id:
+                        raise StorageLayoutUpgradeRequiredError(
+                            {
+                                "schema": {
+                                    schema.table_name: {
+                                        "identity_audit": "content_id mismatch",
+                                        "sid": int(sid),
+                                        "expected": current_content_id,
+                                        "actual": stored_content_id,
+                                    }
+                                }
+                            }
+                        )
+        finally:
+            self._initializing = False
+            self._metadata = previous_metadata
+            self._layout = previous_layout
+            self._managed_table_names = previous_managed
+            self._validated_table_names = previous_validated
+            self._clear_identity_caches()
+
+    @staticmethod
+    def _audit_dispatch_data(
+        connection: sqlalchemy.Connection,
+        layout: StorageLayout,
+        metadata: sqlalchemy.MetaData,
+    ) -> None:
+        """Verify that every configured multi-backing row has one exact dispatch row.
+
+        The dispatch constraints ensure a row selects at most one concrete
+        backing, but they cannot enforce the inverse: a backing may be saved
+        without a dispatch row or a valid foreign key may point at a backing
+        whose content id differs.  Both conditions make entry lookup
+        incomplete or wrong, so opening/adopting a store refuses them.
+        """
+        problems: dict[str, object] = {}
+        for family in layout.families:
+            if len(family.backings) < 2:
+                continue
+            assert family.dispatch_table_name is not None
+            dispatch = metadata.tables[family.dispatch_table_name]
+            data: dict[str, object] = {}
+            dispatch_columns = tuple(
+                dispatch.c[backing_dispatch_column_name(backing_name)] for backing_name in family.backing_names
+            )
+            cardinality = sum(
+                (sqlalchemy.case((column.is_not(None), 1), else_=0) for column in dispatch_columns),
+                sqlalchemy.literal(0),
+            )
+            invalid = (
+                connection.execute(
+                    sqlalchemy.select(dispatch.c[DISPATCH_CONTENT_ID_COLUMN], *dispatch_columns)
+                    .where(cardinality != 1)
+                    .limit(1)
+                )
+                .mappings()
+                .first()
+            )
+            if invalid is not None:
+                data["invalid_dispatch_rows"] = (
+                    {
+                        "content_id": str(invalid[DISPATCH_CONTENT_ID_COLUMN]),
+                        "populated_backings": tuple(
+                            backing_name
+                            for backing_name, column in zip(family.backing_names, dispatch_columns, strict=True)
+                            if invalid[column.name] is not None
+                        ),
+                    },
+                )
+
+            for backing_name, backing in zip(family.backing_names, family.backings, strict=True):
+                backing_table = metadata.tables[resolve_schema(backing).table_name]
+                dispatch_column = dispatch.c[backing_dispatch_column_name(backing_name)]
+                matching_dispatch = sqlalchemy.exists(
+                    sqlalchemy.select(sqlalchemy.literal(1))
+                    .select_from(dispatch)
+                    .where(
+                        dispatch.c[DISPATCH_CONTENT_ID_COLUMN] == backing_table.c[CONTENT_ID_COLUMN],
+                        dispatch_column == backing_table.c[SID_COLUMN],
+                    )
+                )
+                missing = connection.execute(
+                    sqlalchemy.select(backing_table.c[SID_COLUMN], backing_table.c[CONTENT_ID_COLUMN])
+                    .where(~matching_dispatch)
+                    .limit(1)
+                ).first()
+                if missing is not None and "missing_dispatch_rows" not in data:
+                    data["missing_dispatch_rows"] = (
+                        {"content_id": str(missing[1]), "backing": backing_name, "sid": int(missing[0])},
+                    )
+
+                matching_backing = sqlalchemy.exists(
+                    sqlalchemy.select(sqlalchemy.literal(1))
+                    .select_from(backing_table)
+                    .where(
+                        backing_table.c[SID_COLUMN] == dispatch_column,
+                        backing_table.c[CONTENT_ID_COLUMN] == dispatch.c[DISPATCH_CONTENT_ID_COLUMN],
+                    )
+                )
+                mismatch = connection.execute(
+                    sqlalchemy.select(dispatch.c[DISPATCH_CONTENT_ID_COLUMN], dispatch_column)
+                    .where(dispatch_column.is_not(None), ~matching_backing)
+                    .limit(1)
+                ).first()
+                if mismatch is not None and "orphaned_or_mismatched_dispatch_rows" not in data:
+                    data["orphaned_or_mismatched_dispatch_rows"] = (
+                        {"content_id": str(mismatch[0]), "backing": backing_name, "sid": int(mismatch[1])},
+                    )
+
+            if data:
+                problems[family.dispatch_table_name] = {"data": data}
+        if problems:
+            raise StorageLayoutUpgradeRequiredError({"schema": problems})
 
     # ------------------------------------------------------------------ tables and transactions
 
     def ensure_tables(self, *classes: type) -> None:
         """Resolve each class's schema and create its tables (and those it references, transitively).
 
-        Existing tables are left alone. Saving or fetching calls this
-        implicitly, but calling it up front is useful to separate DDL from a
-        data transaction (SQLite rolls back tables created inside a rolled-back
-        transaction along with the data).
+        Existing tables are validated and left alone. Saving or fetching calls
+        this implicitly, but calling it up front is useful to establish and
+        validate the physical layout before a data transaction.
         """
         self._ensure_tables(self._current_connection(), classes)
 
@@ -155,6 +649,7 @@ class SqlStore:
                 finally:
                     stack.pop()
         except BaseException:
+            self._invalidate_private_table_validations()
             self._clear_identity_caches()
             raise
 
@@ -184,6 +679,7 @@ class SqlStore:
                 finally:
                     stack.pop()
         except BaseException:
+            self._invalidate_private_table_validations()
             self._clear_identity_caches()
             raise
 
@@ -193,24 +689,99 @@ class SqlStore:
         if current is not None:
             yield current
             return
-        with self._database.engine.connect() as connection:
-            stack = self._connection_stack()
-            stack.append(connection)
-            try:
-                yield connection
-            finally:
-                stack.pop()
+        try:
+            # A read path can establish a missing private table in ``ensure``
+            # mode. Commit that DDL on success; on failure DuckDB rolls it back
+            # and the validation cache must forget it.
+            with self._database.engine.begin() as connection:
+                stack = self._connection_stack()
+                stack.append(connection)
+                try:
+                    yield connection
+                finally:
+                    stack.pop()
+        except BaseException:
+            self._invalidate_private_table_validations()
+            self._clear_identity_caches()
+            raise
+
+    def _invalidate_private_table_validations(self) -> None:
+        """Keep only initialization-validated protocol tables after a transaction failure."""
+        self._validated_table_names.intersection_update(self._managed_table_names)
 
     def _ensure_tables(self, connection: sqlalchemy.Connection | None, classes: Iterable[type]) -> None:
-        before = len(self._metadata.tables)
+        """Validate or create ordinary record tables after protocol initialization.
+
+        Configured entry tables are installed at construction.  Every other
+        class is private storage: an existing table is always compared to the
+        SQLAlchemy-derived layout before use, and a missing one is created
+        only by an ``ensure`` store.  Tables observed during unversioned
+        adoption remain explicitly unclaimed, so an old private content-id
+        table can never be silently accepted as current storage.
+        """
+        if not self._initialized and not self._initializing:
+            raise RuntimeError("SqlStore layout has not been initialized")
+        if connection is None:
+            # RowHydrator calls this helper before it obtains its own nested
+            # read scope. Reuse the caller's connection when one is active:
+            # DuckDB permits only one transaction on its shared in-memory
+            # connection, and this also preserves transaction visibility.
+            connection = self._current_connection()
+        candidate = sqlalchemy.MetaData()
+        for cls in classes:
+            table_for(resolve_schema(cls), candidate)
+        candidate_names = frozenset(candidate.tables)
+        forbidden = sorted(
+            name for name in candidate_names if name.startswith("_httk_") and name not in self._managed_table_names
+        )
+        if forbidden:
+            raise ValueError(f"ordinary records may not claim reserved SqlStore table names: {', '.join(forbidden)}")
+        collisions = tuple(sorted(candidate_names & self._unclaimed_table_names))
+        if collisions:
+            raise StorageLayoutUpgradeRequiredError(
+                {
+                    "schema": {
+                        name: {
+                            "unversioned": True,
+                            "message": "pre-existing unclaimed table cannot be adopted as private storage",
+                        }
+                        for name in collisions
+                    }
+                }
+            )
+        pending_validation = candidate_names - self._validated_table_names
+        if not pending_validation:
+            for cls in classes:
+                table_for(resolve_schema(cls), self._metadata)
+            return
+
+        def ensure_on(active: sqlalchemy.Connection) -> None:
+            names = actual_table_names(active)
+            existing = tuple(sorted(pending_validation & names))
+            difference = validate_expected_tables(active, candidate, table_names=existing)
+            if difference:
+                raise StorageLayoutUpgradeRequiredError({"schema": difference})
+            missing = tuple(sorted(pending_validation - names))
+            if missing:
+                if self._layout_mode == "verify":
+                    raise StorageLayoutUpgradeRequiredError({"schema": {name: {"missing": True} for name in missing}})
+                # The candidate contains all transitive targets. ``checkfirst``
+                # is safe only after the explicit validation above, and lets
+                # SQLAlchemy order foreign-key creation for each dialect.
+                candidate.create_all(active, checkfirst=True)
+
+        if connection is not None:
+            ensure_on(connection)
+        else:
+            if self._layout_mode == "verify":
+                with self._database.engine.connect() as active:
+                    ensure_on(active)
+            else:
+                with self._database.engine.begin() as active:
+                    ensure_on(active)
+        self._validated_table_names.update(candidate_names)
         for cls in classes:
             table_for(resolve_schema(cls), self._metadata)
-        if not self._create_tables or len(self._metadata.tables) == before:
-            return
-        if connection is not None:
-            self._metadata.create_all(connection, checkfirst=True)
-        else:
-            self._metadata.create_all(self._database.engine, checkfirst=True)
 
     def _table(self, name: str) -> sqlalchemy.Table:
         return self._metadata.tables[name]
@@ -231,7 +802,11 @@ class SqlStore:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = _Projection()
         with self._write_connection() as connection:
-            return self._save(connection, record_type, obj, projection, "")
+            sid = self._save(connection, record_type, obj, projection, "")
+            family = self._family_for_backing(record_type)
+            if family is not None:
+                self._save_entry_dispatch(connection, family, record_type, sid, projection.content_id(record_type, obj))
+            return sid
 
     def _save(
         self,
@@ -481,6 +1056,58 @@ class SqlStore:
                 return None
             return cast(T, self._fetch(connection, cls, int(found[0])))
 
+    def fetch_entry(self, family_cls: type, content_id: str) -> object | None:
+        """Return the concrete configured backing for an entry-family content identity.
+
+        The result is the actual frozen record class, not the family protocol.
+        A single-backing family can query that backing directly; only
+        multi-backing families need their reserved one-of-many dispatch table.
+        """
+        family = next((item for item in self.layout.families if item.family is family_cls), None)
+        if family is None:
+            raise ValueError(f"{family_cls.__name__} is not a configured entry family in this SqlStore")
+        with self._read_connection() as connection:
+            if len(family.backings) == 1:
+                backing = family.backings[0]
+                schema = resolve_schema(backing)
+                self._ensure_tables(connection, (backing,))
+                table = self._table(schema.table_name)
+                sid = connection.execute(
+                    sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == content_id)
+                ).scalar_one_or_none()
+                return None if sid is None else self._fetch(connection, backing, int(sid))
+            assert family.dispatch_table_name is not None
+            table = self._table(family.dispatch_table_name)
+            row = (
+                connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == content_id))
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                for backing in family.backings:
+                    backing_table = self._table(resolve_schema(backing).table_name)
+                    found = connection.execute(
+                        sqlalchemy.select(backing_table.c[SID_COLUMN])
+                        .where(backing_table.c[CONTENT_ID_COLUMN] == content_id)
+                        .limit(1)
+                    ).first()
+                    if found is not None:
+                        raise EntryDispatchIntegrityError(
+                            f"entry dispatch {family.name!r} is missing for stored content_id {content_id!r}"
+                        )
+                return None
+            backing, sid = self._dispatch_target(family, row, content_id)
+            backing_table = self._table(resolve_schema(backing).table_name)
+            backing_content_id = connection.execute(
+                sqlalchemy.select(backing_table.c[CONTENT_ID_COLUMN]).where(backing_table.c[SID_COLUMN] == sid)
+            ).scalar_one_or_none()
+            if backing_content_id != content_id:
+                raise EntryDispatchIntegrityError(
+                    f"entry dispatch {family.name!r} maps content_id {content_id!r} to backing sid {sid} "
+                    f"whose content_id is {backing_content_id!r}"
+                )
+            return self._fetch(connection, backing, sid)
+
     def sid_of(self, obj: Any, *, as_record: type | None = None) -> int | None:
         """Return this store's sid for ``obj``'s record identity, if present."""
         record_type = resolve_storage_record(obj, as_record=as_record)
@@ -564,6 +1191,108 @@ class SqlStore:
             raise KeyError(cls, sid) from None
         self._remember(cls, sid, instance)
         return instance
+
+    def _family_for_backing(self, record_type: type) -> EntryFamilyLayout | None:
+        for family in self.layout.families:
+            if any(backing is record_type for backing in family.backings):
+                return family
+        return None
+
+    def _save_entry_dispatch(
+        self,
+        connection: sqlalchemy.Connection,
+        family: EntryFamilyLayout,
+        backing: type,
+        sid: int,
+        key: str,
+    ) -> None:
+        if len(family.backings) == 1:
+            return
+        assert family.dispatch_table_name is not None
+        table = self._table(family.dispatch_table_name)
+        column_name = backing_dispatch_column_name(family.backing_names[family.backings.index(backing)])
+        existing = (
+            connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == key))
+            .mappings()
+            .one_or_none()
+        )
+        if existing is not None:
+            found_backing, found_sid = self._dispatch_target(family, existing, key)
+            if found_backing is not backing or found_sid != sid:
+                raise EntryDispatchIntegrityError(
+                    f"entry dispatch {family.name!r} maps content_id {key!r} to a conflicting backing row"
+                )
+            return
+        values = {DISPATCH_CONTENT_ID_COLUMN: key, column_name: sid}
+        inserted = self._insert_dispatch_row(connection, table, values)
+        if inserted:
+            return
+        # ``ON CONFLICT DO NOTHING`` keeps SQLite, DuckDB and PostgreSQL
+        # transactions usable after either uniqueness conflict. Diagnose the
+        # content-id path first, then the per-backing UNIQUE sid path.
+        existing = (
+            connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == key))
+            .mappings()
+            .one_or_none()
+        )
+        if existing is not None:
+            found_backing, found_sid = self._dispatch_target(family, existing, key)
+            if found_backing is backing and found_sid == sid:
+                return
+            raise EntryDispatchIntegrityError(
+                f"entry dispatch {family.name!r} maps content_id {key!r} to a conflicting backing row"
+            )
+        sid_owner = (
+            connection.execute(sqlalchemy.select(table).where(table.c[column_name] == sid)).mappings().one_or_none()
+        )
+        if sid_owner is not None:
+            owner_content_id = str(sid_owner[DISPATCH_CONTENT_ID_COLUMN])
+            raise EntryDispatchIntegrityError(
+                f"entry dispatch {family.name!r} already maps backing sid {sid} to content_id {owner_content_id!r}, "
+                f"not {key!r}"
+            )
+        raise EntryDispatchIntegrityError(
+            f"entry dispatch {family.name!r} declined content_id {key!r} without a discoverable conflicting row"
+        )
+
+    @staticmethod
+    def _insert_dispatch_row(
+        connection: sqlalchemy.Connection,
+        table: sqlalchemy.Table,
+        values: Mapping[str, object],
+    ) -> bool:
+        """Insert one dispatch association, safely detecting every uniqueness conflict."""
+        dialect = connection.dialect.name
+        if dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+            statement: Any = sqlite_insert(table).values(values).on_conflict_do_nothing()
+        elif dialect in {"duckdb", "postgresql"}:
+            from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+
+            statement = postgresql_insert(table).values(values).on_conflict_do_nothing()
+        else:
+            result = connection.execute(sqlalchemy.insert(table).values(values))
+            return result.rowcount == 1
+        result = connection.execute(statement.returning(table.c[DISPATCH_CONTENT_ID_COLUMN]))
+        return result.scalar_one_or_none() is not None
+
+    @staticmethod
+    def _dispatch_target(
+        family: EntryFamilyLayout,
+        row: Any,
+        content_id: str,
+    ) -> tuple[type, int]:
+        populated: list[tuple[type, int]] = []
+        for backing_name, backing in zip(family.backing_names, family.backings, strict=True):
+            value = row[backing_dispatch_column_name(backing_name)]
+            if value is not None:
+                populated.append((backing, int(value)))
+        if len(populated) != 1:
+            raise EntryDispatchIntegrityError(
+                f"entry dispatch {family.name!r} has {len(populated)} backing rows for content_id {content_id!r}"
+            )
+        return populated[0]
 
     def _check_metadata(
         self,

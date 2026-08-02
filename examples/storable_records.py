@@ -242,7 +242,7 @@ def show_persistence() -> None:
         path = Path(directory) / "measurements.sqlite"
 
         database = Database.sqlite(path)
-        sid = SqlStore(database).save(ROCKSALT)
+        sid = SqlStore(database, entry_backings={}).save(ROCKSALT)
         database.dispose()  # close the engine entirely: nothing is left in memory
         print(f"  wrote sid {sid} to {path.name} ({path.stat().st_size} bytes on disk)")
 
@@ -256,7 +256,7 @@ def show_persistence() -> None:
 def main() -> None:
     show_schema()
     with Database.sqlite() as database:  # in memory; Database.sqlite(path) for a file
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         sid = show_round_trip(store, database)
         show_dedup(store, sid)
         show_referring(store)

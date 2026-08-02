@@ -49,7 +49,7 @@ def store(request):
     else:
         manager = Database.sqlite()
     with manager as database:
-        value = SqlStore(database)
+        value = SqlStore(database, entry_backings={})
         with value.transaction():
             for row in ROWS:
                 value.save(row)
@@ -205,7 +205,7 @@ def test_token_rejects_changed_filter_order_and_corruption(store):
 def test_token_rejects_changed_schema_and_dialect():
     order = (PageOrder("bucket"),)
     with Database.sqlite() as sqlite_database:
-        sqlite_store = SqlStore(sqlite_database)
+        sqlite_store = SqlStore(sqlite_database, entry_backings={})
         with sqlite_store.transaction():
             for row in ROWS:
                 sqlite_store.save(row)
@@ -220,7 +220,7 @@ def test_token_rejects_changed_schema_and_dialect():
 
         pytest.importorskip("duckdb_engine")
         with Database.duckdb() as duckdb_database:
-            duckdb_store = SqlStore(duckdb_database)
+            duckdb_store = SqlStore(duckdb_database, entry_backings={})
             with duckdb_store.transaction():
                 for row in ROWS:
                     duckdb_store.save(row)
@@ -307,7 +307,7 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
 
 def test_deep_page_stays_seek_based_and_returns_only_requested_rows():
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         with store.transaction():
             for index in range(2_000):
                 store.save(PageRecord(index, index, f"r-{index}", ["common"]))
@@ -324,7 +324,7 @@ def test_deep_page_stays_seek_based_and_returns_only_requested_rows():
 @pytest.mark.extended
 def test_extended_deep_page_has_a_bounded_seek_statement():
     with Database.sqlite() as database:
-        store = SqlStore(database)
+        store = SqlStore(database, entry_backings={})
         with store.transaction():
             for index in range(10_000):
                 store.save(PageRecord(index, index, f"r-{index}", ["common"]))

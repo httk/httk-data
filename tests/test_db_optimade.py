@@ -45,7 +45,7 @@ MAT_3 = Material("gamma oxide", Fraction(7, 2), ["O"], None)
 
 @pytest.fixture()
 def store():
-    store = SqlStore(Database.sqlite(":memory:"))
+    store = SqlStore(Database.sqlite(":memory:"), entry_backings={})
     for material in (MAT_1, MAT_2, MAT_3):
         store.save(material)
     return store
