@@ -32,6 +32,7 @@ from httk.core import (
     StoredPropertyProjection,
     content_id,
     entry_family_info,
+    known_definition_prefixes,
     load_entry_type_schema,
     parse_optimade_filter,
     stored_property_projections,
@@ -55,6 +56,7 @@ from httk.data.optimade_query import (
 )
 
 __all__ = [
+    "StoredPropertySqlCandidateStream",
     "StoredPropertySqlConfigurationError",
     "StoredPropertySqlPlan",
     "stored_property_sql_plan",
@@ -433,6 +435,22 @@ class _BackingPlan:
     projections: Mapping[str, StoredPropertyProjection]
 
 
+@dataclass(frozen=True)
+class StoredPropertySqlCandidateStream:
+    """One raw, SQL-bounded backing stream for a later federation merge.
+
+    ``searcher`` outputs only ``sid``, canonical ``content_id``, and one raw
+    SQL value per requested sort property.  Iterating it therefore never
+    hydrates a record; a federation can select its final page before fetching
+    any object graph.
+    """
+
+    backing: type
+    backing_name: str
+    searcher: SqlSearcher
+    sort_count: int
+
+
 class StoredPropertySqlPlan:
     """Validated responses and SQL queries for one configured logical entry family.
 
@@ -472,10 +490,57 @@ class StoredPropertySqlPlan:
         filter_string: str | FilterAst,
         *,
         sort: Sequence[tuple[str, bool]] = (),
+        public_id_prefix: str = "",
     ) -> tuple[SqlSearcher, ...]:
         """Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list."""
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
-        return tuple(self._filter_searcher(backing, ast, sort) for backing in self._backings)
+        return tuple(self._filter_searcher(backing, ast, sort, public_id_prefix) for backing in self._backings)
+
+    def candidate_searchers(
+        self,
+        filter_string: str | FilterAst | None = None,
+        *,
+        sort: Sequence[tuple[str, bool]] = (),
+        public_id_prefix: str = "",
+    ) -> tuple[StoredPropertySqlCandidateStream, ...]:
+        """Return ID-only concrete streams for a bounded federated page.
+
+        ``None`` emits the query context's portable true predicate.  It never
+        adds an ``ORDER BY`` unless a sort was explicitly requested.  The
+        supplied public-id prefix participates in both the intrinsic id
+        filter handlers and id sort expression.
+        """
+        ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
+        streams: list[StoredPropertySqlCandidateStream] = []
+        for backing, backing_name in zip(self._backings, self.layout.backing_names, strict=True):
+            searcher, variable, sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix)
+            searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
+            searcher.output(SqlColumn(searcher, variable._alias.c[CONTENT_ID_COLUMN]), "content_id")
+            for index, value in enumerate(sort_values):
+                searcher.output(SqlColumn(searcher, value.element), f"sort_{index}")
+            streams.append(StoredPropertySqlCandidateStream(backing.backing, backing_name, searcher, len(sort_values)))
+        return tuple(streams)
+
+    def response_row(
+        self,
+        backing: type,
+        record: object,
+        *,
+        public_id: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Render one hydrated backing record at the protocol boundary."""
+        configured = next((item for item in self._backings if item.backing is backing), None)
+        if configured is None:
+            raise StoredPropertySqlConfigurationError(
+                f"{backing.__name__} is not a configured backing for {self.family.__name__}"
+            )
+        row: dict[str, Any] = {"id": content_id(record) if public_id is None else public_id, "type": self.entry_type}
+        for name in self.definition.properties:
+            if name in _CORE_PROPERTIES:
+                continue
+            projection = configured.projections.get(name)
+            row[name] = None if projection is None else _response_json_value(projection.response(record))
+        return row
 
     def _records_for(self, backing: _BackingPlan) -> Iterator[Mapping[str, Any]]:
         searcher = self.store.searcher()
@@ -485,45 +550,65 @@ class StoredPropertySqlPlan:
         sids = tuple(int(values[0]) for values, _names in searcher)
         hydrator = RowHydrator(self.store, backing.backing, sids)
         for record in hydrator.materialize_many():
-            row: dict[str, Any] = {"id": content_id(record), "type": self.entry_type}
-            for name in self.definition.properties:
-                if name in _CORE_PROPERTIES:
-                    continue
-                projection = backing.projections.get(name)
-                row[name] = None if projection is None else _response_json_value(projection.response(record))
-            yield row
+            yield self.response_row(backing.backing, record)
 
     def _filter_searcher(
         self,
         backing: _BackingPlan,
         ast: FilterAst,
         sort: Sequence[tuple[str, bool]],
+        public_id_prefix: str,
     ) -> SqlSearcher:
-        searcher = self.store.searcher()
-        variable = searcher.variable(backing.backing)
+        searcher, variable, _sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix)
         searcher.output(variable, "record")
-        context = _SqlQueryContext(searcher, variable)
-        handlers = self._handlers(backing, context)
-        try:
-            predicate = translate_filter_ast(
-                ast,
-                cast(Any, variable),
-                self.entry_type,
-                _property_fulltypes(self.definition),
-                handlers,
-                (),
-            )
-        except QueryLiteralError as error:
-            raise FilterTranslationError(str(error), "type-mismatch") from error
-        searcher.add(cast(SqlExpression, predicate))
-        for name, descending in sort:
-            value = self._sort_value(backing, context, name)
-            searcher.add_sort(SqlColumn(searcher, value.exact), descending)
         return searcher
 
-    def _handlers(self, backing: _BackingPlan, context: _SqlQueryContext) -> HandlerTable:
+    def _candidate_searcher(
+        self,
+        backing: _BackingPlan,
+        ast: FilterAst | None,
+        sort: Sequence[tuple[str, bool]],
+        public_id_prefix: str,
+    ) -> tuple[SqlSearcher, SqlVariable, tuple[_SqlValue, ...]]:
+        searcher = self.store.searcher()
+        variable = searcher.variable(backing.backing)
+        context = _SqlQueryContext(searcher, variable)
+        if ast is None:
+            searcher.add(cast(SqlExpression, context.always_true()))
+        else:
+            handlers = self._handlers(backing, context, public_id_prefix)
+            try:
+                predicate = translate_filter_ast(
+                    ast,
+                    cast(Any, variable),
+                    self.entry_type,
+                    _property_fulltypes(self.definition),
+                    handlers,
+                    known_definition_prefixes(),
+                )
+            except QueryLiteralError as error:
+                raise FilterTranslationError(str(error), "type-mismatch") from error
+            searcher.add(cast(SqlExpression, predicate))
+        sort_values: list[_SqlValue] = []
+        for name, descending in sort:
+            value = self._sort_value(backing, context, name, public_id_prefix)
+            # SQLite orders nulls first in ascending order while DuckDB's
+            # default differs.  Make the cross-dialect NULLS LAST contract
+            # explicit before the actual user key in both directions.
+            null_rank = sqlalchemy.case((value.element.is_(None), 1), else_=0)
+            searcher.add_sort(SqlColumn(searcher, null_rank), False)
+            searcher.add_sort(SqlColumn(searcher, value.exact), descending)
+            sort_values.append(value)
+        return searcher, variable, tuple(sort_values)
+
+    def _handlers(
+        self,
+        backing: _BackingPlan,
+        context: _SqlQueryContext,
+        public_id_prefix: str,
+    ) -> HandlerTable:
         handlers: dict[str, Mapping[str, Callable[..., Any]]] = {
-            "id": _id_handlers(context),
+            "id": _id_handlers(context, public_id_prefix),
             "type": _type_handlers(self.entry_type),
         }
         for name, definition in self.definition.properties.items():
@@ -537,9 +622,15 @@ class StoredPropertySqlPlan:
                 handlers[name] = _projection_handlers(projection, context)
         return handlers
 
-    def _sort_value(self, backing: _BackingPlan, context: _SqlQueryContext, name: str) -> _SqlValue:
+    def _sort_value(
+        self,
+        backing: _BackingPlan,
+        context: _SqlQueryContext,
+        name: str,
+        public_id_prefix: str,
+    ) -> _SqlValue:
         if name == "id":
-            return _SqlValue(context._root.alias.c[CONTENT_ID_COLUMN])
+            return _public_id_value(context, public_id_prefix)
         if name == "type":
             return context.constant(self.entry_type)
         if name not in self.definition.properties:
@@ -683,8 +774,15 @@ def _null_handlers(context: _SqlQueryContext) -> Mapping[str, Callable[..., Any]
     }
 
 
-def _id_handlers(context: _SqlQueryContext) -> Mapping[str, Callable[..., Any]]:
-    value = _SqlValue(context._root.alias.c[CONTENT_ID_COLUMN])
+def _public_id_value(context: _SqlQueryContext, prefix: str) -> _SqlValue:
+    """The source-prefixed public id as one portable SQL string expression."""
+    if not prefix:
+        return _SqlValue(context._root.alias.c[CONTENT_ID_COLUMN])
+    return _SqlValue(sqlalchemy.literal(prefix) + context._root.alias.c[CONTENT_ID_COLUMN])
+
+
+def _id_handlers(context: _SqlQueryContext, prefix: str) -> Mapping[str, Callable[..., Any]]:
+    value = _public_id_value(context, prefix)
     return {
         "comparison": lambda entry, operator, literal, variable: context.compare(
             value, operator, context.constant(literal)

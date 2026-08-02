@@ -85,6 +85,7 @@ __all__ = [
     "ChildTableSpec",
     "ColumnSpec",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "FieldRole",
@@ -104,6 +105,10 @@ __all__ = [
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoredEntryOrigin",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoredEntryPage",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoredEntrySource",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredPropertySqlConfigurationError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredPropertySqlPlan",  # pyright: ignore[reportUnsupportedDunderAll]
     "TableSchema",
@@ -137,6 +142,11 @@ _SQL_EXPORTS = {
     "SqlColumn": ".searcher",
     "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
+    "StoredEntryFederation": ".stored_federation",
+    "StoredEntryOrigin": ".stored_federation",
+    "StoredEntryPage": ".stored_federation",
+    "StoredEntrySource": ".stored_federation",
+    "DuplicateEntryIdError": ".stored_federation",
     "StoredPropertySqlConfigurationError": ".stored_properties",
     "StoredPropertySqlPlan": ".stored_properties",
     "StorageLayoutUpgradeRequiredError": ".layout",
