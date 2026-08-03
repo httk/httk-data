@@ -69,7 +69,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, ClassVar
 
-from httk.core import StorageInfo
+from httk.core.storage import StorageInfo
 
 from httk.data.db import Database, SqlStore
 from httk.data.query import Searcher, SearchVariable

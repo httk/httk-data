@@ -56,7 +56,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, Any
 
-from httk.core import Related, parse_optimade_filter, stored_property
+from httk.core.optimade import parse_optimade_filter
+from httk.core.storage import Related, stored_property
 
 from httk.data.db import Database, SqlStore, StoreEntryProvider
 

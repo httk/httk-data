@@ -8,13 +8,10 @@ import pytest
 import sqlalchemy
 from httk.core import (
     PropertyDefinition,
-    StorageInfo,
-    StoredPropertyProjection,
-    content_id,
     load_entry_type_definition,
-    register_entry_family,
-    register_entry_record,
 )
+from httk.core.register import register_entry_family, register_entry_record
+from httk.core.storage import StorageInfo, StoredPropertyProjection, content_id
 
 from httk.data.db import (
     Database,

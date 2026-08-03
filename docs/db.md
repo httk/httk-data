@@ -32,7 +32,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, ClassVar
 
-from httk.core import FracVector, Indexed, Shape, StorageInfo, stored_property
+from httk.core import FracVector
+from httk.core.storage import Indexed, Shape, StorageInfo, stored_property
 
 
 @dataclass(frozen=True)

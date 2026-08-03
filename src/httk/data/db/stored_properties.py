@@ -1,7 +1,7 @@
 """SQL plans for property-mapped durable entry backings.
 
 This module translates the backend-neutral
-:class:`httk.core.StoredPropertyProjection` callbacks declared by one concrete
+:class:`httk.core.storage.StoredPropertyProjection` callbacks declared by one concrete
 record backing into SQLAlchemy predicates.  A logical entry family supplies its
 entry type and OPTIMADE definition; every backing configured for that family in
 the :class:`~httk.data.db.store.SqlStore` supplies only the properties it can
@@ -25,16 +25,17 @@ from typing import Any, Final, cast
 import sqlalchemy
 from httk.core import (
     EntryTypeDefinition,
-    FilterAst,
     FracVector,
     PropertyDefinition,
+    known_definition_prefixes,
+    load_entry_type_definition,
+)
+from httk.core.optimade import FilterAst, parse_optimade_filter
+from httk.core.register import entry_family_info
+from httk.core.storage import (
     QueryLiteralError,
     StoredPropertyProjection,
     content_id,
-    entry_family_info,
-    known_definition_prefixes,
-    load_entry_type_definition,
-    parse_optimade_filter,
     stored_property_projections,
 )
 from sqlalchemy.sql.elements import Null

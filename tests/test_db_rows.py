@@ -8,7 +8,7 @@ from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import Skip, StorageInfo
+from httk.core.storage import Skip, StorageInfo
 
 from httk.data.db import Database, SchemaError, SqlStore, StaleResultError, content_id, resolve_schema
 from httk.data.db.rows import RowHydrator, row_class

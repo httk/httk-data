@@ -123,7 +123,7 @@ looked up with `store.referring`:
 from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
-from httk.core import Indexed, StorageInfo
+from httk.core.storage import Indexed, StorageInfo
 from httk.data.db import Database, SqlStore
 
 
@@ -209,7 +209,7 @@ the `add_all(... .is_in(...))` post-filter into a single `add(... .has_only(...)
 from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
-from httk.core import Indexed, StorageInfo, stored_property
+from httk.core.storage import Indexed, StorageInfo, stored_property
 from httk.data.db import Database, SqlStore
 
 

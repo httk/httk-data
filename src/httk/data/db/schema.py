@@ -1,12 +1,12 @@
 """Schema IR: resolve a storable dataclass into the relational schema that drives storage.
 
 A *storable* class is a plain **frozen dataclass** declared with the stdlib-only
-marker vocabulary from httk-core (:class:`~httk.core.Indexed`,
-:class:`~httk.core.Unique`, :class:`~httk.core.Skip`, ``IdentitySkip``, :class:`~httk.core.Shape`,
-:class:`~httk.core.StorageInfo`, :class:`~httk.core.stored_property`).
+marker vocabulary from httk-core (:class:`~httk.core.storage.Indexed`,
+:class:`~httk.core.storage.Unique`, :class:`~httk.core.storage.Skip`, ``IdentitySkip``, :class:`~httk.core.storage.Shape`,
+:class:`~httk.core.storage.StorageInfo`, :class:`~httk.core.storage.stored_property`).
 :func:`resolve_schema` reads the class once — dataclass fields, ``Annotated``
 markers, stored properties, and the optional class-level or externally
-registered :class:`~httk.core.StorageInfo` — and produces a
+registered :class:`~httk.core.storage.StorageInfo` — and produces a
 :class:`TableSchema`, the single source of truth from which the SQL layer
 derives DDL, inserts, selects, and reconstruction alike.
 
@@ -39,7 +39,7 @@ Resolution rules (field annotation, then the resulting relational shape):
 - ``Annotated[..., Related(...)]`` — relationship metadata carried on the
   resolved :class:`FieldSpec`; valid only on reference fields and on
   lists/tuples of storable classes.
-- a :class:`~httk.core.stored_property` — resolved like a field from its return
+- a :class:`~httk.core.storage.stored_property` — resolved like a field from its return
   annotation, flagged derived: stored and queryable, recomputed (not passed to
   ``__init__``) on reconstruction.
 
@@ -57,10 +57,10 @@ import types
 import typing
 from typing import Annotated, Any, Final, Literal
 
-from httk.core import (
+from httk.core import FracVector
+from httk.core.storage import (
     STORAGE_INFO_ATTRIBUTE,
     DedupPolicy,
-    FracVector,
     Indexed,
     Related,
     RelationshipLink,
@@ -108,10 +108,10 @@ class ColumnSpec:
     """Whether the column accepts NULL (all columns of an optional field do)."""
 
     indexed: bool = False
-    """Whether a single-column index is requested (:class:`~httk.core.Indexed`)."""
+    """Whether a single-column index is requested (:class:`~httk.core.storage.Indexed`)."""
 
     unique: bool = False
-    """Whether a unique index is requested (:class:`~httk.core.Unique`)."""
+    """Whether a unique index is requested (:class:`~httk.core.storage.Unique`)."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,7 +152,7 @@ class FieldSpec:
     """The value codec encoding this field (or its child elements), if any."""
 
     shape: Shape | None = None
-    """The :class:`~httk.core.Shape` marker for tensor-valued fields, if any."""
+    """The :class:`~httk.core.storage.Shape` marker for tensor-valued fields, if any."""
 
     child: ChildTableSpec | None = None
     """The child table specification for the child role, else None."""
@@ -161,7 +161,7 @@ class FieldSpec:
     """The referenced storable class for reference (and child-of-storable) fields."""
 
     related: Related | None = None
-    """The :class:`~httk.core.Related` relationship marker of the field, if any.
+    """The :class:`~httk.core.storage.Related` relationship marker of the field, if any.
 
     Only reference fields and child fields of storable elements can carry one;
     the marker's metadata flows into the relationships an entry provider emits
@@ -169,7 +169,7 @@ class FieldSpec:
     """
 
     derived: bool = False
-    """True for :class:`~httk.core.stored_property` values: stored and queryable,
+    """True for :class:`~httk.core.storage.stored_property` values: stored and queryable,
     recomputed rather than passed to ``__init__`` on reconstruction."""
 
     optional: bool = False
@@ -184,7 +184,7 @@ class TableSchema:
     """The storable dataclass this schema was resolved from."""
 
     table_name: str
-    """The table name (:attr:`~httk.core.StorageInfo.storage_name` or the snake-cased class name)."""
+    """The table name (:attr:`~httk.core.storage.StorageInfo.storage_name` or the snake-cased class name)."""
 
     fields: tuple[FieldSpec, ...]
     """The stored fields, dataclass fields first (in declaration order), then stored properties.
@@ -194,13 +194,13 @@ class TableSchema:
     """
 
     composite_indexes: tuple[tuple[str, ...], ...]
-    """The :attr:`~httk.core.StorageInfo.indexes` declarations, resolved to column names."""
+    """The :attr:`~httk.core.storage.StorageInfo.indexes` declarations, resolved to column names."""
 
     dedup: DedupPolicy
     """The deduplication policy applied when instances are saved."""
 
     links: tuple[RelationshipLink, ...] = ()
-    """The class's :attr:`~httk.core.StorageInfo.links` relationship declarations.
+    """The class's :attr:`~httk.core.storage.StorageInfo.links` relationship declarations.
 
     Each link is validated: every non-``None`` endpoint names an existing
     reference field of the class (child fields are not valid endpoints — a link
@@ -246,7 +246,7 @@ def snake_case(name: str) -> str:
 
 
 def register_schema_override(cls: type, info: StorageInfo) -> None:
-    """Register an external :class:`~httk.core.StorageInfo` for a class that cannot declare one.
+    """Register an external :class:`~httk.core.storage.StorageInfo` for a class that cannot declare one.
 
     The registered info is used by :func:`resolve_schema` whenever no explicit
     ``override`` argument is passed, and takes precedence over a
@@ -258,7 +258,7 @@ def register_schema_override(cls: type, info: StorageInfo) -> None:
 def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSchema:
     """Resolve (and cache) the :class:`TableSchema` of a storable dataclass.
 
-    The effective :class:`~httk.core.StorageInfo` is, in order of precedence:
+    The effective :class:`~httk.core.storage.StorageInfo` is, in order of precedence:
     the explicit ``override`` argument, an info registered via
     :func:`register_schema_override`, the class's own ``__httk_storage__``
     attribute, or defaults. Results are cached per ``(class, effective

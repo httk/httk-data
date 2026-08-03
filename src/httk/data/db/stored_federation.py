@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final
 
-from httk.core import FilterAst
+from httk.core.optimade import FilterAst
 
 from httk.data.db.store import SqlStore
 from httk.data.db.stored_properties import (

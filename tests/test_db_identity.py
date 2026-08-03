@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated
 
-from httk.core import FracVector, Shape, Skip, stored_property
+from httk.core import FracVector
+from httk.core.storage import Shape, Skip, stored_property
 
 from httk.data.db import canonical_form, content_id
 

@@ -7,13 +7,8 @@ from typing import ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import (
-    QueryLiteralError,
-    StorageInfo,
-    StoredPropertyProjection,
-    register_entry_family,
-    register_entry_record,
-)
+from httk.core.register import register_entry_family, register_entry_record
+from httk.core.storage import QueryLiteralError, StorageInfo, StoredPropertyProjection
 
 from httk.data.db import (
     Database,

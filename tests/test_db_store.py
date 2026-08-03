@@ -13,7 +13,8 @@ from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import FracScalar, FracVector, Indexed, Shape, Skip, StorageInfo, Unique, stored_property
+from httk.core import FracScalar, FracVector
+from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 
 from httk.data.db import Database, SchemaError, SqlStore, content_id, resolve_schema
 from httk.data.db.mapping import sqlalchemy_metadata, table_for

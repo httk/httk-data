@@ -18,9 +18,10 @@ supplies *capabilities*:
   source and target bindings plus lazy sequential union query execution; and
 - the **generic OPTIMADE filter translation** (:mod:`httk.data.optimade_query`)
   — turning filter syntax trees parsed by
-  :func:`httk.core.parse_optimade_filter` into search expressions over the
+  :func:`httk.core.optimade.parse_optimade_filter` into search expressions over the
   query protocols (:func:`~httk.data.optimade_query.translate_filter_ast`, :func:`filter_searcher`), with
   neutral :class:`FilterTranslationError` categories; and
+
 - the **database storage layer** (:mod:`httk.data.db`, requiring the
   ``httk-data[db]`` extra) — relational storage and querying of plain frozen
   dataclasses (:class:`~httk.data.db.store.SqlStore` over SQLite or DuckDB),

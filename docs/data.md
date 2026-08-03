@@ -59,7 +59,7 @@ find them through the registry without importing httk-data directly:
 
 ```python
 import httk.core
-from httk.core import known_entry_providers
+from httk.core.register import known_entry_providers
 from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
 

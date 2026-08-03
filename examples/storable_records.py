@@ -70,7 +70,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Annotated, ClassVar
 
-from httk.core import FracVector, Indexed, Shape, Skip, StorageInfo, stored_property
+from httk.core import FracVector
+from httk.core.storage import Indexed, Shape, Skip, StorageInfo, stored_property
 
 from httk.data.db import Database, SqlStore, content_id, resolve_schema
 

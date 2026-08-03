@@ -1,7 +1,7 @@
 """Generic translation of OPTIMADE filter syntax trees into backend search expressions.
 
 This module turns the OPTIMADE filter language — parsed by
-:func:`httk.core.parse_optimade_filter` into a :py:type:`httk.core.FilterAst`
+:func:`httk.core.optimade.parse_optimade_filter` into a :py:type:`httk.core.optimade.FilterAst`
 nested-tuple syntax tree — into :class:`~httk.data.query.SearchExpression`
 objects over the backend-agnostic store/searcher protocols of
 :mod:`httk.data.query`. It is pure and store-independent: any
@@ -44,7 +44,7 @@ import operator
 from collections.abc import Callable, Mapping
 from typing import Any, Literal, Self
 
-from httk.core import FilterAst, parse_optimade_filter
+from httk.core.optimade import FilterAst, parse_optimade_filter
 
 from httk.data.query import Searcher, SearchExpression, SearchVariable, Store
 from httk.data.validation import _is_rfc3339_datetime
@@ -422,8 +422,8 @@ def translate_filter_ast(
 ) -> SearchExpression:
     """Translate one filter syntax-tree node into a search expression.
 
-    ``node`` is a :py:type:`~httk.core.FilterAst` node (as produced by
-    :func:`httk.core.parse_optimade_filter`); ``search_variable`` is the
+    ``node`` is a :py:type:`~httk.core.optimade.FilterAst` node (as produced by
+    :func:`httk.core.optimade.parse_optimade_filter`); ``search_variable`` is the
     backend search variable the expression is built against;
     ``property_fulltypes``, ``handlers``, and ``recognized_prefixes`` drive the
     translation as described in the module docstring; ``recursion`` counts the
@@ -762,8 +762,8 @@ def filter_searcher(
     """Build a :class:`~httk.data.query.Searcher` over ``store`` applying an OPTIMADE filter.
 
     ``filter_string`` is an OPTIMADE filter string (parsed with
-    :func:`httk.core.parse_optimade_filter`) or an already-parsed
-    :py:type:`~httk.core.FilterAst`. The searcher binds one search variable to
+    :func:`httk.core.optimade.parse_optimade_filter`) or an already-parsed
+    :py:type:`~httk.core.optimade.FilterAst`. The searcher binds one search variable to
     ``target`` (the store-specific query target, declared as the searcher
     output named ``entry_type``) and applies the translated filter. When
     ``handlers`` is not supplied, a default table is built with
@@ -775,7 +775,7 @@ def filter_searcher(
 
     Raises:
         FilterTranslationError: When the filter cannot be translated.
-        httk.core.ParserSyntaxError: When a filter string does not parse.
+        httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
     """
     filter_ast: FilterAst = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
     if handlers is None:

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 import pytest
-from httk.core import FracScalar, FracVector, SurdScalar, SurdVector, content_id, register_canonical_encoder
+from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
+from httk.core.storage import content_id, register_canonical_encoder
 
 from httk.data.db import (
     Database,

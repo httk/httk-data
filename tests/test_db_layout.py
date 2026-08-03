@@ -8,7 +8,8 @@ from typing import ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core import StorageInfo, content_id, register_entry_family, register_entry_record
+from httk.core.register import register_entry_family, register_entry_record
+from httk.core.storage import StorageInfo, content_id
 
 from httk.data.db import (
     STORAGE_PROTOCOL_VERSION,

@@ -5,12 +5,12 @@ from decimal import Decimal
 
 import pytest
 import sqlalchemy
-from httk.core import (
+from httk.core import Reference
+from httk.core.optimade import (
     OptimadeDocument,
     OptimadeReference,
     OptimadeResource,
     OptimadeSchemaSnapshot,
-    Reference,
     ReferenceView,
 )
 

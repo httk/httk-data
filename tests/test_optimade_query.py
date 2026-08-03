@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from httk.core import parse_optimade_filter
+from httk.core.optimade import parse_optimade_filter
 
 from httk.data.optimade_query import (
     FilterTranslationError,

@@ -13,13 +13,9 @@ from httk.core import (
     EntryTypeDefinition,
     FracVector,
     PropertyDefinition,
-    Related,
     RelatedEntry,
-    RelationshipLink,
-    Shape,
-    StorageInfo,
-    stored_property,
 )
+from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
 
 from httk.data.db import Database, SqlStore, StoreEntryProvider
 from httk.data.validation import validate_record

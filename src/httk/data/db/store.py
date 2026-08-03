@@ -7,7 +7,7 @@ mapping (:mod:`httk.data.db.mapping`):
 
 - :meth:`SqlStore.save` writes an instance (recursing into referenced and
   child-element storables) and returns its integer ``sid``, deduplicating per
-  the class's :attr:`~httk.core.StorageInfo.dedup` policy;
+  the class's :attr:`~httk.core.storage.StorageInfo.dedup` policy;
 - :meth:`SqlStore.fetch` reconstructs the instance stored under a ``sid`` —
   exactly, via the ``*_exact`` companion columns for rationals — with an
   identity guarantee: while an instance is alive, fetching its sid again
@@ -45,6 +45,8 @@ from typing import Annotated, Any, cast
 import sqlalchemy
 from httk.core import (
     FracVector,
+)
+from httk.core.storage import (
     IdentitySkip,
     Shape,
     StorageProjectionCycleError,

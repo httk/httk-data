@@ -14,7 +14,7 @@ from types import MappingProxyType
 from typing import Final
 
 import sqlalchemy
-from httk.core import (
+from httk.core.register import (
     entry_family_info,
     entry_record_info,
     known_entry_families,

@@ -6,8 +6,8 @@ from fractions import Fraction
 from typing import Annotated, ClassVar
 
 import pytest
-from httk.core import (
-    FracVector,
+from httk.core import FracVector
+from httk.core.storage import (
     Indexed,
     Related,
     RelationshipLink,

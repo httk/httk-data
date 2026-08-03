@@ -39,9 +39,9 @@ storable elements surface through :meth:`StoreEntryProvider.relationships`
 instead — when their target class is itself served, each record declares its
 related entries as a flat tuple of :class:`~httk.core.RelatedEntry` values,
 carrying the ``role``/``description`` metadata of an optional
-:class:`~httk.core.Related` field marker (``Related(serve=False)`` suppresses
+:class:`~httk.core.storage.Related` field marker (``Related(serve=False)`` suppresses
 the field as a relationship). Class-level
-:class:`~httk.core.RelationshipLink` declarations contribute further
+:class:`~httk.core.storage.RelationshipLink` declarations contribute further
 relationships: each stored row of the declaring class — a served class, or an
 unserved join class passed via ``link_classes`` — expresses one FROM→TO
 relationship between the entries its link endpoints resolve to, carrying the
@@ -59,9 +59,9 @@ from httk.core import (
     FracVector,
     PropertyDefinition,
     RelatedEntry,
-    RelationshipLink,
     known_definition_prefixes,
 )
+from httk.core.storage import RelationshipLink
 
 from httk.data.db.codecs import codec_named
 from httk.data.db.mapping import SID_COLUMN
@@ -205,7 +205,7 @@ class StoreEntryProvider(EntryProvider):
     ``(entry_type, sid, instance)`` to the served entry id; the default is
     ``"<entry_type>-<sid>"``. ``link_classes`` names storable *join-object*
     classes that are not served as entries themselves but whose
-    :class:`~httk.core.RelationshipLink` declarations contribute relationships
+    :class:`~httk.core.storage.RelationshipLink` declarations contribute relationships
     between served entries; every link endpoint (on a served class or a link
     class) must resolve to a served entry type, and a link class without link
     declarations is rejected.

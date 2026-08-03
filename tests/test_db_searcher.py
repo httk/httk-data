@@ -6,7 +6,8 @@ from fractions import Fraction
 from typing import Annotated, ClassVar
 
 import pytest
-from httk.core import FracVector, Shape, StorageInfo
+from httk.core import FracVector
+from httk.core.storage import Shape, StorageInfo
 
 from httk.data.db import Database, SchemaError, SqlStore
 

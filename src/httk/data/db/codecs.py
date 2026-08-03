@@ -38,7 +38,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from httk.core import FracScalar, FracVector, SurdScalar, SurdVector, register_canonical_encoder
+from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
+from httk.core.storage import register_canonical_encoder
 
 __all__ = [
     "FRACTION_EXACT_FORMAT",

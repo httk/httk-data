@@ -23,9 +23,9 @@ from typing import Any, cast
 
 from httk.core import (
     EntryTypeDefinition,
-    FilterAst,
     PropertyDefinition,
 )
+from httk.core.optimade import FilterAst
 
 from httk.data.db.entry_provider import served_specs
 from httk.data.db.schema import resolve_schema
@@ -116,7 +116,7 @@ def optimade_filter_searcher(
     """Build a searcher over the stored rows of ``cls`` from an OPTIMADE filter.
 
     ``filter_string`` is an OPTIMADE filter string or an already-parsed
-    :py:type:`~httk.core.FilterAst`. The returned searcher outputs the matching
+    :py:type:`~httk.core.optimade.FilterAst`. The returned searcher outputs the matching
     stored instances (``item[0][0]`` per match).
 
     **Property names.** Every servable stored field of ``cls`` (per
@@ -161,7 +161,7 @@ def optimade_filter_searcher(
 
     Raises:
         httk.data.optimade_query.FilterTranslationError: When the filter cannot be translated.
-        httk.core.ParserSyntaxError: When a filter string does not parse.
+        httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
         ValueError: When a ``related_classes`` entry does not match exactly one
             reference or child-of-storable field of ``cls``.
     """

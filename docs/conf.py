@@ -132,7 +132,7 @@ nitpick_ignore = [
     # AutoAPI renders the value of the RelatedPropertyResolver type alias with a
     # bare (unqualified) FilterAst class xref; the name comes from httk-core (a
     # separate distribution sharing the "httk" namespace), so it cannot resolve
-    # here. Qualified httk.core.FilterAst references resolve via intersphinx.
+    # here. Qualified httk.core.optimade.FilterAst references resolve via intersphinx.
     ("py:class", "FilterAst"),
     # RowHydrator's constructor takes the module-private hydration context; the
     # private class is deliberately undocumented, so the annotation xref cannot
@@ -143,7 +143,7 @@ nitpick_ignore = [
     ("py:class", "_BackingPlan"),
     # StoredPropertyProjection is new in the sibling core workspace; the
     # committed release inventory cannot name it until core is released.
-    ("py:class", "httk.core.StoredPropertyProjection"),
+    ("py:class", "httk.core.storage.StoredPropertyProjection"),
     # AutoAPI renders ResultSetLike.one as a bare method reference in the
     # protocol and implementing result-set summaries.  There is no module-level
     # ``one`` method for Sphinx to resolve; the qualified class members remain
