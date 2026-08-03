@@ -86,6 +86,13 @@ with store.transaction():
 same_record = store.fetch(StructureRecord, sid)  # reconstructed exactly
 ```
 
+### Vocabulary
+
+An entry family is a logical key such as `StructureEntry`.
+A record is a durable frozen-dataclass representation; a family may have several.
+Backend/View is the representation pattern: a backend owns data, and a view presents it.
+A content id identifies the record's content across stores; a SID is only a local row id.
+
 Every database starts with a persisted, versioned layout declaration. Passing
 `entry_records={}` says that this is a private/custom-record store with no
 queryable entry families. An entry store instead maps each registered logical
@@ -106,17 +113,21 @@ saving a naturally bound domain object) makes it discoverable through
 `fetch_entry(StructureEntry, content_id)`; that method returns the actual
 concrete Record.
 
-Later `SqlStore(db)` calls trust the persisted declaration; supplying a
-declaration again must match it exactly. Missing or edited record tables fail
-with the database's own errors when used. Old, unversioned, or incompatible
-layouts raise `StorageLayoutUpgradeRequiredError`; this redesign does not
-migrate old stores, so rebuild them explicitly.
+Later `SqlStore(db)` calls trust the persisted declaration; there is no layout
+mode or schema diffing. Missing or edited record tables fail with the database's
+own errors when used. Tables are created lazily on the first write; reads never
+issue DDL. Old, unversioned, or incompatible layouts raise
+`StorageLayoutUpgradeRequiredError`; this redesign does not migrate old stores,
+so rebuild them explicitly.
 
 A source object with an exact `__httk_storage_record__` can be saved directly;
 `save(source, as_record=OtherRecord)` selects another declared projection.
 Nested record fields are projected recursively. A projected source must expose
 any derived `stored_property` declared by its target record because storage
 does not construct an intermediate record merely to evaluate that property.
+Record validation runs at this storage boundary through `__httk_validate__`.
+Optional child fields use presence columns, so `None` remains distinct from an
+empty child value.
 
 While a saved or fetched instance is alive, fetching its sid again returns the
 very same object. Join-objects pointing at a stored instance are found with
