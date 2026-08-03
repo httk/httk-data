@@ -1,7 +1,7 @@
 """Tests for OPTIMADE-definition-derived portable query fields."""
 
 import pytest
-from httk.core import EntryTypeDefinition, PropertyDefinition, load_entry_type_schema, standard_entry_type
+from httk.core import EntryTypeDefinition, PropertyDefinition, load_entry_type_definition, standard_entry_type
 
 from httk.data import portable_query_capabilities, portable_query_fields
 
@@ -18,7 +18,7 @@ def test_standard_data_entry_types_have_only_the_portable_core_fields(name: str)
 
 def test_standard_structures_definition_has_the_expected_portable_fields():
     pytest.importorskip("httk.atomistic")
-    structures = load_entry_type_schema("https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/structures")
+    structures = load_entry_type_definition("https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/structures")
     assert portable_query_fields(structures) == (
         "id",
         "type",

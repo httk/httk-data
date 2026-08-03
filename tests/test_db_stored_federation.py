@@ -11,7 +11,7 @@ from httk.core import (
     StorageInfo,
     StoredPropertyProjection,
     content_id,
-    load_entry_type_schema,
+    load_entry_type_definition,
     register_entry_family,
     register_entry_record,
 )
@@ -36,7 +36,7 @@ class FederatedCalculation:
 
     @staticmethod
     def entry_type_definition():
-        return load_entry_type_schema(CALCULATIONS_DEFINITION).extended(
+        return load_entry_type_definition(CALCULATIONS_DEFINITION).extended(
             {
                 "_httk_label": PropertyDefinition.from_simple(
                     "_httk_label", description="A label stored for federation tests."

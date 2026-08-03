@@ -33,7 +33,7 @@ from httk.core import (
     content_id,
     entry_family_info,
     known_definition_prefixes,
-    load_entry_type_schema,
+    load_entry_type_definition,
     parse_optimade_filter,
     stored_property_projections,
 )
@@ -682,7 +682,7 @@ def stored_property_sql_plan(store: SqlStore, family: type) -> StoredPropertySql
     if not isinstance(definition_id, str) or not definition_id:
         raise StoredPropertySqlConfigurationError(f"{family.__name__} needs a registered entry definition id")
     factory = getattr(family, "entry_type_definition", None)
-    definition = factory() if callable(factory) else load_entry_type_schema(definition_id)
+    definition = factory() if callable(factory) else load_entry_type_definition(definition_id)
     if not isinstance(definition, EntryTypeDefinition):
         raise StoredPropertySqlConfigurationError(
             f"{family.__name__}.entry_type_definition() must return EntryTypeDefinition"

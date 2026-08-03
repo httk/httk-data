@@ -2,7 +2,7 @@
 
 import jsonschema
 import pytest
-from httk.core import PropertyDefinition, load_entry_type_schema, standard_entry_type
+from httk.core import PropertyDefinition, load_entry_type_definition, standard_entry_type
 
 from httk.data import PropertyValidationError, validate_property, validate_record
 from httk.data.validation import _validator_schema
@@ -39,7 +39,7 @@ def test_nullable_property_accepts_none() -> None:
 
 
 def test_nullable_enum_property_accepts_none() -> None:
-    structures = load_entry_type_schema("https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/structures")
+    structures = load_entry_type_definition("https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/structures")
     optimization_type = structures.properties["optimization_type"]
     assert optimization_type.nullable
     validate_property(optimization_type, None)
@@ -58,9 +58,7 @@ def test_non_nullable_property_rejects_none() -> None:
 
 
 def test_list_of_list_structures_like() -> None:
-    matrix = PropertyDefinition.from_simple(
-        "_httk_matrix", description="A matrix.", fulltype="list of list of float"
-    )
+    matrix = PropertyDefinition.from_simple("_httk_matrix", description="A matrix.", fulltype="list of list of float")
     validate_property(matrix, [[1.0, 2.0], [3.0, 4.0]])
     with pytest.raises(PropertyValidationError):
         validate_property(matrix, [[1.0, "x"]])  # inner element is not a number
