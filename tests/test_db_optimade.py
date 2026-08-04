@@ -56,25 +56,25 @@ def results(searcher):
 
 
 def test_numeric_comparison_on_fraction_field(store):
-    searcher = optimade_filter_searcher(store, Material, "_httk_x > 1")
+    searcher = optimade_filter_searcher(store, Material, "_httk_custom_x > 1")
     assert results(searcher) == [MAT_2, MAT_3]
 
 
 def test_string_operations(store):
-    searcher = optimade_filter_searcher(store, Material, '_httk_name STARTS WITH "beta"')
+    searcher = optimade_filter_searcher(store, Material, '_httk_custom_name STARTS WITH "beta"')
     assert results(searcher) == [MAT_2]
-    searcher = optimade_filter_searcher(store, Material, '_httk_name CONTAINS "oxide"')
+    searcher = optimade_filter_searcher(store, Material, '_httk_custom_name CONTAINS "oxide"')
     assert results(searcher) == [MAT_1, MAT_3]
-    searcher = optimade_filter_searcher(store, Material, '_httk_name = "gamma oxide"')
+    searcher = optimade_filter_searcher(store, Material, '_httk_custom_name = "gamma oxide"')
     assert results(searcher) == [MAT_3]
 
 
 def test_has_over_list_field(store):
-    searcher = optimade_filter_searcher(store, Material, '_httk_symbols HAS "O"')
+    searcher = optimade_filter_searcher(store, Material, '_httk_custom_symbols HAS "O"')
     assert results(searcher) == [MAT_1, MAT_3]
-    searcher = optimade_filter_searcher(store, Material, '_httk_symbols HAS ALL "O","H"')
+    searcher = optimade_filter_searcher(store, Material, '_httk_custom_symbols HAS ALL "O","H"')
     assert results(searcher) == [MAT_1]
-    searcher = optimade_filter_searcher(store, Material, 'NOT _httk_symbols HAS "O"')
+    searcher = optimade_filter_searcher(store, Material, 'NOT _httk_custom_symbols HAS "O"')
     assert results(searcher) == [MAT_2]
 
 
@@ -82,32 +82,32 @@ def test_combined_scalar_and_related_property_semi_join(store):
     searcher = optimade_filter_searcher(
         store,
         Material,
-        '_httk_x > 1 AND refs._httk_doi CONTAINS "10.2"',
+        '_httk_custom_x > 1 AND refs._httk_custom_doi CONTAINS "10.2"',
         related_classes={"refs": Publication},
     )
     assert results(searcher) == [MAT_2]
     # The doi condition alone matches MAT_1 as well.
     searcher = optimade_filter_searcher(
-        store, Material, 'refs._httk_doi CONTAINS "10."', related_classes={"refs": Publication}
+        store, Material, 'refs._httk_custom_doi CONTAINS "10."', related_classes={"refs": Publication}
     )
     assert results(searcher) == [MAT_1, MAT_2]
 
 
 def test_related_property_comparison_and_not_complement(store):
     searcher = optimade_filter_searcher(
-        store, Material, "refs._httk_year >= 2000", related_classes={"refs": Publication}
+        store, Material, "refs._httk_custom_year >= 2000", related_classes={"refs": Publication}
     )
     assert results(searcher) == [MAT_2]
     # The complement includes the material without any related publication.
     searcher = optimade_filter_searcher(
-        store, Material, "NOT refs._httk_year >= 2000", related_classes={"refs": Publication}
+        store, Material, "NOT refs._httk_custom_year >= 2000", related_classes={"refs": Publication}
     )
     assert results(searcher) == [MAT_1, MAT_3]
 
 
 def test_related_property_no_match_is_empty_not_an_error(store):
     searcher = optimade_filter_searcher(
-        store, Material, 'refs._httk_doi CONTAINS "nomatch"', related_classes={"refs": Publication}
+        store, Material, 'refs._httk_custom_doi CONTAINS "nomatch"', related_classes={"refs": Publication}
     )
     assert results(searcher) == []
 
@@ -147,7 +147,7 @@ def test_child_of_storable_target(store):
     assembly_2 = Assembly("hinge", [part_a])
     store.save(assembly_1)
     store.save(assembly_2)
-    searcher = optimade_filter_searcher(store, Assembly, "parts._httk_val > 2", related_classes={"parts": Part})
+    searcher = optimade_filter_searcher(store, Assembly, "parts._httk_custom_val > 2", related_classes={"parts": Part})
     assert results(searcher) == [assembly_1]
     part_a_sid = store.sid_of(part_a)
     searcher = optimade_filter_searcher(
@@ -158,14 +158,16 @@ def test_child_of_storable_target(store):
 
 def test_nested_dotted_path_not_implemented(store):
     with pytest.raises(FilterTranslationError) as excinfo:
-        optimade_filter_searcher(store, Material, "refs.other._httk_x = 1", related_classes={"refs": Publication})
+        optimade_filter_searcher(
+            store, Material, "refs.other._httk_custom_x = 1", related_classes={"refs": Publication}
+        )
     assert excinfo.value.category == "not-implemented"
 
 
 def test_dotted_filter_without_related_classes_matches_nothing(store):
     # Without related_classes, 'refs' is not a relationship target, so
     # 'refs.<...>' is an unknown (unprefixed) property: it matches nothing.
-    searcher = optimade_filter_searcher(store, Material, 'refs._httk_doi CONTAINS "10."')
+    searcher = optimade_filter_searcher(store, Material, 'refs._httk_custom_doi CONTAINS "10."')
     assert results(searcher) == []
 
 

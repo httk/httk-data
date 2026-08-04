@@ -146,13 +146,13 @@ def served_specs(schema: TableSchema, prefix: str) -> list[tuple[str, FieldSpec,
 
     One triple per servable stored field of ``schema`` (see the module
     docstring for which fields are servable and how their types map), each
-    named ``{prefix}{field}``.
+    named ``{prefix}custom_{field}`` in the ``custom_`` sub-namespace.
     """
     served: list[tuple[str, FieldSpec, str]] = []
     for spec in schema.fields:
         fulltype = _fulltype_of(spec)
         if fulltype is not None:
-            served.append((f"{prefix}{spec.field}", spec, fulltype))
+            served.append((f"{prefix}custom_{spec.field}", spec, fulltype))
     return served
 
 
@@ -161,7 +161,9 @@ def auto_definition(entry_type: str, schema: TableSchema, prefix: str) -> EntryT
 
     The definition carries the OPTIMADE core ``id``/``type`` properties plus
     one :meth:`~httk.core.PropertyDefinition.from_simple` definition per triple
-    of :func:`served_specs`, merged in via
+    of :func:`served_specs`, named in the ``custom_`` sub-namespace of
+    ``prefix`` so generated names cannot collide with curated prefixed
+    definitions, merged in via
     :meth:`~httk.core.EntryTypeDefinition.extended` (so ``prefix`` must be a
     registered definition prefix).
     """

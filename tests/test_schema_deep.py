@@ -42,31 +42,31 @@ def test_exact_codec_projections_and_shallow_checker_output() -> None:
     assert specs["matrix"].shape == Shape(2, 2)
 
     definition = auto_definition("deep", schema, "_httk_")
-    property_keys = {name: f"_httk_{name}" for name in specs}
+    property_keys = {name: f"_httk_custom_{name}" for name in specs}
     assert {property_keys[name]: definition.properties[property_keys[name]].optimade_type for name in specs} == {
-        "_httk_fraction": "float",
-        "_httk_fracscalar": "float",
-        "_httk_surdscalar": "float",
-        "_httk_created": "timestamp",
-        "_httk_matrix": "list",
+        "_httk_custom_fraction": "float",
+        "_httk_custom_fracscalar": "float",
+        "_httk_custom_surdscalar": "float",
+        "_httk_custom_created": "timestamp",
+        "_httk_custom_matrix": "list",
     }
-    assert definition.properties["_httk_matrix"].dimensions == {"names": ["rows", "cols"], "sizes": [2, 2]}
+    assert definition.properties["_httk_custom_matrix"].dimensions == {"names": ["rows", "cols"], "sizes": [2, 2]}
 
     mismatches = check_record_matches_definition(DeepCodecRecord, definition, property_keys=property_keys)
     assert mismatches == [
         (
             "field 'fracscalar' annotation httk.core.vectors.fracvector.FracScalar | None does not match property "
-            "'_httk_fracscalar' type 'float' (field -> property type shape)"
+            "'_httk_custom_fracscalar' type 'float' (field -> property type shape)"
         ),
         (
-            "field 'fraction' annotation fractions.Fraction | None does not match property '_httk_fraction' type "
+            "field 'fraction' annotation fractions.Fraction | None does not match property '_httk_custom_fraction' type "
             "'float' (field -> property type shape)"
         ),
         (
             "field 'surdscalar' annotation httk.core.vectors.surdvector.SurdScalar | None does not match property "
-            "'_httk_surdscalar' type 'float' (field -> property type shape)"
+            "'_httk_custom_surdscalar' type 'float' (field -> property type shape)"
         ),
     ]
     for field in ("fraction", "fracscalar", "surdscalar"):
         assert _fulltype_of(specs[field]) == "float"
-        assert definition.properties[f"_httk_{field}"].optimade_type == "float"
+        assert definition.properties[f"_httk_custom_{field}"].optimade_type == "float"

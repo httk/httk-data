@@ -124,11 +124,11 @@ BOOKS = [
 
 #: OPTIMADE filter strings to run through the serving layer, with the fields to return.
 QUERIES: list[tuple[str, list[str], str]] = [
-    ("books", ["id", "_httk_title", "_httk_pages"], "_httk_pages > 200"),
-    ("books", ["id", "_httk_price"], "_httk_price < 0"),
-    ("books", ["id", "_httk_keywords"], '_httk_keywords HAS "history"'),
-    ("books", ["id", "_httk_title"], '_httk_in_print = TRUE AND _httk_title CONTAINS "o"'),
-    ("writers", ["id", "_httk_name"], "_httk_born = 1820"),
+    ("books", ["id", "_httk_custom_title", "_httk_custom_pages"], "_httk_custom_pages > 200"),
+    ("books", ["id", "_httk_custom_price"], "_httk_custom_price < 0"),
+    ("books", ["id", "_httk_custom_keywords"], '_httk_custom_keywords HAS "history"'),
+    ("books", ["id", "_httk_custom_title"], '_httk_custom_in_print = TRUE AND _httk_custom_title CONTAINS "o"'),
+    ("writers", ["id", "_httk_custom_name"], "_httk_custom_born = 1820"),
 ]
 
 
@@ -148,11 +148,11 @@ def show_provider(provider: StoreEntryProvider) -> None:
     for entry_type, definition in sorted(provider.entry_types().items()):
         print(f"  {entry_type}: {', '.join(sorted(definition.properties))}")
     books = provider.entry_types()["books"].properties
-    print(f"  _httk_price is served as: {books['_httk_price'].optimade_type} (a Fraction in the database)")
-    print(f"  _httk_published is served as: {books['_httk_published'].optimade_type}")
-    print(f"  _httk_nkeywords is served as: {books['_httk_nkeywords'].optimade_type} (a stored_property)")
-    print("  '_httk_cover' (bytes) is absent: no OPTIMADE value representation.")
-    print("  '_httk_author' is absent as a property: references surface as relationships.")
+    print(f"  _httk_custom_price is served as: {books['_httk_custom_price'].optimade_type} (a Fraction in the database)")
+    print(f"  _httk_custom_published is served as: {books['_httk_custom_published'].optimade_type}")
+    print(f"  _httk_custom_nkeywords is served as: {books['_httk_custom_nkeywords'].optimade_type} (a stored_property)")
+    print("  '_httk_custom_cover' (bytes) is absent: no OPTIMADE value representation.")
+    print("  '_httk_custom_author' is absent as a property: references surface as relationships.")
     print()
 
     print("== Records, keyed through property_keys() ==")
@@ -160,8 +160,8 @@ def show_provider(provider: StoreEntryProvider) -> None:
     for record in provider.records("books"):
         served = {name: record[key] for name, key in property_keys.items()}
         print(
-            f"  {served['id']}: title={served['_httk_title']!r}, price={served['_httk_price']}, "
-            f"published={served['_httk_published']!r}, keywords={served['_httk_keywords']}"
+            f"  {served['id']}: title={served['_httk_custom_title']!r}, price={served['_httk_custom_price']}, "
+            f"published={served['_httk_custom_published']!r}, keywords={served['_httk_custom_keywords']}"
         )
     print()
 

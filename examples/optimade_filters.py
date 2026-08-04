@@ -18,9 +18,9 @@ OPTIMADE endpoint in sight. (For the full serving path, see the
 
 An OPTIMADE filter may only mention properties the API declares, and a
 database-specific property must carry a registered provider prefix. The stored
-fields of `cls` are therefore filterable as `_httk_<field>` — `_httk_name`,
-`_httk_x`, `_httk_symbols` — and **not** as the bare field name. This holds
-inside dotted relationship paths too: `refs._httk_doi`, not `refs.doi`.
+fields of `cls` are therefore filterable as `_httk_custom_<field>` — `_httk_custom_name`,
+`_httk_custom_x`, `_httk_custom_symbols` — and **not** as the bare field name. This holds
+inside dotted relationship paths too: `refs._httk_custom_doi`, not `refs.doi`.
 
 The rules for names that do not resolve follow the OPTIMADE specification
 rather than being uniformly strict:
@@ -37,7 +37,7 @@ Everything the grammar offers is available. Comparisons on numeric and string
 properties; `STARTS WITH`, `ENDS WITH` and `CONTAINS` for substrings; and the
 list operators `HAS`, `HAS ALL`, `HAS ANY`, `HAS ONLY` on variable-length
 fields, which map onto the set semantics described in the *searching* example.
-`NOT` negates, with the same set reading: `NOT _httk_symbols HAS "O"` selects
+`NOT` negates, with the same set reading: `NOT _httk_custom_symbols HAS "O"` selects
 the records where *no* symbol is O.
 
 Rational fields (`Fraction` and friends) are stored exactly but compared on
@@ -54,13 +54,13 @@ filters, resolved as a **two-phase semi-join**: a nested filter search over
 then matched against the relationship's own column. Two consequences worth
 knowing:
 
-- `NOT refs._httk_year >= 2000` is the complement over the *parent* rows, so it
+- `NOT refs._httk_custom_year >= 2000` is the complement over the *parent* rows, so it
   includes rows with no related publication at all.
 - A related filter matching nothing yields an empty result, not an error.
 
 Relationship *ids* are filterable as `refs.id HAS "refs-<sid>"`, using the same
 `"<entry type>-<sid>"` ids `StoreEntryProvider` mints by default. Nesting
-deeper than one level (`refs.other._httk_x`) raises `FilterTranslationError`
+deeper than one level (`refs.other._httk_custom_x`) raises `FilterTranslationError`
 with category `"not-implemented"`.
 """
 
@@ -99,36 +99,36 @@ MATERIALS = [
 
 #: Plain filters over the material's own (prefixed) properties.
 PLAIN_FILTERS = [
-    '_httk_name = "gamma oxide"',
-    "_httk_x > 1",
-    "_httk_x <= 2.5 AND _httk_x > 0",
-    '_httk_name STARTS WITH "beta"',
-    '_httk_name CONTAINS "oxide"',
-    '_httk_name ENDS WITH "metal"',
-    '_httk_symbols HAS "O"',
-    '_httk_symbols HAS ALL "O","H"',
-    '_httk_symbols HAS ANY "H","Fe"',
-    '_httk_symbols HAS ONLY "O","H"',
-    'NOT _httk_symbols HAS "O"',
-    '_httk_symbols HAS "O" AND _httk_x > 1',
+    '_httk_custom_name = "gamma oxide"',
+    "_httk_custom_x > 1",
+    "_httk_custom_x <= 2.5 AND _httk_custom_x > 0",
+    '_httk_custom_name STARTS WITH "beta"',
+    '_httk_custom_name CONTAINS "oxide"',
+    '_httk_custom_name ENDS WITH "metal"',
+    '_httk_custom_symbols HAS "O"',
+    '_httk_custom_symbols HAS ALL "O","H"',
+    '_httk_custom_symbols HAS ANY "H","Fe"',
+    '_httk_custom_symbols HAS ONLY "O","H"',
+    'NOT _httk_custom_symbols HAS "O"',
+    '_httk_custom_symbols HAS "O" AND _httk_custom_x > 1',
     'bananas = 3',
 ]
 
 #: Depth-1 filters through the 'refs' relationship, needing related_classes.
 RELATED_FILTERS = [
-    'refs._httk_doi CONTAINS "10."',
-    'refs._httk_doi CONTAINS "10.2"',
-    "refs._httk_year >= 2000",
-    "NOT refs._httk_year >= 2000",
-    '_httk_x > 1 AND refs._httk_doi CONTAINS "10.2"',
-    'refs._httk_doi CONTAINS "nomatch"',
+    'refs._httk_custom_doi CONTAINS "10."',
+    'refs._httk_custom_doi CONTAINS "10.2"',
+    "refs._httk_custom_year >= 2000",
+    "NOT refs._httk_custom_year >= 2000",
+    '_httk_custom_x > 1 AND refs._httk_custom_doi CONTAINS "10.2"',
+    'refs._httk_custom_doi CONTAINS "nomatch"',
 ]
 
 #: Filters that cannot be translated, and the category each reports.
 REJECTED_FILTERS = [
     "_httk_bananas = 3",
     'id = "materials-1"',
-    "refs.other._httk_x = 1",
+    "refs.other._httk_custom_x = 1",
 ]
 
 
@@ -160,7 +160,7 @@ def show_related_filters(store: SqlStore) -> None:
     for filter_string in RELATED_FILTERS:
         searcher = optimade_filter_searcher(store, Material, filter_string, related_classes={"refs": Publication})
         print(f"  {filter_string:<45} -> {names(searcher)}")
-    print("  'NOT refs._httk_year >= 2000' also returns 'gamma oxide', which has no")
+    print("  'NOT refs._httk_custom_year >= 2000' also returns 'gamma oxide', which has no")
     print("  related publication at all: the negation is over the material rows.")
     print()
 

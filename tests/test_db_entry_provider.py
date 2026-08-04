@@ -111,15 +111,15 @@ def test_auto_definition_properties_prefixed_and_core_present(provider):
     definition = provider.entry_types()["books"]
     assert isinstance(definition, EntryTypeDefinition)
     assert sorted(definition.properties) == [
-        "_httk_in_print",
-        "_httk_keywords",
-        "_httk_metric",
-        "_httk_nkeywords",
-        "_httk_pages",
-        "_httk_price",
-        "_httk_published",
-        "_httk_samples",
-        "_httk_title",
+        "_httk_custom_in_print",
+        "_httk_custom_keywords",
+        "_httk_custom_metric",
+        "_httk_custom_nkeywords",
+        "_httk_custom_pages",
+        "_httk_custom_price",
+        "_httk_custom_published",
+        "_httk_custom_samples",
+        "_httk_custom_title",
         "id",
         "type",
     ]
@@ -129,27 +129,27 @@ def test_auto_definition_properties_prefixed_and_core_present(provider):
 
 def test_auto_definition_fulltype_mapping(provider):
     properties = provider.entry_types()["books"].properties
-    assert properties["_httk_title"].optimade_type == "string"
-    assert properties["_httk_pages"].optimade_type == "integer"
-    assert properties["_httk_in_print"].optimade_type == "boolean"
-    assert properties["_httk_price"].optimade_type == "float"  # rational served as float
-    assert properties["_httk_published"].optimade_type == "timestamp"
-    assert properties["_httk_nkeywords"].optimade_type == "integer"  # derived stored property
-    keywords = properties["_httk_keywords"].as_optimade()
+    assert properties["_httk_custom_title"].optimade_type == "string"
+    assert properties["_httk_custom_pages"].optimade_type == "integer"
+    assert properties["_httk_custom_in_print"].optimade_type == "boolean"
+    assert properties["_httk_custom_price"].optimade_type == "float"  # rational served as float
+    assert properties["_httk_custom_published"].optimade_type == "timestamp"
+    assert properties["_httk_custom_nkeywords"].optimade_type == "integer"  # derived stored property
+    keywords = properties["_httk_custom_keywords"].as_optimade()
     assert keywords["x-optimade-type"] == "list"
     assert keywords["items"]["x-optimade-type"] == "string"
-    metric = properties["_httk_metric"].as_optimade()
+    metric = properties["_httk_custom_metric"].as_optimade()
     assert metric["items"]["items"]["x-optimade-type"] == "float"
     assert metric["x-optimade-dimensions"]["sizes"] == [2, 2]
-    samples = properties["_httk_samples"].as_optimade()
+    samples = properties["_httk_custom_samples"].as_optimade()
     assert samples["items"]["items"]["x-optimade-type"] == "float"
 
 
 def test_bytes_reference_and_storable_children_not_served_as_properties(provider):
     properties = provider.entry_types()["books"].properties
-    assert "_httk_cover" not in properties  # bytes: no OPTIMADE value representation
-    assert "_httk_author" not in properties  # reference: surfaces through relationships()
-    assert "_httk_coauthors" not in properties  # child of storables: relationships()
+    assert "_httk_custom_cover" not in properties  # bytes: no OPTIMADE value representation
+    assert "_httk_custom_author" not in properties  # reference: surfaces through relationships()
+    assert "_httk_custom_coauthors" not in properties  # child of storables: relationships()
 
 
 def test_custom_definition_id_under_httk_ad_hoc_base(provider):
@@ -159,7 +159,7 @@ def test_custom_definition_id_under_httk_ad_hoc_base(provider):
     live; a definition synthesized here for a stored field is not published anywhere, and
     ``/ad-hoc/`` says so rather than implying it resolves.
     """
-    definition = provider.entry_types()["books"].properties["_httk_title"]
+    definition = provider.entry_types()["books"].properties["_httk_custom_title"]
     assert definition.definition_id.startswith("https://schemas.httk.org/ad-hoc/defs/properties/")
 
 
@@ -184,7 +184,7 @@ def test_supplied_definition_must_describe_served_properties(store):
             "type": PropertyDefinition.from_simple("type", description="type", required_response=True),
         },
     )
-    with pytest.raises(ValueError, match="_httk_born.*_httk_name|_httk_name"):
+    with pytest.raises(ValueError, match="_httk_custom_born.*_httk_custom_name|_httk_custom_name"):
         StoreEntryProvider(store, {"writers": Writer}, definitions={"writers": incomplete})
 
 
@@ -199,7 +199,12 @@ def test_supplied_definition_for_unserved_entry_type_rejected(store):
 
 def test_property_keys_id_type_and_identity_map(provider):
     property_keys = provider.property_keys("writers")
-    assert property_keys == {"id": "__id", "type": "type", "_httk_name": "_httk_name", "_httk_born": "_httk_born"}
+    assert property_keys == {
+        "id": "__id",
+        "type": "type",
+        "_httk_custom_name": "_httk_custom_name",
+        "_httk_custom_born": "_httk_custom_born",
+    }
     book_keys = provider.property_keys("books")
     assert book_keys["id"] == "__id" and book_keys["type"] == "type"
     served = set(book_keys) - {"id", "type"}
@@ -247,31 +252,31 @@ def test_records_batches_child_field_reads(provider):
 def test_records_values(provider):
     row = rows_by_id(provider, "books")["books-1"]
     assert row["type"] == "books"
-    assert row["_httk_title"] == "Analytical Engines"
-    assert row["_httk_pages"] == 350
-    assert row["_httk_in_print"] is True
-    assert row["_httk_price"] == pytest.approx(float(Fraction(1, 3)))  # rational -> nearest float
-    assert row["_httk_published"] == "2026-07-24T12:30:00+00:00"  # datetime -> ISO text
-    assert row["_httk_metric"] == [[1.0, 0.5], [0.0, 1.0]]  # fixed tensor -> nested lists
-    assert row["_httk_samples"] == [[0.0, 0.0], [0.5, 0.5]]  # variable rows -> list of lists
-    assert row["_httk_keywords"] == ["computing", "history"]
-    assert row["_httk_nkeywords"] == 2
-    assert "_httk_cover" not in row and "_httk_author" not in row and "_httk_coauthors" not in row
+    assert row["_httk_custom_title"] == "Analytical Engines"
+    assert row["_httk_custom_pages"] == 350
+    assert row["_httk_custom_in_print"] is True
+    assert row["_httk_custom_price"] == pytest.approx(float(Fraction(1, 3)))  # rational -> nearest float
+    assert row["_httk_custom_published"] == "2026-07-24T12:30:00+00:00"  # datetime -> ISO text
+    assert row["_httk_custom_metric"] == [[1.0, 0.5], [0.0, 1.0]]  # fixed tensor -> nested lists
+    assert row["_httk_custom_samples"] == [[0.0, 0.0], [0.5, 0.5]]  # variable rows -> list of lists
+    assert row["_httk_custom_keywords"] == ["computing", "history"]
+    assert row["_httk_custom_nkeywords"] == 2
+    assert "_httk_custom_cover" not in row and "_httk_custom_author" not in row and "_httk_custom_coauthors" not in row
 
 
 def test_records_empty_containers(provider):
     row = rows_by_id(provider, "books")["books-2"]
-    assert row["_httk_samples"] == []
-    assert row["_httk_keywords"] == []
-    assert row["_httk_nkeywords"] == 0
-    assert row["_httk_in_print"] is False
+    assert row["_httk_custom_samples"] == []
+    assert row["_httk_custom_keywords"] == []
+    assert row["_httk_custom_nkeywords"] == 0
+    assert row["_httk_custom_in_print"] is False
 
 
 def test_writer_records(provider):
     rows = rows_by_id(provider, "writers")
     assert set(rows) == {"writers-1", "writers-2", "writers-3"}
-    assert rows["writers-1"]["_httk_name"] == "Ada"
-    assert rows["writers-3"]["_httk_born"] == 1820
+    assert rows["writers-1"]["_httk_custom_name"] == "Ada"
+    assert rows["writers-3"]["_httk_custom_born"] == 1820
 
 
 # --------------------------------------------------------------------- relationships
@@ -295,7 +300,7 @@ def test_relationships_across_served_classes(provider):
 def test_relationships_empty_when_target_class_not_served(store):
     provider = StoreEntryProvider(store, {"books": Book})
     assert provider.relationships("books") == {}
-    assert "_httk_author" not in provider.entry_types()["books"].properties
+    assert "_httk_custom_author" not in provider.entry_types()["books"].properties
 
 
 def test_id_of_override_used_in_records_and_relationships(store):
@@ -522,15 +527,27 @@ def test_optimade_adapter_end_to_end(provider):
     assert set(adapter.schema.all_entries) == {"books", "writers"}
 
     results = list(
-        execute_query(adapter, ["books"], ["id", "_httk_title"], [], 100, 0, parse_optimade_filter("_httk_pages > 200"))
+        execute_query(
+            adapter,
+            ["books"],
+            ["id", "_httk_custom_title"],
+            [],
+            100,
+            0,
+            parse_optimade_filter("_httk_custom_pages > 200"),
+        )
     )
     assert [r.values["id"] for r in results] == ["books-1"]
-    assert results[0].values["_httk_title"] == "Analytical Engines"
+    assert results[0].values["_httk_custom_title"] == "Analytical Engines"
 
     results = list(
-        execute_query(adapter, ["books"], ["id"], [], 100, 0, parse_optimade_filter('_httk_keywords HAS "history"'))
+        execute_query(
+            adapter, ["books"], ["id"], [], 100, 0, parse_optimade_filter('_httk_custom_keywords HAS "history"')
+        )
     )
     assert [r.values["id"] for r in results] == ["books-1"]
 
-    results = list(execute_query(adapter, ["writers"], ["id"], [], 100, 0, parse_optimade_filter("_httk_born = 1820")))
+    results = list(
+        execute_query(adapter, ["writers"], ["id"], [], 100, 0, parse_optimade_filter("_httk_custom_born = 1820"))
+    )
     assert [r.values["id"] for r in results] == ["writers-3"]
