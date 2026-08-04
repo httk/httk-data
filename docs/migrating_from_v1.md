@@ -278,7 +278,7 @@ questions.
 
 ```python
 # httk₂
-from httk.data.db import content_id
+from httk.core.storage import content_id
 
 nacl = structures[0]
 sid = store.sid_of(nacl)                                  # was nacl.db.sid

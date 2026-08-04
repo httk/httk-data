@@ -31,14 +31,14 @@ from httk.data.db.entry_provider import served_specs
 from httk.data.db.schema import resolve_schema
 from httk.data.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable
 from httk.data.db.store import SqlStore
-from httk.data.optimade_query import (
+from httk.data.query import Searcher, SearchExpression, SearchVariable
+from httk.data.query.optimade_filters import (
     FilterTranslationError,
     filter_searcher,
     known_unknown_handler,
     set_handler,
     simple_property_handlers,
 )
-from httk.data.query import Searcher, SearchExpression, SearchVariable
 
 __all__ = [
     "optimade_filter_searcher",
@@ -124,7 +124,7 @@ def optimade_filter_searcher(
     ``{prefix}{field}``, with its schema-derived fulltype driving constant
     conversion and handler dispatch (rational fields compare on their
     documented-approximate float query column). Unknown names carrying
-    ``prefix`` raise :class:`~httk.data.optimade_query.FilterTranslationError`
+    ``prefix`` raise :class:`~httk.data.query.optimade_filters.FilterTranslationError`
     (``"unrecognized-property"``); other unknown names match nothing, per the
     OPTIMADE specification. Unprefixed property names (beyond ``id``/``type``)
     are recognized only when a ``definition`` describes them — and even then
@@ -152,7 +152,7 @@ def optimade_filter_searcher(
       ``rcls`` (with the same ``prefix``; no further relationship nesting)
       collects the matching related sids, which are then matched as
       ``<rtype>.id HAS ANY ...``. Each dotted filter node resolves
-      independently — see :func:`~httk.data.optimade_query.translate_filter_ast`.
+      independently — see :func:`~httk.data.query.optimade_filters.translate_filter_ast`.
 
     ``extra_handlers`` entries are merged over the derived handler table last
     (so they can also override derived handlers); extra property names that are
@@ -160,7 +160,7 @@ def optimade_filter_searcher(
     constants pass through unconverted).
 
     Raises:
-        httk.data.optimade_query.FilterTranslationError: When the filter cannot be translated.
+        httk.data.query.optimade_filters.FilterTranslationError: When the filter cannot be translated.
         httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
         ValueError: When a ``related_classes`` entry does not match exactly one
             reference or child-of-storable field of ``cls``.

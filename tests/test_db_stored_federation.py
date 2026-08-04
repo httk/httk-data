@@ -21,7 +21,7 @@ from httk.data.db import (
     StoredEntryFederation,
     StoredEntrySource,
 )
-from httk.data.optimade_query import FilterTranslationError
+from httk.data.query.optimade_filters import FilterTranslationError
 
 CALCULATIONS_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 _RESPONSES: list[str] = []

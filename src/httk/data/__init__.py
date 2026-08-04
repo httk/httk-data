@@ -14,13 +14,14 @@ supplies *capabilities*:
 - the **store/searcher query protocols** (:mod:`httk.data.query`) — the
   backend-agnostic query contract implemented by httk data stores and consumed
   by serving modules; and
-- the **federated store** (:mod:`httk.data.federation`) — ordered, immutable
+- the **federated store** (:mod:`httk.data.federated_store`) — ordered, immutable
   source and target bindings plus lazy sequential union query execution; and
-- the **generic OPTIMADE filter translation** (:mod:`httk.data.optimade_query`)
+- the **generic OPTIMADE filter translation** (:mod:`httk.data.query.optimade_filters`)
   — turning filter syntax trees parsed by
   :func:`httk.core.optimade.parse_optimade_filter` into search expressions over the
-  query protocols (:func:`~httk.data.optimade_query.translate_filter_ast`, :func:`filter_searcher`), with
-  neutral :class:`FilterTranslationError` categories; and
+  query protocols (the machinery in :mod:`httk.data.query.optimade_filters`, including
+  :func:`~httk.data.query.optimade_filters.filter_searcher`), with
+  neutral :class:`~httk.data.query.optimade_filters.FilterTranslationError` categories; and
 
 - the **database storage layer** (:mod:`httk.data.db`, requiring the
   ``httk-data[db]`` extra) — relational storage and querying of plain frozen
@@ -32,6 +33,9 @@ The providers self-register (under ``httk.registry.entries.data``, as
 ``data-references``/``data-files``/``data-calculations``/``data-db-store``)
 when ``httk.core`` discovers the module, so a serving module (such as
 *httk-serve*) can find them through the registry.
+
+.. py:class:: StandardEntryProvider
+   :canonical: httk.data.entry_providers.StandardEntryProvider
 """
 
 from .entry_providers import (
@@ -39,31 +43,14 @@ from .entry_providers import (
     FileEntryProvider,
     ReferenceEntryProvider,
 )
-from .federation import (
-    FederatedExpression,
-    FederatedField,
-    FederatedResultColumn,
+from .federated_store import (
     FederatedResultSet,
     FederatedSearcher,
     FederatedSourceError,
     FederatedStore,
     FederatedStoreError,
     FederatedTarget,
-    FederatedVariable,
 )
-from .optimade_query import (
-    FilterTranslationCategory,
-    FilterTranslationError,
-    HandlerTable,
-    RelatedPropertyResolver,
-    filter_searcher,
-    format_value,
-    invert_op,
-    relationship_id_handler,
-    simple_property_handlers,
-    translate_filter_ast,
-)
-from .portable_query import PortableQueryCapabilities, portable_query_capabilities, portable_query_fields
 from .query import (
     ContinuationToken,
     CountUnavailableError,
@@ -72,6 +59,7 @@ from .query import (
     PageableResultSetLike,
     PageOrder,
     PaginationCursorError,
+    PortableQueryCapabilities,
     ResultPage,
     ResultRow,
     ResultRowLike,
@@ -83,6 +71,13 @@ from .query import (
     SearchVariable,
     Store,
     UnsupportedQueryError,
+    portable_query_capabilities,
+    portable_query_fields,
+)
+from .query.optimade_filters import (
+    FilterTranslationCategory,
+    FilterTranslationError,
+    filter_searcher,
 )
 from .validation import PropertyValidationError, validate_property, validate_record
 
@@ -90,20 +85,15 @@ __all__ = [
     "CalculationEntryProvider",
     "ContinuationToken",
     "CountUnavailableError",
-    "FederatedExpression",
-    "FederatedField",
-    "FederatedResultColumn",
     "FederatedResultSet",
     "FederatedSearcher",
     "FederatedSourceError",
     "FederatedStore",
     "FederatedStoreError",
     "FederatedTarget",
-    "FederatedVariable",
     "FileEntryProvider",
     "FilterTranslationCategory",
     "FilterTranslationError",
-    "HandlerTable",
     "MultipleResultsError",
     "NoResultError",
     "PageOrder",
@@ -112,7 +102,6 @@ __all__ = [
     "PortableQueryCapabilities",
     "PropertyValidationError",
     "ReferenceEntryProvider",
-    "RelatedPropertyResolver",
     "ResultPage",
     "ResultRow",
     "ResultRowLike",
@@ -125,13 +114,8 @@ __all__ = [
     "Store",
     "UnsupportedQueryError",
     "filter_searcher",
-    "format_value",
-    "invert_op",
     "portable_query_capabilities",
     "portable_query_fields",
-    "relationship_id_handler",
-    "simple_property_handlers",
-    "translate_filter_ast",
     "validate_property",
     "validate_record",
 ]

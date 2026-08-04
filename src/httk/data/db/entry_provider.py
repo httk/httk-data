@@ -68,6 +68,7 @@ from httk.data.db.mapping import SID_COLUMN
 from httk.data.db.schema import FieldSpec, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlColumn, _query_index
 from httk.data.db.store import SqlStore, _as_fixed_tensor
+from httk.data.query import ID_FIELD
 
 __all__ = [
     "StoreEntryProvider",
@@ -351,7 +352,7 @@ class StoreEntryProvider(EntryProvider):
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
         self._require_entry_type(entry_type)
-        property_keys = {"id": "__id", "type": "type"}
+        property_keys = {"id": ID_FIELD, "type": "type"}
         property_keys.update({name: name for name, _spec, _fulltype in self._served_specs(entry_type)})
         return property_keys
 
@@ -367,7 +368,7 @@ class StoreEntryProvider(EntryProvider):
         matches: Iterator[tuple[Any, Any]] = ((obj, sid) for (obj, sid), _names in searcher)
         for obj, sid in matches:
             row: dict[str, Any] = {
-                "__id": self._id_of(entry_type, int(sid), obj),
+                ID_FIELD: self._id_of(entry_type, int(sid), obj),
                 "type": entry_type,
             }
             for name, spec, _fulltype in served:

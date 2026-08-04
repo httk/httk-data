@@ -1,6 +1,6 @@
 """Bounded, durable federation of stored entry-family property plans.
 
-Unlike :mod:`httk.data.federation`, which is the general portable query
+Unlike :mod:`httk.data.federated_store`, which is the general portable query
 protocol, this module joins only configured
 :class:`~httk.data.db.store.SqlStore` entry families.
 It can therefore retain a stable backing inventory, push candidate filtering

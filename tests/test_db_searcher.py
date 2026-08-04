@@ -509,7 +509,7 @@ def test_true_handler_filter_matches_rows_with_a_null_scalar(store):
     # End to end through the OPTIMADE translation: `IS KNOWN` on a property the
     # handler table declares always-known routes through true_handler, and must
     # match even though the underlying column is NULL for every row.
-    from httk.data.optimade_query import filter_searcher
+    from httk.data.query.optimade_filters import filter_searcher
 
     searcher = filter_searcher(
         store,

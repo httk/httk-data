@@ -15,6 +15,9 @@ from httk.data.db import (
     SchemaError,
     SqlStore,
     ValueCodec,
+    register_value_codec,
+)
+from httk.data.db.codecs import (
     codec_for,
     codec_named,
     decode_fraction_exact,
@@ -25,7 +28,6 @@ from httk.data.db import (
     encode_fracvector_floats,
     encode_surdscalar_exact,
     known_value_codecs,
-    register_value_codec,
 )
 
 

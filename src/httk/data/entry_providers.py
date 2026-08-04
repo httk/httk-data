@@ -32,6 +32,8 @@ from httk.core import (
     standard_entry_type,
 )
 
+from httk.data.query import ID_FIELD
+
 
 def _normalized_relationships(
     relationships: Mapping[str, Iterable[RelatedEntry]] | None,
@@ -44,7 +46,7 @@ def _normalized_relationships(
 
 def _provider_property_keys(record_type: type[Any]) -> dict[str, str]:
     """The served-property-name to record-key map for a standard entry type."""
-    property_keys = {"id": "__id", "type": "type"}
+    property_keys = {"id": ID_FIELD, "type": "type"}
     property_keys.update({field.name: field.name for field in fields(record_type)})
     return property_keys
 
@@ -75,14 +77,50 @@ def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[
     field_names = [field.name for field in fields(record_type)]
     records: list[dict[str, Any]] = []
     for entry_id, record in entries.items():
-        row: dict[str, Any] = {"__id": entry_id, "type": entry_type}
+        row: dict[str, Any] = {ID_FIELD: entry_id, "type": entry_type}
         for name in field_names:
             row[name] = _json_value(getattr(record, name))
         records.append(row)
     return records
 
 
-class ReferenceEntryProvider(EntryProvider):
+class StandardEntryProvider(EntryProvider):
+    """Shared implementation base for the standard entry providers."""
+
+    def __init__(
+        self,
+        entries: Mapping[str, Any],
+        *,
+        record_type: type[Any],
+        entry_type: str,
+        relationships: Mapping[str, Iterable[RelatedEntry]] | None,
+    ) -> None:
+        self._record_type = record_type
+        self._entry_type = entry_type
+        self._entries = {str(key): record_type.create(value) for key, value in entries.items()}
+        self._relationships = _normalized_relationships(relationships)
+
+    def _check_entry_type(self, entry_type: str) -> None:
+        if entry_type != self._entry_type:
+            raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
+
+    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        return {self._entry_type: standard_entry_type(self._entry_type)}
+
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        self._check_entry_type(entry_type)
+        return _provider_property_keys(self._record_type)
+
+    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        self._check_entry_type(entry_type)
+        return _provider_records(self._entry_type, self._record_type, self._entries)
+
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        self._check_entry_type(entry_type)
+        return self._relationships
+
+
+class ReferenceEntryProvider(StandardEntryProvider):
     """Serves OPTIMADE ``references`` from a mapping of id to :class:`~httk.core.Reference`.
 
     ``relationships`` optionally maps a reference id to its related entries
@@ -95,29 +133,10 @@ class ReferenceEntryProvider(EntryProvider):
         *,
         relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
     ) -> None:
-        self._entries: dict[str, Reference] = {str(key): Reference.create(value) for key, value in entries.items()}
-        self._relationships = _normalized_relationships(relationships)
-
-    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
-        return {"references": standard_entry_type("references")}
-
-    def property_keys(self, entry_type: str) -> Mapping[str, str]:
-        if entry_type != "references":
-            raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
-        return _provider_property_keys(Reference)
-
-    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
-        if entry_type != "references":
-            raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
-        return _provider_records("references", Reference, self._entries)
-
-    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
-        if entry_type != "references":
-            raise KeyError("ReferenceEntryProvider serves only the 'references' entry type.")
-        return self._relationships
+        super().__init__(entries, record_type=Reference, entry_type="references", relationships=relationships)
 
 
-class FileEntryProvider(EntryProvider):
+class FileEntryProvider(StandardEntryProvider):
     """Serves OPTIMADE ``files`` from a mapping of id to :class:`~httk.core.File`.
 
     ``relationships`` optionally maps a file id to its related entries
@@ -131,29 +150,10 @@ class FileEntryProvider(EntryProvider):
         *,
         relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
     ) -> None:
-        self._entries: dict[str, File] = {str(key): File.create(value) for key, value in entries.items()}
-        self._relationships = _normalized_relationships(relationships)
-
-    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
-        return {"files": standard_entry_type("files")}
-
-    def property_keys(self, entry_type: str) -> Mapping[str, str]:
-        if entry_type != "files":
-            raise KeyError("FileEntryProvider serves only the 'files' entry type.")
-        return _provider_property_keys(File)
-
-    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
-        if entry_type != "files":
-            raise KeyError("FileEntryProvider serves only the 'files' entry type.")
-        return _provider_records("files", File, self._entries)
-
-    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
-        if entry_type != "files":
-            raise KeyError("FileEntryProvider serves only the 'files' entry type.")
-        return self._relationships
+        super().__init__(entries, record_type=File, entry_type="files", relationships=relationships)
 
 
-class CalculationEntryProvider(EntryProvider):
+class CalculationEntryProvider(StandardEntryProvider):
     """Serves OPTIMADE ``calculations`` from a mapping of id to :class:`~httk.core.Calculation`.
 
     ``relationships`` optionally maps a calculation id to its related entries
@@ -167,23 +167,4 @@ class CalculationEntryProvider(EntryProvider):
         *,
         relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
     ) -> None:
-        self._entries: dict[str, Calculation] = {str(key): Calculation.create(value) for key, value in entries.items()}
-        self._relationships = _normalized_relationships(relationships)
-
-    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
-        return {"calculations": standard_entry_type("calculations")}
-
-    def property_keys(self, entry_type: str) -> Mapping[str, str]:
-        if entry_type != "calculations":
-            raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
-        return _provider_property_keys(Calculation)
-
-    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
-        if entry_type != "calculations":
-            raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
-        return _provider_records("calculations", Calculation, self._entries)
-
-    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
-        if entry_type != "calculations":
-            raise KeyError("CalculationEntryProvider serves only the 'calculations' entry type.")
-        return self._relationships
+        super().__init__(entries, record_type=Calculation, entry_type="calculations", relationships=relationships)

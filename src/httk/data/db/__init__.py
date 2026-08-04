@@ -6,11 +6,11 @@ stdlib-only marker vocabulary in httk-core (``Indexed``, ``Unique``, ``Skip``,
 The pure-Python foundation lives here:
 
 - :mod:`httk.data.db.schema` — :func:`resolve_schema` reads a storable class
-  into a :class:`TableSchema`, the single source of truth for DDL, inserts,
+  into a :class:`~httk.data.db.schema.TableSchema`, the single source of truth for DDL, inserts,
   selects, and reconstruction;
 - :mod:`httk.data.db.codecs` — the :class:`ValueCodec` registry with exact,
   round-trippable encodings for rationals, surds, and datetimes;
-- :mod:`httk.data.db.identity` — ``canonical_form`` and ``content_id``,
+- :mod:`httk.core.storage` — ``canonical_form`` and ``content_id``,
   the content identity used for deduplication.
 
 These modules import cleanly without sqlalchemy. The SQL layer proper builds
@@ -32,7 +32,7 @@ on them and requires the ``httk-data[db]`` extra (sqlalchemy):
   contract (e.g. as an OPTIMADE API via *httk-serve*);
 - :func:`~httk.data.db.optimade.optimade_filter_searcher` — OPTIMADE-filter
   querying over storable classes, tying the generic filter translation in
-  :mod:`httk.data.optimade_query` to the SQL layer.
+  :mod:`httk.data.query.optimade_filters` to the SQL layer.
 
 The sqlalchemy-backed names are imported lazily on first attribute access, so
 ``import httk.data.db`` keeps working without sqlalchemy; touching them
@@ -42,94 +42,38 @@ without sqlalchemy installed raises :class:`ImportError` naming the extra.
 import importlib
 from typing import Any, Final
 
-from ..query import MultipleResultsError, NoResultError
-from .codecs import (
-    FRACTION_EXACT_FORMAT,
-    FRACVECTOR_EXACT_FORMAT,
-    SURD_EXACT_FORMAT,
-    ScalarKind,
-    ValueCodec,
-    codec_for,
-    codec_named,
-    decode_fraction_exact,
-    decode_fracvector_exact,
-    decode_surdscalar_exact,
-    encode_fraction_exact,
-    encode_fracvector_exact,
-    encode_fracvector_floats,
-    encode_surdscalar_exact,
-    known_value_codecs,
-    register_value_codec,
-)
-from .identity import canonical_form, content_id
-from .schema import (
-    ChildTableSpec,
-    ColumnSpec,
-    FieldRole,
-    FieldSpec,
-    SchemaError,
-    TableSchema,
-    register_schema_override,
-    resolve_schema,
-    snake_case,
-)
+from ..query import MultipleResultsError, NoResultError, ResultRow
+from .codecs import ValueCodec, register_value_codec
+from .schema import SchemaError, register_schema_override, resolve_schema
 
 STORAGE_PROTOCOL_VERSION: Final = "v2.0.3"
 """The current persisted ``SqlStore`` physical-layout protocol."""
 
 __all__ = [
-    "FRACTION_EXACT_FORMAT",
-    "FRACVECTOR_EXACT_FORMAT",
     "STORAGE_PROTOCOL_VERSION",
-    "SURD_EXACT_FORMAT",
-    "ChildTableSpec",
-    "ColumnSpec",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
-    "FieldRole",
-    "FieldSpec",
     "MultipleResultsError",
     "NoResultError",
     "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
     "ResultRow",  # pyright: ignore[reportUnsupportedDunderAll]
-    "ScalarKind",
     "SchemaError",
-    "SqlColumn",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "SqlExpression",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlResultSet",  # pyright: ignore[reportUnsupportedDunderAll]
     "SqlSearcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "SqlVariable",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
-    "StoredEntryOrigin",  # pyright: ignore[reportUnsupportedDunderAll]
-    "StoredEntryPage",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntrySource",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredPropertySqlConfigurationError",  # pyright: ignore[reportUnsupportedDunderAll]
-    "StoredPropertySqlPlan",  # pyright: ignore[reportUnsupportedDunderAll]
-    "TableSchema",
     "ValueCodec",
-    "canonical_form",
-    "codec_for",
-    "codec_named",
-    "content_id",
-    "decode_fraction_exact",
-    "decode_fracvector_exact",
-    "decode_surdscalar_exact",
-    "encode_fraction_exact",
-    "encode_fracvector_exact",
-    "encode_fracvector_floats",
-    "encode_surdscalar_exact",
-    "known_value_codecs",
     "optimade_filter_searcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "register_schema_override",
     "register_value_codec",
     "resolve_schema",
-    "snake_case",
     "stored_property_sql_plan",  # pyright: ignore[reportUnsupportedDunderAll]
 ]
 
@@ -138,24 +82,17 @@ _SQL_EXPORTS = {
     "EntryMetadataConflictError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",
-    "SqlVariable": ".searcher",
-    "SqlColumn": ".searcher",
-    "SqlExpression": ".searcher",
     "StoreEntryProvider": ".entry_provider",
     "StoredEntryFederation": ".stored_federation",
-    "StoredEntryOrigin": ".stored_federation",
-    "StoredEntryPage": ".stored_federation",
     "StoredEntrySource": ".stored_federation",
     "DuplicateEntryIdError": ".stored_federation",
     "StoredPropertySqlConfigurationError": ".stored_properties",
-    "StoredPropertySqlPlan": ".stored_properties",
     "StorageLayoutUpgradeRequiredError": ".layout",
     "optimade_filter_searcher": ".optimade",
     "stored_property_sql_plan": ".stored_properties",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",
     "ResultColumn": ".results",
-    "ResultRow": ".results",
     "SqlResultSet": ".results",
 }
 

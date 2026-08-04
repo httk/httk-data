@@ -36,10 +36,13 @@ import fractions
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
 from httk.core.storage import register_canonical_encoder
+
+if TYPE_CHECKING:
+    import httk.data.db.codecs
 
 __all__ = [
     "FRACTION_EXACT_FORMAT",
@@ -90,7 +93,7 @@ class ValueCodec:
     python_type: type
     """The Python type this codec stores; matched exactly first, then by subclass."""
 
-    columns: tuple[tuple[str, ScalarKind], ...]
+    columns: "tuple[tuple[str, httk.data.db.codecs.ScalarKind], ...]"
     """The ``(column name suffix, scalar kind)`` pairs the codec encodes into."""
 
     encode: Callable[[Any], tuple[Any, ...]]

@@ -48,7 +48,7 @@ from httk.data.db.rows import RowHydrator
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
 from httk.data.db.store import SqlStore
-from httk.data.optimade_query import (
+from httk.data.query.optimade_filters import (
     FilterTranslationError,
     HandlerTable,
     constant_comparison_handler,
@@ -587,7 +587,6 @@ class StoredPropertySqlPlan:
                 predicate = translate_filter_ast(
                     ast,
                     cast(Any, variable),
-                    self.entry_type,
                     _property_fulltypes(self.definition),
                     handlers,
                     known_definition_prefixes(),

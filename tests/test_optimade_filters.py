@@ -1,4 +1,4 @@
-"""Tests for the generic OPTIMADE filter translation (httk.data.optimade_query)."""
+"""Tests for the generic OPTIMADE filter translation (httk.data.query.optimade_filters)."""
 
 from collections.abc import Iterator
 from typing import Any
@@ -7,7 +7,8 @@ import pytest
 from httk.core.optimade import parse_optimade_filter
 from httk.core.report import collect_reports
 
-from httk.data.optimade_query import (
+from httk.data.query import SearchResult
+from httk.data.query.optimade_filters import (
     FilterTranslationError,
     filter_searcher,
     format_value,
@@ -16,7 +17,6 @@ from httk.data.optimade_query import (
     simple_property_handlers,
     translate_filter_ast,
 )
-from httk.data.query import SearchResult
 
 # ---------------------------------------------------------------------- a minimal fake store
 
@@ -196,7 +196,6 @@ def translate(filter_string, *, relationship_targets=(), resolver=None, handlers
     return translate_filter_ast(
         parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string,
         search_variable,
-        "structures",
         FULLTYPES,
         handlers if handlers is not None else make_handlers(),
         ("_httk_",),

@@ -16,8 +16,8 @@ The translation is driven by three inputs:
   ..."``), used to type-check and convert filter constants;
 - ``handlers`` — a :data:`HandlerTable` mapping property names to the callables
   that build the actual search expressions (see
-  :func:`simple_property_handlers` for the generic property-key-driven builder,
-  and :func:`~httk.data.optimade_query.relationship_id_handler` for ``<type>.id`` relationship entries);
+  :func:`~httk.data.query.optimade_filters.simple_property_handlers` for the generic property-key-driven builder,
+  and :func:`~httk.data.query.optimade_filters.relationship_id_handler` for ``<type>.id`` relationship entries);
 - ``recognized_prefixes`` — property-name prefixes the serving side claims:
   an unknown property carrying such a prefix is an error
   (``"unrecognized-property"``), while any other unknown property silently
@@ -31,7 +31,7 @@ transport's error codes.
 supported for relationship types named in ``relationship_targets``:
 ``<type>.id HAS ...`` translates directly through the handler table, and any
 other depth-1 dotted filter is resolved by a two-phase semi-join through a
-supplied :data:`RelatedPropertyResolver` (see :func:`~httk.data.optimade_query.translate_filter_ast`).
+supplied :data:`RelatedPropertyResolver` (see :func:`~httk.data.query.optimade_filters.translate_filter_ast`).
 Each dotted filter node is resolved *independently*: in ``references.doi
 CONTAINS "x" AND references.year >= 2000``, some related reference must match
 the doi condition and some (possibly different) related reference must match
@@ -43,11 +43,12 @@ import decimal
 import logging
 import operator
 from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Any, Literal, Self
 
 from httk.core.optimade import FilterAst, parse_optimade_filter
 
-from httk.data.query import Searcher, SearchExpression, SearchVariable, Store
+from httk.data.query import ID_FIELD, Searcher, SearchExpression, SearchVariable, Store
 from httk.data.validation import _is_rfc3339_datetime
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,7 +108,7 @@ search_variable, has_type)`` and returns a plain
 :class:`~httk.data.query.SearchExpression`. The caller applies ``NOT`` as
 ``~``; handlers do not receive negation state or report post-filter placement.
 Dotted ``'<type>.id'`` entries provide relationship-id filtering (see
-:func:`~httk.data.optimade_query.relationship_id_handler`).
+:func:`~httk.data.query.optimade_filters.relationship_id_handler`).
 """
 
 type RelatedPropertyResolver = Callable[[str, FilterAst], tuple[str, ...]]
@@ -144,9 +145,9 @@ class FilterTranslationError(Exception):
         self.detail = detail
 
 
-constant_types = ['String', 'Number', 'Boolean']
+constant_types = ('String', 'Number', 'Boolean')
 
-invert_op = {'!=': '!=', '>': '<', '<': '>', '=': '=', '<=': '>=', '>=': '<='}
+invert_op = MappingProxyType({'!=': '!=', '>': '<', '<': '>', '=': '=', '<=': '>=', '>=': '<='})
 _python_opmap = {
     '!=': '__ne__',
     '>': '__gt__',
@@ -328,7 +329,7 @@ def constant_comparison_handler(val1: Any, op: str, val2: Any, search_variable: 
 
     ``val1`` is the *value being compared* and ``val2`` the *filter constant*,
     the same left-to-right convention as :func:`constant_set_handler`;
-    :func:`~httk.data.optimade_query.translate_filter_ast` has already inverted ``op`` for
+    :func:`~httk.data.query.optimade_filters.translate_filter_ast` has already inverted ``op`` for
     constant-on-the-left filters, so this ordering is the filter's own.
     """
     if getattr(operator, _python_opmap[op])(val1, val2):
@@ -423,12 +424,10 @@ def constant_set_handler(
 def translate_filter_ast(
     node: FilterAst,
     search_variable: SearchVariable,
-    entry_type: str,
     property_fulltypes: Mapping[str, str],
     handlers: HandlerTable,
     recognized_prefixes: tuple[str, ...],
     *,
-    recursion: int = 0,
     relationship_targets: tuple[str, ...] = (),
     related_property_resolver: RelatedPropertyResolver | None = None,
 ) -> SearchExpression:
@@ -438,8 +437,7 @@ def translate_filter_ast(
     :func:`httk.core.optimade.parse_optimade_filter`); ``search_variable`` is the
     backend search variable the expression is built against;
     ``property_fulltypes``, ``handlers``, and ``recognized_prefixes`` drive the
-    translation as described in the module docstring; ``recursion`` counts the
-    nesting depth.
+    translation as described in the module docstring.
 
     Returns the translated expression, ready to hand to
     :meth:`~httk.data.query.Searcher.add`. ``NOT`` translates to the backend's
@@ -475,11 +473,9 @@ def translate_filter_ast(
         return translate_filter_ast(
             sub_node,
             search_variable,
-            entry_type,
             property_fulltypes,
             handlers,
             recognized_prefixes,
-            recursion=recursion + 1,
             relationship_targets=relationship_targets,
             related_property_resolver=related_property_resolver,
         )
@@ -693,7 +689,7 @@ def simple_property_handlers(
 ) -> dict[str, Mapping[str, Callable[..., Any]]]:
     """Build a filter handler table for an entry type from a property-key map.
 
-    Always provides the standard ``id`` (matched against the ``__id`` field)
+    Always provides the standard ``id`` (matched against the :data:`~httk.data.query.protocols.ID_FIELD` field)
     and ``type`` (a constant equal to ``entry_type``) handlers. For every
     property named in ``property_keys`` (which maps property names to backend
     field names), handlers are generated from the property's fulltype in
@@ -705,9 +701,9 @@ def simple_property_handlers(
     """
     handlers: dict[str, Mapping[str, Callable[..., Any]]] = {
         'id': {
-            'comparison': lambda entry, op, value, sv: string_handler('__id', op, value, sv),
+            'comparison': lambda entry, op, value, sv: string_handler(ID_FIELD, op, value, sv),
             'unknown': known_unknown_handler,
-            'stringmatching': lambda entry, value, smtype, sv: stringmatching_handler('__id', value, smtype, sv),
+            'stringmatching': lambda entry, value, smtype, sv: stringmatching_handler(ID_FIELD, value, smtype, sv),
         },
         'type': {
             # The property's own value (``entry_type``) is the LEFT operand and
@@ -748,7 +744,7 @@ def relationship_id_handler(rel_key: str) -> Mapping[str, Callable[..., Any]]:
     ``rel_key`` names a list-valued backend field holding the related entry
     ids; the returned ``{'HAS': ...}`` mapping serves ``<type>.id HAS ...``
     filters (and the semi-join rewrites of other dotted filters) with the
-    standard set-operation semantics of :func:`~httk.data.optimade_query.set_handler`.
+    standard set-operation semantics of :func:`~httk.data.query.optimade_filters.set_handler`.
     """
     return {
         'HAS': lambda entry, ops, values, sv, has_type: set_handler(rel_key, ops, values, has_type, sv),
@@ -779,11 +775,11 @@ def filter_searcher(
     ``target`` (the store-specific query target, declared as the searcher
     output named ``entry_type``) and applies the translated filter. When
     ``handlers`` is not supplied, a default table is built with
-    :func:`simple_property_handlers` from ``property_keys`` (or, when
+    :func:`~httk.data.query.optimade_filters.simple_property_handlers` from ``property_keys`` (or, when
     ``property_keys`` is also None, from an identity map over
     ``property_fulltypes``). The
     remaining keyword arguments are passed through to
-    :func:`~httk.data.optimade_query.translate_filter_ast`.
+    :func:`~httk.data.query.optimade_filters.translate_filter_ast`.
 
     Raises:
         FilterTranslationError: When the filter cannot be translated.
@@ -801,7 +797,6 @@ def filter_searcher(
         translate_filter_ast(
             filter_ast,
             search_variable,
-            entry_type,
             property_fulltypes,
             handlers,
             recognized_prefixes,

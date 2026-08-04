@@ -657,18 +657,11 @@ class FederatedSearcher:
             raise ValueError("this federated searcher has no query variable; call variable() first")
         return self._variable
 
-    @staticmethod
-    def _field(variable: SearchVariable, path: tuple[str, ...]) -> SearchField:
-        return _child_field(variable, path)
-
-    def _replay(self, ast: _FederatedAst, variable: SearchVariable) -> SearchExpression:
-        return _replay_ast(ast, variable)
-
     def _validate(self, ast: _FederatedAst, operation: str) -> None:
         variable = self._require_variable()
         for source, child_variable in variable._variables.items():
             try:
-                self._replay(ast, child_variable)
+                _replay_ast(ast, child_variable)
             except Exception as exc:
                 raise _source_error(source, operation, exc) from exc
 
@@ -684,7 +677,7 @@ class FederatedSearcher:
             raise UnsupportedQueryError("federated queries accept expressions from this searcher only")
         for source, child_variable in variable._variables.items():
             try:
-                self._prototypes[source].add(self._replay(expression._ast, child_variable))
+                self._prototypes[source].add(_replay_ast(expression._ast, child_variable))
             except Exception as exc:
                 raise _source_error(source, "add", exc) from exc
         self._expressions.append(expression._ast)
@@ -721,7 +714,7 @@ class FederatedSearcher:
                 child_value = (
                     child_variable
                     if field_path is None
-                    else self._field(cast(SearchVariable, child_variable), field_path)
+                    else _child_field(cast(SearchVariable, child_variable), field_path)
                 )
                 child_searcher.output(child_value, name)
             except Exception as exc:

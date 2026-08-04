@@ -18,7 +18,8 @@ from httk.core.storage import (
     stored_property,
 )
 
-from httk.data.db import SchemaError, register_schema_override, resolve_schema, snake_case
+from httk.data.db import SchemaError, register_schema_override, resolve_schema
+from httk.data.db.schema import snake_case
 
 
 @dataclass(frozen=True)
@@ -112,9 +113,7 @@ class DerivedRecord:
 
 @dataclass(frozen=True)
 class CompositeIndexRecord:
-    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
-        indexes=(("spacegroup", "formula"), ("reference", "ratio"))
-    )
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(indexes=(("spacegroup", "formula"), ("reference", "ratio")))
     formula: str
     spacegroup: int
     ratio: Fraction

@@ -1,4 +1,4 @@
-"""Tests for content identity (httk.data.db.identity)."""
+"""Tests for content identity (httk.core.storage)."""
 
 import datetime
 import string
@@ -7,9 +7,7 @@ from fractions import Fraction
 from typing import Annotated
 
 from httk.core import FracVector
-from httk.core.storage import Shape, Skip, stored_property
-
-from httk.data.db import canonical_form, content_id
+from httk.core.storage import Shape, Skip, canonical_form, content_id, stored_property
 
 
 @dataclass(frozen=True)

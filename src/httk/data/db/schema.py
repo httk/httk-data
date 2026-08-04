@@ -7,7 +7,7 @@ marker vocabulary from httk-core (:class:`~httk.core.storage.Indexed`,
 :func:`resolve_schema` reads the class once — dataclass fields, ``Annotated``
 markers, stored properties, and the optional class-level or externally
 registered :class:`~httk.core.storage.StorageInfo` — and produces a
-:class:`TableSchema`, the single source of truth from which the SQL layer
+:class:`~httk.data.db.schema.TableSchema`, the single source of truth from which the SQL layer
 derives DDL, inserts, selects, and reconstruction alike.
 
 Resolution rules (field annotation, then the resulting relational shape):
@@ -83,7 +83,6 @@ __all__ = [
     "TableSchema",
     "register_schema_override",
     "resolve_schema",
-    "snake_case",
 ]
 
 type FieldRole = Literal["scalar", "encoded", "fixed_array", "child", "reference"]
@@ -256,13 +255,13 @@ def register_schema_override(cls: type, info: StorageInfo) -> None:
 
 
 def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSchema:
-    """Resolve (and cache) the :class:`TableSchema` of a storable dataclass.
+    """Resolve (and cache) the :class:`~httk.data.db.schema.TableSchema` of a storable dataclass.
 
     The effective :class:`~httk.core.storage.StorageInfo` is, in order of precedence:
     the explicit ``override`` argument, an info registered via
     :func:`register_schema_override`, the class's own ``__httk_storage__``
     attribute, or defaults. Results are cached per ``(class, effective
-    override)``, so repeated calls return the same :class:`TableSchema` object.
+    override)``, so repeated calls return the same :class:`~httk.data.db.schema.TableSchema` object.
     Reference cycles (a class referencing itself, or mutually referencing
     classes) are allowed and resolve without recursion loops.
 

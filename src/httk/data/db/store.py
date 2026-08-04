@@ -2,7 +2,7 @@
 
 :class:`SqlStore` is the object-level storage API on top of the schema IR
 (:mod:`httk.data.db.schema`), the value codecs (:mod:`httk.data.db.codecs`),
-the content identity (:mod:`httk.data.db.identity`), and the SQLAlchemy table
+the content identity (:mod:`httk.core.storage`), and the SQLAlchemy table
 mapping (:mod:`httk.data.db.mapping`):
 
 - :meth:`SqlStore.save` writes an instance (recursing into referenced and

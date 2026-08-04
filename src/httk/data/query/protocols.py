@@ -10,9 +10,10 @@ stand in for a real store in tests.
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, Protocol, Self
+from typing import Any, Final, Literal, NamedTuple, Protocol, Self
 
 __all__ = [
+    "ID_FIELD",
     "ContinuationToken",
     "CountUnavailableError",
     "MultipleResultsError",
@@ -32,6 +33,9 @@ __all__ = [
     "Store",
     "UnsupportedQueryError",
 ]
+
+ID_FIELD: Final = "__id"
+"""The backend field name used for the served entry identifier."""
 
 
 class UnsupportedQueryError(ValueError):

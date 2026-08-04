@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 
 from httk.data.db import Database, SqlStore, optimade_filter_searcher
-from httk.data.optimade_query import FilterTranslationError
+from httk.data.query.optimade_filters import FilterTranslationError
 
 
 @dataclass(frozen=True)
