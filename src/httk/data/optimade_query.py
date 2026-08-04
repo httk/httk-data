@@ -40,6 +40,7 @@ the year condition.
 
 import datetime
 import decimal
+import logging
 import operator
 from collections.abc import Callable, Mapping
 from typing import Any, Literal, Self
@@ -48,6 +49,8 @@ from httk.core.optimade import FilterAst, parse_optimade_filter
 
 from httk.data.query import Searcher, SearchExpression, SearchVariable, Store
 from httk.data.validation import _is_rfc3339_datetime
+
+_LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "FilterTranslationCategory",
@@ -79,6 +82,15 @@ __all__ = [
     "unknown_stringmatching_handler",
     "unknown_unknown_handler",
 ]
+
+
+def _warn_unknown_property(name: str) -> None:
+    _LOGGER.warning(
+        "filter references unknown property %r; treated as a property with unknown value",
+        name,
+        extra={"context": "optimade"},
+    )
+
 
 type FilterTranslationCategory = Literal["unrecognized-property", "not-implemented", "type-mismatch", "internal"]
 """Why a filter could not be translated (see :class:`FilterTranslationError`)."""
@@ -531,7 +543,7 @@ def translate_filter_ast(
                     "Filter invokes unrecognized property name: " + left[1], "unrecognized-property"
                 )
             else:
-                # TODO: this should warn
+                _warn_unknown_property(left[1])
                 has_handler = unknown_has_handler
                 values = format_value('list of unknown', right)
         else:
@@ -569,7 +581,7 @@ def translate_filter_ast(
                     "Filter invokes unrecognized property name: " + left[1], "unrecognized-property"
                 )
             else:
-                # TODO: this should warn
+                _warn_unknown_property(left[1])
                 length_handler = unknown_length_handler
                 value = format_value('unknown', right)
         else:
@@ -607,7 +619,7 @@ def translate_filter_ast(
                         "Filter invokes unrecognized property name: " + left[1], "unrecognized-property"
                     )
                 else:
-                    # TODO: this should warn
+                    _warn_unknown_property(left[1])
                     comparison_handler = unknown_comparison_handler
                     value = format_value('unknown', right)
             else:
@@ -635,7 +647,7 @@ def translate_filter_ast(
                     "Filter invokes unrecognized property name: " + left[1], "unrecognized-property"
                 )
             else:
-                # TODO: this should warn
+                _warn_unknown_property(left[1])
                 stringmatching = unknown_stringmatching_handler
                 value = format_value('unknown', right)
         else:
@@ -658,7 +670,7 @@ def translate_filter_ast(
                     "Filter invokes unrecognized property name: " + left[1], "unrecognized-property"
                 )
             else:
-                # TODO: this should warn
+                _warn_unknown_property(left[1])
                 unknown_handler = unknown_unknown_handler
         else:
             unknown_handler = handlers.get(left[1], {}).get('unknown')

@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from httk.core.optimade import parse_optimade_filter
+from httk.core.report import collect_reports
 
 from httk.data.optimade_query import (
     FilterTranslationError,
@@ -366,6 +367,21 @@ def test_not_comparison():
 def test_unknown_nonprefixed_property_matches_nothing():
     expr = translate("bananas = 3")
     assert expr.tree == FALSE_TREE
+
+
+def test_unknown_provider_prefixed_property_warns_for_comparison_and_has():
+    unknown_property = "_unknownprov_foo"
+    with collect_reports() as collection:
+        translate(f"{unknown_property} = 3")
+        translate(f'{unknown_property} HAS "x"')
+
+    assert len(collection.records) == 2
+    assert all(unknown_property in record.getMessage() for record in collection.records)
+    assert all("optimade" in record.context for record in collection.records)
+
+    with collect_reports() as recognized_collection:
+        translate("nelements = 3")
+    assert recognized_collection.records == []
 
 
 def test_unknown_prefixed_property_raises_unrecognized_property():

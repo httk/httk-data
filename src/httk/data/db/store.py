@@ -646,7 +646,9 @@ class SqlStore:
         if type(source) is record_type and validation_key not in projection.validated:
             validator = vars(record_type).get("__httk_validate__")
             if validator is not None:
-                record_type.__httk_validate__(source)
+                # Bind the descriptor fetched from the class's own dict; the
+                # own-dict lookup (not getattr) keeps inherited validators out.
+                validator.__get__(None, record_type)(source)
             projection.validated.add(validation_key)
 
         key: str | None = None
