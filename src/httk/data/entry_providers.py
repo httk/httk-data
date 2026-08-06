@@ -182,7 +182,6 @@ class CalculationEntryProvider(StandardEntryProvider):
 def _entry_definition(
     entry_type: str,
     definition_id: str,
-    category: str,
     properties: Mapping[str, PropertyDefinition],
 ) -> EntryTypeDefinition:
     base = load_entry_type_definition(definition_id)
@@ -192,7 +191,6 @@ def _entry_definition(
         properties,
         definition_id=None,
         extends_id=definition_id,
-        category=category,
     )
 
 
@@ -204,7 +202,7 @@ def _runs_definition() -> EntryTypeDefinition:
     properties["_httk_workflow_declaration_uri"] = PropertyDefinition.from_optimade(
         "_httk_workflow_declaration_uri", workflow.as_optimade()
     )
-    return _entry_definition("_httk_runs", RUNS_DEFINITION_ID, "execution", properties)
+    return _entry_definition("_httk_runs", RUNS_DEFINITION_ID, properties)
 
 
 class RunEntryProvider(EntryProvider):
@@ -302,7 +300,7 @@ class DataRecordEntryProvider(EntryProvider):
         base = load_entry_type_definition(RECORDS_DEFINITION_ID)
         properties = dict(base.properties)
         properties.update(resolved)
-        self._definition = _entry_definition(self._entry_type, RECORDS_DEFINITION_ID, "data", properties)
+        self._definition = _entry_definition(self._entry_type, RECORDS_DEFINITION_ID, properties)
 
     def _check_entry_type(self, entry_type: str) -> None:
         if entry_type != self._entry_type:

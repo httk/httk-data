@@ -49,7 +49,6 @@ def test_run_provider_serves_rows_and_relationships() -> None:
     run = _run()
     provider = RunEntryProvider({"run-key": run, "run-map": {"workflow_declaration_uri": None}})
     definition = provider.entry_types()['_httk_runs']
-    assert definition.category == "execution"
     assert set(definition.properties) == {
         "id",
         "type",
