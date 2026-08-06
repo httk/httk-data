@@ -148,7 +148,9 @@ def show_provider(provider: StoreEntryProvider) -> None:
     for entry_type, definition in sorted(provider.entry_types().items()):
         print(f"  {entry_type}: {', '.join(sorted(definition.properties))}")
     books = provider.entry_types()["books"].properties
-    print(f"  _httk_custom_price is served as: {books['_httk_custom_price'].optimade_type} (a Fraction in the database)")
+    print(
+        f"  _httk_custom_price is served as: {books['_httk_custom_price'].optimade_type} (a Fraction in the database)"
+    )
     print(f"  _httk_custom_published is served as: {books['_httk_custom_published'].optimade_type}")
     print(f"  _httk_custom_nkeywords is served as: {books['_httk_custom_nkeywords'].optimade_type} (a stored_property)")
     print("  '_httk_custom_cover' (bytes) is absent: no OPTIMADE value representation.")
