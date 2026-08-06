@@ -40,8 +40,11 @@ when ``httk.core`` discovers the module, so a serving module (such as
 
 from .entry_providers import (
     CalculationEntryProvider,
+    DataRecordEntryProvider,
     FileEntryProvider,
     ReferenceEntryProvider,
+    RunEntryProvider,
+    product_relationships,
 )
 from .federated_store import (
     FederatedResultSet,
@@ -85,6 +88,7 @@ __all__ = [
     "CalculationEntryProvider",
     "ContinuationToken",
     "CountUnavailableError",
+    "DataRecordEntryProvider",
     "FederatedResultSet",
     "FederatedSearcher",
     "FederatedSourceError",
@@ -106,6 +110,7 @@ __all__ = [
     "ResultRow",
     "ResultRowLike",
     "ResultSetLike",
+    "RunEntryProvider",
     "SearchExpression",
     "SearchField",
     "SearchResult",
@@ -116,6 +121,7 @@ __all__ = [
     "filter_searcher",
     "portable_query_capabilities",
     "portable_query_fields",
+    "product_relationships",
     "validate_property",
     "validate_record",
 ]

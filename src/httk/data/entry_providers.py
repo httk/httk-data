@@ -20,17 +20,26 @@ dataclasses the same way.
 import datetime
 from collections.abc import Iterable, Mapping
 from dataclasses import fields
+from functools import cache
 from typing import Any
 
 from httk.core import (
     Calculation,
+    DataRecord,
     EntryProvider,
     EntryTypeDefinition,
     File,
+    ProductLink,
+    PropertyDefinition,
     Reference,
     RelatedEntry,
+    Run,
+    load_entry_type_definition,
+    load_property_definition,
     standard_entry_type,
 )
+from httk.core.data_records import RECORDS_DEFINITION_ID
+from httk.core.provenance import RUNS_DEFINITION_ID
 
 from httk.data.query import ID_FIELD
 
@@ -168,3 +177,182 @@ class CalculationEntryProvider(StandardEntryProvider):
         relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
     ) -> None:
         super().__init__(entries, record_type=Calculation, entry_type="calculations", relationships=relationships)
+
+
+def _entry_definition(
+    entry_type: str,
+    definition_id: str,
+    category: str,
+    properties: Mapping[str, PropertyDefinition],
+) -> EntryTypeDefinition:
+    base = load_entry_type_definition(definition_id)
+    return EntryTypeDefinition(
+        entry_type,
+        base.description,
+        properties,
+        definition_id=None,
+        extends_id=definition_id,
+        category=category,
+    )
+
+
+@cache
+def _runs_definition() -> EntryTypeDefinition:
+    base = load_entry_type_definition(RUNS_DEFINITION_ID)
+    properties = {name: base.properties[name] for name in ("id", "type", "immutable_id", "last_modified")}
+    workflow = base.properties["workflow_declaration_uri"]
+    properties["_httk_workflow_declaration_uri"] = PropertyDefinition.from_optimade(
+        "_httk_workflow_declaration_uri", workflow.as_optimade()
+    )
+    return _entry_definition("_httk_runs", RUNS_DEFINITION_ID, "execution", properties)
+
+
+class RunEntryProvider(EntryProvider):
+    """Serve core :class:`~httk.core.Run` records and their provenance edges."""
+
+    _entry_type = "_httk_runs"
+
+    def __init__(self, entries: Mapping[str, Run | Mapping[str, Any]]) -> None:
+        self._entries = {str(key): Run.create(value) for key, value in entries.items()}
+
+    def _check_entry_type(self, entry_type: str) -> None:
+        if entry_type != self._entry_type:
+            raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
+
+    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        return {self._entry_type: _runs_definition()}
+
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        self._check_entry_type(entry_type)
+        return {
+            "id": ID_FIELD,
+            "type": "type",
+            "immutable_id": "immutable_id",
+            "last_modified": "last_modified",
+            "_httk_workflow_declaration_uri": "workflow_declaration_uri",
+        }
+
+    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        self._check_entry_type(entry_type)
+        for entry_id, run in self._entries.items():
+            yield {
+                ID_FIELD: entry_id,
+                "type": self._entry_type,
+                "immutable_id": run.immutable_id,
+                "last_modified": _json_value(run.last_modified),
+                "workflow_declaration_uri": run.workflow_declaration_uri,
+            }
+
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        self._check_entry_type(entry_type)
+        return {
+            entry_id: tuple(
+                RelatedEntry(edge.entry_type, edge.entry_id, role=role, label=edge.label)
+                for role, edges in (("input", run.inputs), ("artifact", run.artifacts), ("output", run.outputs))
+                for edge in edges
+            )
+            for entry_id, run in self._entries.items()
+        }
+
+
+class DataRecordEntryProvider(EntryProvider):
+    """Serve core :class:`~httk.core.DataRecord` values as provider properties."""
+
+    _entry_type = "_httk_records"
+
+    def __init__(
+        self,
+        entries: Mapping[str, DataRecord | Mapping[str, Any]],
+        *,
+        definitions: Mapping[str, PropertyDefinition] | None = None,
+        relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
+    ) -> None:
+        self._entries = {str(key): DataRecord.create(value) for key, value in entries.items()}
+        self._relationships = _normalized_relationships(relationships)
+        resolved = dict(definitions or {})
+        for name in resolved:
+            if not name.startswith("_"):
+                raise ValueError(f"served property name {name!r} must start with '_'")
+        for key, record in self._entries.items():
+            definition = resolved.get(record.name)
+            if definition is None:
+                try:
+                    definition = PropertyDefinition.from_optimade(
+                        record.name, load_property_definition(record.definition_id).as_optimade()
+                    )
+                except Exception as exc:
+                    raise ValueError(
+                        f"record {key!r} name {record.name!r} has no registered definition "
+                        f"for IRI {record.definition_id!r}"
+                    ) from exc
+                resolved[record.name] = definition
+            if definition.definition_id and record.definition_id != definition.definition_id:
+                raise ValueError(
+                    f"record {key!r} name {record.name!r} has definition IRI {record.definition_id!r}, "
+                    f"but resolved definition is {definition.definition_id!r}"
+                )
+        for name, definition in resolved.items():
+            if not definition.nullable:
+                missing = next((key for key, record in self._entries.items() if record.name != name), None)
+                if missing is not None:
+                    raise ValueError(
+                        f"served property {name!r} is non-nullable, but record {missing!r} does not populate it"
+                    )
+        self._definitions = resolved
+        base = load_entry_type_definition(RECORDS_DEFINITION_ID)
+        properties = dict(base.properties)
+        properties.update(resolved)
+        self._definition = _entry_definition(self._entry_type, RECORDS_DEFINITION_ID, "data", properties)
+
+    def _check_entry_type(self, entry_type: str) -> None:
+        if entry_type != self._entry_type:
+            raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
+
+    def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        return {self._entry_type: self._definition}
+
+    def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        self._check_entry_type(entry_type)
+        return {
+            "id": ID_FIELD,
+            "type": "type",
+            "immutable_id": "immutable_id",
+            "last_modified": "last_modified",
+            **{name: name for name in self._definitions},
+        }
+
+    def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        self._check_entry_type(entry_type)
+        for entry_id, record in self._entries.items():
+            yield {
+                ID_FIELD: entry_id,
+                "type": self._entry_type,
+                "immutable_id": record.immutable_id,
+                "last_modified": _json_value(record.last_modified),
+                **{name: _json_value(record.value) if name == record.name else None for name in self._definitions},
+            }
+
+    def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        self._check_entry_type(entry_type)
+        return self._relationships
+
+
+def product_relationships(links: Iterable[ProductLink]) -> dict[str, dict[str, tuple[RelatedEntry, ...]]]:
+    """Build source-side relationships for a provider's ``relationships=`` argument.
+
+    Feed the inner mapping into the source-side provider's ``relationships=`` argument;
+    per-edge ``workflow_declaration_uri`` is deliberately not served yet (relation-object
+    serving is future work).
+    """
+    result: dict[str, dict[str, list[RelatedEntry]]] = {}
+    for link in links:
+        source = result.setdefault(link.source_type, {}).setdefault(link.source_id, [])
+        if any(entry.label == link.label for entry in source):
+            raise ValueError(
+                f"duplicate product label for source {link.source_type!r}/{link.source_id!r}: {link.label!r}"
+            )
+        source.append(RelatedEntry(link.target_type, link.target_id, role="product", label=link.label))
+    return {
+        source_type: {source_id: tuple(entries) for source_id, entries in sources.items()}
+        for source_type, sources in result.items()
+    }
