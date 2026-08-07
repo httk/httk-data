@@ -44,7 +44,9 @@ autodoc_default_options = {
     "undoc-members": False,
     "show-inheritance": True,
 }
-autodoc_typehints = "signature"
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented"
+autodoc_typehints_format = "short"  # no-op under AutoAPI 3.8 (annotations render fully qualified); kept for intent
 typehints_fully_qualified = False
 typehints_document_rtype = True
 typehints_defaults = "comma"
