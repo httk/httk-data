@@ -89,6 +89,9 @@ def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[
         row: dict[str, Any] = {ID_FIELD: entry_id, "type": entry_type}
         for name in field_names:
             row[name] = _json_value(getattr(record, name))
+        sha256 = getattr(record, "sha256", None)
+        if entry_type == "files" and sha256 and row["checksums"] is None:
+            row["checksums"] = {"sha256": sha256}
         records.append(row)
     return records
 

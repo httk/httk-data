@@ -7,6 +7,7 @@ from httk.core import (
     Calculation,
     EntryTypeDefinition,
     File,
+    FileRecord,
     Reference,
     RelatedEntry,
     known_entry_providers,
@@ -45,6 +46,26 @@ def test_file_provider_records() -> None:
     record = next(iter(provider.records("files")))
     assert record["url"] == "http://x/INCAR"
     assert record["size"] == 512
+
+
+def test_file_provider_serves_sha256_and_preserves_checksums() -> None:
+    digest = "a" * 64
+    provider = FileEntryProvider(
+        {
+            "record": FileRecord(url="http://x/data", name="data", sha256=digest),
+            "plain": File(url="http://x/plain", name="plain", checksums={"md5": "b"}),
+        }
+    )
+
+    rows = {row["__id"]: row for row in provider.records("files")}
+    assert rows["record"]["checksums"] == {"sha256": digest}
+    assert rows["plain"]["checksums"] == {"md5": "b"}
+
+
+def test_file_provider_preserves_an_explicit_empty_checksums_mapping() -> None:
+    provider = FileEntryProvider({"empty": FileRecord(url="http://x/e", name="e", checksums={}, sha256="c" * 64)})
+    (row,) = provider.records("files")
+    assert row["checksums"] == {}
 
 
 def test_calculation_provider_property_keys_cover_id_type() -> None:

@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "Rickard Armiento", email = "gitcommits@armiento.net" }]
 dependencies = [
-  "httk-core>=2.0.2,<3",
+  "httk-core>=2.1.0,<3",
   "jsonschema>=4",
 ]
 keywords = [
