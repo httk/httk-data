@@ -1,0 +1,196 @@
+httk.data.db.results
+====================
+
+.. py:module:: httk.data.db.results
+
+.. autoapi-nested-parse::
+
+   Lazy, named result rows for :class:`~httk.data.db.searcher.SqlSearcher`.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.results.MultipleResultsError
+   httk.data.db.results.NoResultError
+   httk.data.db.results.ExpiredCursorRowError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.results.ResultRow
+   httk.data.db.results.ResultColumn
+   httk.data.db.results.SqlResultSet
+
+
+Module Contents
+---------------
+
+.. py:exception:: MultipleResultsError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found multiple results.
+
+
+.. py:exception:: NoResultError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found no matching result.
+
+
+.. py:class:: ResultRow(values, names, resolver = None, guard = None)
+
+   Represent one named result row by position, name, or attribute.
+
+   :param values: The row values in declaration order.
+   :param names: The corresponding output names.
+   :param resolver: An optional lazy value resolver.
+   :param guard: An optional callback that rejects access to expired values.
+
+
+   .. py:property:: names
+      :type: tuple[str, Ellipsis]
+
+
+      Return the declared output names.
+
+
+   .. py:property:: values
+      :type: tuple[Any, Ellipsis]
+
+
+      Return the row values in declaration order.
+
+
+.. py:exception:: ExpiredCursorRowError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A cursor proxy was used after the cursor advanced.
+
+
+.. py:class:: ResultColumn(result, index)
+
+   A declared scalar projection, with exact and float presentations.
+
+   :param result: The result set containing the projection.
+   :param index: The projection's position in the result set.
+
+
+   .. py:attribute:: name
+
+
+   .. py:method:: floats()
+
+      Yield the query-domain values for this projection.
+
+      :yield: A projection value in the query-domain representation.
+
+
+
+   .. py:method:: to_fracvector()
+
+      Convert this rational projection to a fraction vector.
+
+      :return: The projection values as a fraction vector.
+      :raises TypeError: If the projection is not a supported rational column.
+
+
+
+.. py:class:: SqlResultSet(searcher, outputs = None)
+
+   A frozen, lazy result plan.
+
+   :param searcher: The search whose query state is frozen.
+   :param outputs: Optional output names mapped to query variables or columns.
+
+
+   .. py:property:: names
+      :type: tuple[str, Ellipsis]
+
+
+      Return the names of the declared projections in order.
+
+      :return: The declared projection names.
+
+
+   .. py:method:: first()
+
+      Return the first result, or ``None`` when no result exists.
+
+      :return: The first result row, if present.
+
+
+
+   .. py:method:: one()
+
+      Return the only result.
+
+      :return: The sole result row.
+      :raises ~httk.data.query.NoResultError: If no result exists.
+      :raises ~httk.data.query.MultipleResultsError: If more than one result exists.
+
+
+
+   .. py:method:: scalars(name = None)
+
+      Yield one projection from each result row.
+
+      :param name: The projection name, required when several projections are declared.
+      :return: An iterator over the selected projection values.
+      :raises ValueError: If ``name`` is omitted while several projections are declared.
+      :raises KeyError: If ``name`` is not a declared projection.
+
+
+
+   .. py:method:: column(name)
+
+      Return a scalar projection by name.
+
+      :param name: The declared scalar projection name.
+      :return: The selected result column.
+      :raises KeyError: If ``name`` is not declared.
+      :raises TypeError: If ``name`` names an object projection.
+
+
+
+   .. py:method:: page(*, size, order_by, cursor = None, include_total = False)
+
+      Fetch one bounded, live keyset page of this frozen SQL result plan.
+
+      Paging is intentionally separate from :meth:`cursor`: this method
+      returns independent rows whose page-local hydration state remains alive
+      through their result-row resolvers, while ``cursor()`` returns reusable
+      proxies that expire on advance.  It performs one ``LIMIT size + 1``
+      match query and never materializes this result set's ordinary match
+      cache.  A total is deliberately opt-in because it requires the normal
+      exact count query.
+
+      :param size: The maximum number of rows in the page.
+      :param order_by: The declared scalar projections used for keyset ordering.
+      :param cursor: The continuation token identifying the page position.
+      :param include_total: Whether to include the exact filtered total.
+      :return: The requested result page.
+      :raises ~httk.data.query.UnsupportedQueryError: If the query or ordering is not pageable.
+
+
+
+   .. py:method:: cursor()
+
+      Yield cursor rows whose object proxies expire when iteration advances.
+
+      :return: An iterator over live cursor result rows.
+
+
+

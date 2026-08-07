@@ -1,0 +1,846 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../../../../genindex.html"><link rel="search" title="Search" href="../../../../../../search.html"><link rel="next" title="httk.data.db.engine" href="../engine/index.html"><link rel="prev" title="httk.data.db" href="../index.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.db.codecs - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../../index.html">Reference</a><input aria-label="Toggle navigation of Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 current has-children"><a class="reference internal" href="../index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 current has-children"><a class="reference internal" href="../index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" checked="" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l4 current current-page"><a class="current reference internal" href="#">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../../../../../_sources/reference/autoapi/httk/data/db/codecs/index.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-httk.data.db.codecs">
+<span id="httk-data-db-codecs"></span><h1>httk.data.db.codecs<a class="headerlink" href="#module-httk.data.db.codecs" title="Link to this heading">¶</a></h1>
+<p>Value codecs: exact, round-trippable encodings of rich Python values into scalar columns.</p>
+<p>A <a class="reference internal" href="#httk.data.db.codecs.ValueCodec" title="httk.data.db.codecs.ValueCodec"><code class="xref py py-class docutils literal notranslate"><span class="pre">ValueCodec</span></code></a> describes how one field value of a given Python type is
+stored across one or more scalar columns and recovered exactly. The registry
+(<a class="reference internal" href="#httk.data.db.codecs.register_value_codec" title="httk.data.db.codecs.register_value_codec"><code class="xref py py-func docutils literal notranslate"><span class="pre">register_value_codec()</span></code></a> / <a class="reference internal" href="#httk.data.db.codecs.codec_for" title="httk.data.db.codecs.codec_for"><code class="xref py py-func docutils literal notranslate"><span class="pre">codec_for()</span></code></a> / <a class="reference internal" href="#httk.data.db.codecs.codec_named" title="httk.data.db.codecs.codec_named"><code class="xref py py-func docutils literal notranslate"><span class="pre">codec_named()</span></code></a>)
+mirrors the leaf-codec registry idiom in <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/vectors/index.html#module-httk.core.vectors" title="(in httk-core dev:main)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">httk.core.vectors</span></code></a>: a frozen
+dataclass plus module-level registration functions, with built-in codecs
+registered at import time.</p>
+<p>Rational values are stored <strong>losslessly</strong>: a query/index column holds the
+nearest <code class="docutils literal notranslate"><span class="pre">float</span></code> (comparisons on it are documented float-approximate), while a
+companion <code class="docutils literal notranslate"><span class="pre">*_exact</span></code> text column holds a canonical exact form that is the
+round-trip source of truth. The canonical text formats are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">float.hex()</span></code> — the exact finite IEEE-754 binary64 value, including the
+sign of zero. Used for scalar <code class="docutils literal notranslate"><span class="pre">float</span></code> fields and float sequence elements;
+the accompanying SQL <code class="docutils literal notranslate"><span class="pre">DOUBLE</span></code> remains the query/sort presentation.</p></li>
+<li><p><a class="reference internal" href="#httk.data.db.codecs.FRACTION_EXACT_FORMAT" title="httk.data.db.codecs.FRACTION_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACTION_EXACT_FORMAT</span></code></a> — a reduced fraction as <code class="docutils literal notranslate"><span class="pre">&quot;p/q&quot;</span></code>, always with
+the <code class="docutils literal notranslate"><span class="pre">/q</span></code> part (<code class="docutils literal notranslate"><span class="pre">&quot;1/1&quot;</span></code> for one), denominator positive. Used for
+<a class="reference external" href="https://docs.python.org/3/library/fractions.html#fractions.Fraction" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">fractions.Fraction</span></code></a> and <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracScalar" title="(in httk-core dev:main)"><code class="xref py py-class docutils literal notranslate"><span class="pre">FracScalar</span></code></a>.</p></li>
+<li><p><a class="reference internal" href="#httk.data.db.codecs.SURD_EXACT_FORMAT" title="httk.data.db.codecs.SURD_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">SURD_EXACT_FORMAT</span></code></a> — a <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.SurdScalar" title="(in httk-core dev:main)"><code class="xref py py-class docutils literal notranslate"><span class="pre">SurdScalar</span></code></a> as its canonical
+radicand map: <code class="docutils literal notranslate"><span class="pre">&quot;r1:p1/q1;r2:p2/q2;...&quot;</span></code> sorted by squarefree radicand
+(<code class="docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code> for zero), e.g. <code class="docutils literal notranslate"><span class="pre">&quot;1:1/2;2:3/4&quot;</span></code> for <code class="docutils literal notranslate"><span class="pre">1/2</span> <span class="pre">+</span> <span class="pre">(3/4)*sqrt(2)</span></code>.</p></li>
+<li><p><a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a> — a <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)"><code class="xref py py-class docutils literal notranslate"><span class="pre">FracVector</span></code></a> tensor as
+<code class="docutils literal notranslate"><span class="pre">&quot;d;n0,n1,n2,...&quot;</span></code>: the least positive common denominator <code class="docutils literal notranslate"><span class="pre">d</span></code> followed by
+the integer numerators flattened row-major. Used by the schema layer for
+fixed-shape (<code class="docutils literal notranslate"><span class="pre">Shape</span></code>) fields and per-row child-table storage.</p></li>
+</ul>
+<p>httk-core is a hard dependency of httk-data, so the httk.core vector types are
+imported unconditionally; nothing in this module needs sqlalchemy.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.ScalarKind" title="httk.data.db.codecs.ScalarKind"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ScalarKind</span></code></a></p></td>
+<td><p>The five scalar column kinds a storage backend must provide.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.FRACTION_EXACT_FORMAT" title="httk.data.db.codecs.FRACTION_EXACT_FORMAT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FRACTION_EXACT_FORMAT</span></code></a></p></td>
+<td><p>The canonical exact text of a rational — reduced <code class="docutils literal notranslate"><span class="pre">&quot;p/q&quot;</span></code>, always with the <code class="docutils literal notranslate"><span class="pre">/q</span></code> part.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.SURD_EXACT_FORMAT" title="httk.data.db.codecs.SURD_EXACT_FORMAT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SURD_EXACT_FORMAT</span></code></a></p></td>
+<td><p>The canonical exact text of a surd scalar — <code class="docutils literal notranslate"><span class="pre">radicand:coefficient</span></code> terms sorted by radicand.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a></p></td>
+<td><p>The canonical exact text of a rational tensor — common denominator, then numerators row-major.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.ValueCodec" title="httk.data.db.codecs.ValueCodec"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueCodec</span></code></a></p></td>
+<td><p>An exact encoding of one Python value type across one or more scalar columns.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.register_value_codec" title="httk.data.db.codecs.register_value_codec"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_value_codec</span></code></a>(codec)</p></td>
+<td><p>Register <code class="docutils literal notranslate"><span class="pre">codec</span></code> in the value-codec registry.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.known_value_codecs" title="httk.data.db.codecs.known_value_codecs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">known_value_codecs</span></code></a>()</p></td>
+<td><p>Return the registered value-codec names in registration order.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.codec_for" title="httk.data.db.codecs.codec_for"><code class="xref py py-obj docutils literal notranslate"><span class="pre">codec_for</span></code></a>(python_type)</p></td>
+<td><p>Return the codec for <code class="docutils literal notranslate"><span class="pre">python_type</span></code>, or None if no codec covers it.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.codec_named" title="httk.data.db.codecs.codec_named"><code class="xref py py-obj docutils literal notranslate"><span class="pre">codec_named</span></code></a>(name)</p></td>
+<td><p>Return the codec registered as <code class="docutils literal notranslate"><span class="pre">name</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.encode_fraction_exact" title="httk.data.db.codecs.encode_fraction_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">encode_fraction_exact</span></code></a>(value)</p></td>
+<td><p>Encode a fraction in the canonical exact text format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.decode_fraction_exact" title="httk.data.db.codecs.decode_fraction_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decode_fraction_exact</span></code></a>(text)</p></td>
+<td><p>Decode canonical exact fraction text.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.encode_surdscalar_exact" title="httk.data.db.codecs.encode_surdscalar_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">encode_surdscalar_exact</span></code></a>(value)</p></td>
+<td><p>The canonical <a class="reference internal" href="#httk.data.db.codecs.SURD_EXACT_FORMAT" title="httk.data.db.codecs.SURD_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">SURD_EXACT_FORMAT</span></code></a> text of <code class="docutils literal notranslate"><span class="pre">value</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code> for zero).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.decode_surdscalar_exact" title="httk.data.db.codecs.decode_surdscalar_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decode_surdscalar_exact</span></code></a>(text)</p></td>
+<td><p>Decode canonical exact surd text.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.encode_fracvector_exact" title="httk.data.db.codecs.encode_fracvector_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">encode_fracvector_exact</span></code></a>(value)</p></td>
+<td><p>The canonical <a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a> text of a rational tensor.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.db.codecs.decode_fracvector_exact" title="httk.data.db.codecs.decode_fracvector_exact"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decode_fracvector_exact</span></code></a>(text, rows, cols)</p></td>
+<td><p>Parse <a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a> text into a <code class="docutils literal notranslate"><span class="pre">rows</span></code> x <code class="docutils literal notranslate"><span class="pre">cols</span></code> <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)"><code class="xref py py-class docutils literal notranslate"><span class="pre">FracVector</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.db.codecs.encode_fracvector_floats" title="httk.data.db.codecs.encode_fracvector_floats"><code class="xref py py-obj docutils literal notranslate"><span class="pre">encode_fracvector_floats</span></code></a>(value)</p></td>
+<td><p>The elements of a rational tensor as a flat row-major tuple of nearest floats.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py type">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ScalarKind">
+<span class="property"><span class="k"><span class="pre">type</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">ScalarKind</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'int'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'float'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'str'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'bool'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'bytes'</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ScalarKind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ScalarKind" title="Link to this definition">¶</a></dt>
+<dd><p>The five scalar column kinds a storage backend must provide.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.db.codecs.FRACTION_EXACT_FORMAT">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">FRACTION_EXACT_FORMAT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Final</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'p/q'</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#FRACTION_EXACT_FORMAT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.FRACTION_EXACT_FORMAT" title="Link to this definition">¶</a></dt>
+<dd><p>The canonical exact text of a rational — reduced <code class="docutils literal notranslate"><span class="pre">&quot;p/q&quot;</span></code>, always with the <code class="docutils literal notranslate"><span class="pre">/q</span></code> part.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.db.codecs.SURD_EXACT_FORMAT">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">SURD_EXACT_FORMAT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Final</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'r1:p1/q1;r2:p2/q2;...'</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#SURD_EXACT_FORMAT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.SURD_EXACT_FORMAT" title="Link to this definition">¶</a></dt>
+<dd><p>The canonical exact text of a surd scalar — <code class="docutils literal notranslate"><span class="pre">radicand:coefficient</span></code> terms sorted by radicand.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Final</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'d;n0,n1,n2,...'</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#FRACVECTOR_EXACT_FORMAT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="Link to this definition">¶</a></dt>
+<dd><p>The canonical exact text of a rational tensor — common denominator, then numerators row-major.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">ValueCodec</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec" title="Link to this definition">¶</a></dt>
+<dd><p>An exact encoding of one Python value type across one or more scalar columns.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">columns</span></code> tuple gives <code class="docutils literal notranslate"><span class="pre">(suffix,</span> <span class="pre">kind)</span></code> pairs: the empty suffix names
+the field’s own column (by convention the query column), non-empty suffixes
+are appended to the field name by the schema layer (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;_exact&quot;</span></code>).
+<code class="docutils literal notranslate"><span class="pre">encode</span></code> and <code class="docutils literal notranslate"><span class="pre">decode</span></code> map a value to and from the column-value tuple, in
+<code class="docutils literal notranslate"><span class="pre">columns</span></code> order, and must round-trip exactly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – The registry name of the codec.</p></li>
+<li><p><strong>python_type</strong> – The Python type stored by the codec.</p></li>
+<li><p><strong>columns</strong> – The column suffix and scalar-kind pairs encoded by the codec.</p></li>
+<li><p><strong>encode</strong> – The function that encodes a value into column values.</p></li>
+<li><p><strong>decode</strong> – The function that reconstructs a value from column values.</p></li>
+<li><p><strong>query_suffix</strong> – The suffix of the query and index column.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.name" title="Link to this definition">¶</a></dt>
+<dd><p>Registry name of the codec (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;fraction&quot;</span></code>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.python_type">
+<span class="sig-name descname"><span class="pre">python_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><span class="pre">type</span></a></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.python_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.python_type" title="Link to this definition">¶</a></dt>
+<dd><p>The Python type this codec stores; matched exactly first, then by subclass.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.columns">
+<span class="sig-name descname"><span class="pre">columns</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#httk.data.db.codecs.ScalarKind" title="httk.data.db.codecs.ScalarKind"><span class="pre">httk.data.db.codecs.ScalarKind</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.columns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.columns" title="Link to this definition">¶</a></dt>
+<dd><p>The <code class="docutils literal notranslate"><span class="pre">(column</span> <span class="pre">name</span> <span class="pre">suffix,</span> <span class="pre">scalar</span> <span class="pre">kind)</span></code> pairs the codec encodes into.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.encode">
+<span class="sig-name descname"><span class="pre">encode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.encode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.encode" title="Link to this definition">¶</a></dt>
+<dd><p>Encode a value into one scalar per entry of <code class="docutils literal notranslate"><span class="pre">columns</span></code>, in order.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.decode">
+<span class="sig-name descname"><span class="pre">decode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.decode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.decode" title="Link to this definition">¶</a></dt>
+<dd><p>Recover the exact value from the tuple produced by <code class="docutils literal notranslate"><span class="pre">encode</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.db.codecs.ValueCodec.query_suffix">
+<span class="sig-name descname"><span class="pre">query_suffix</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#ValueCodec.query_suffix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.ValueCodec.query_suffix" title="Link to this definition">¶</a></dt>
+<dd><p>Suffix of the column used for querying/indexing (normally the empty suffix).</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.register_value_codec">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">register_value_codec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">codec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#register_value_codec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.register_value_codec" title="Link to this definition">¶</a></dt>
+<dd><p>Register <code class="docutils literal notranslate"><span class="pre">codec</span></code> in the value-codec registry.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>codec</strong> (<a class="reference internal" href="#httk.data.db.codecs.ValueCodec" title="httk.data.db.codecs.ValueCodec"><em>ValueCodec</em></a>) – The codec to register.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the codec name or Python type is already registered.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.known_value_codecs">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">known_value_codecs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#known_value_codecs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.known_value_codecs" title="Link to this definition">¶</a></dt>
+<dd><p>Return the registered value-codec names in registration order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The registered codec names.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.codec_for">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">codec_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">python_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#codec_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.codec_for" title="Link to this definition">¶</a></dt>
+<dd><p>Return the codec for <code class="docutils literal notranslate"><span class="pre">python_type</span></code>, or None if no codec covers it.</p>
+<p>An exact type match wins. Subclasses reuse only codecs for core-native
+canonical types; custom codec registrations are exact-type only so SQL
+encoding and content identity cannot disagree.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>python_type</strong> (<em>Any</em>) – The Python type to look up.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The matching codec, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when no codec covers the type.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.db.codecs.ValueCodec" title="httk.data.db.codecs.ValueCodec">ValueCodec</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.codec_named">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">codec_named</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#codec_named"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.codec_named" title="Link to this definition">¶</a></dt>
+<dd><p>Return the codec registered as <code class="docutils literal notranslate"><span class="pre">name</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The registered codec name.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The matching value codec.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no codec has that name.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.db.codecs.ValueCodec" title="httk.data.db.codecs.ValueCodec">ValueCodec</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.encode_fraction_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">encode_fraction_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#encode_fraction_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.encode_fraction_exact" title="Link to this definition">¶</a></dt>
+<dd><p>Encode a fraction in the canonical exact text format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/fractions.html#fractions.Fraction" title="(in Python v3.14)"><em>fractions.Fraction</em></a>) – The fraction to encode.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The canonical <code class="docutils literal notranslate"><span class="pre">p/q</span></code> text.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.decode_fraction_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">decode_fraction_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#decode_fraction_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.decode_fraction_exact" title="Link to this definition">¶</a></dt>
+<dd><p>Decode canonical exact fraction text.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>text</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The fraction text to parse.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The exact fraction.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the text is malformed.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ZeroDivisionError" title="(in Python v3.14)"><strong>ZeroDivisionError</strong></a> – If the denominator is zero.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/fractions.html#fractions.Fraction" title="(in Python v3.14)">fractions.Fraction</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.encode_surdscalar_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">encode_surdscalar_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#encode_surdscalar_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.encode_surdscalar_exact" title="Link to this definition">¶</a></dt>
+<dd><p>The canonical <a class="reference internal" href="#httk.data.db.codecs.SURD_EXACT_FORMAT" title="httk.data.db.codecs.SURD_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">SURD_EXACT_FORMAT</span></code></a> text of <code class="docutils literal notranslate"><span class="pre">value</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code> for zero).</p>
+<p>The terms are the canonical radicand map of the surd — squarefree radicands
+in increasing order, each with its reduced rational coefficient — so the
+text is unique per value and round-trips exactly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.SurdScalar" title="(in httk-core dev:main)"><em>httk.core.SurdScalar</em></a>) – The surd scalar to encode.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The canonical surd text.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.decode_surdscalar_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">decode_surdscalar_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#decode_surdscalar_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.decode_surdscalar_exact" title="Link to this definition">¶</a></dt>
+<dd><p>Decode canonical exact surd text.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>text</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The surd text to parse.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The exact surd scalar.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the text is malformed.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ZeroDivisionError" title="(in Python v3.14)"><strong>ZeroDivisionError</strong></a> – If a coefficient denominator is zero.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.SurdScalar" title="(in httk-core dev:main)">httk.core.SurdScalar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.encode_fracvector_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">encode_fracvector_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#encode_fracvector_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.encode_fracvector_exact" title="Link to this definition">¶</a></dt>
+<dd><p>The canonical <a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a> text of a rational tensor.</p>
+<p>The tensor is flattened row-major and normalized through
+<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector.to_fractions" title="(in httk-core dev:main)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_fractions()</span></code></a>: <code class="docutils literal notranslate"><span class="pre">d</span></code> is the least positive
+common denominator of the (reduced) elements and the numerators are the
+elements scaled by <code class="docutils literal notranslate"><span class="pre">d</span></code>. The text is therefore canonical — independent of
+the internal denominator the input happened to carry — and lossless at
+arbitrary precision. The shape itself is not encoded; fixed-shape schema
+fields carry it in their declaration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)"><em>httk.core.FracVector</em></a>) – The rational tensor to encode.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The canonical exact tensor text.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.decode_fracvector_exact">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">decode_fracvector_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#decode_fracvector_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.decode_fracvector_exact" title="Link to this definition">¶</a></dt>
+<dd><p>Parse <a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT" title="httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="xref py py-data docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a> text into a <code class="docutils literal notranslate"><span class="pre">rows</span></code> x <code class="docutils literal notranslate"><span class="pre">cols</span></code> <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)"><code class="xref py py-class docutils literal notranslate"><span class="pre">FracVector</span></code></a>.</p>
+<p>The numerators are laid out row-major into a tensor of shape
+<code class="docutils literal notranslate"><span class="pre">(rows,</span> <span class="pre">cols)</span></code>; their count must equal <code class="docutils literal notranslate"><span class="pre">rows</span> <span class="pre">*</span> <span class="pre">cols</span></code>. Raises
+<a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ValueError</span></code></a> on malformed text or a count/shape mismatch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>text</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The exact tensor text to parse.</p></li>
+<li><p><strong>rows</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The expected row count.</p></li>
+<li><p><strong>cols</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The expected column count.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The reconstructed rational tensor.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the text or requested shape is invalid.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)">httk.core.FracVector</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.db.codecs.encode_fracvector_floats">
+<span class="sig-prename descclassname"><span class="pre">httk.data.db.codecs.</span></span><span class="sig-name descname"><span class="pre">encode_fracvector_floats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/db/codecs.html#encode_fracvector_floats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.db.codecs.encode_fracvector_floats" title="Link to this definition">¶</a></dt>
+<dd><p>The elements of a rational tensor as a flat row-major tuple of nearest floats.</p>
+<p>This is the (documented approximate) companion of
+<a class="reference internal" href="#httk.data.db.codecs.encode_fracvector_exact" title="httk.data.db.codecs.encode_fracvector_exact"><code class="xref py py-func docutils literal notranslate"><span class="pre">encode_fracvector_exact()</span></code></a>, used to fill the per-element float
+query/index columns of fixed-shape fields.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.FracVector" title="(in httk-core dev:main)"><em>httk.core.FracVector</em></a>) – The rational tensor to convert.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The row-major floating-point values.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>, Ellipsis]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../engine/index.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">httk.data.db.engine</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">httk.data.db</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">httk.data.db.codecs</a><ul>
+<li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li><a class="reference internal" href="#httk.data.db.codecs.ScalarKind"><code class="docutils literal notranslate"><span class="pre">ScalarKind</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.FRACTION_EXACT_FORMAT"><code class="docutils literal notranslate"><span class="pre">FRACTION_EXACT_FORMAT</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.SURD_EXACT_FORMAT"><code class="docutils literal notranslate"><span class="pre">SURD_EXACT_FORMAT</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT"><code class="docutils literal notranslate"><span class="pre">FRACVECTOR_EXACT_FORMAT</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec"><code class="docutils literal notranslate"><span class="pre">ValueCodec</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.name"><code class="docutils literal notranslate"><span class="pre">ValueCodec.name</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.python_type"><code class="docutils literal notranslate"><span class="pre">ValueCodec.python_type</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.columns"><code class="docutils literal notranslate"><span class="pre">ValueCodec.columns</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.encode"><code class="docutils literal notranslate"><span class="pre">ValueCodec.encode</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.decode"><code class="docutils literal notranslate"><span class="pre">ValueCodec.decode</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.ValueCodec.query_suffix"><code class="docutils literal notranslate"><span class="pre">ValueCodec.query_suffix</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.db.codecs.register_value_codec"><code class="docutils literal notranslate"><span class="pre">register_value_codec()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.known_value_codecs"><code class="docutils literal notranslate"><span class="pre">known_value_codecs()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.codec_for"><code class="docutils literal notranslate"><span class="pre">codec_for()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.codec_named"><code class="docutils literal notranslate"><span class="pre">codec_named()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.encode_fraction_exact"><code class="docutils literal notranslate"><span class="pre">encode_fraction_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.decode_fraction_exact"><code class="docutils literal notranslate"><span class="pre">decode_fraction_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.encode_surdscalar_exact"><code class="docutils literal notranslate"><span class="pre">encode_surdscalar_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.decode_surdscalar_exact"><code class="docutils literal notranslate"><span class="pre">decode_surdscalar_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.encode_fracvector_exact"><code class="docutils literal notranslate"><span class="pre">encode_fracvector_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.decode_fracvector_exact"><code class="docutils literal notranslate"><span class="pre">decode_fracvector_exact()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.db.codecs.encode_fracvector_floats"><code class="docutils literal notranslate"><span class="pre">encode_fracvector_floats()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

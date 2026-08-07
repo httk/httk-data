@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "project": "httk-data",
+  "url": "https://docs.httk.org/httk-data",
+  "source_commit": "fdef3cfa378dc6befe8bd62b04af8b15e7bd9796",
+  "default": {
+    "name": "dev:main",
+    "path": "dev/main/",
+    "channel": "dev"
+  },
+  "versions": [
+    {
+      "name": "dev:main",
+      "path": "dev/main/",
+      "channel": "dev"
+    }
+  ]
+}

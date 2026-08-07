@@ -1,0 +1,192 @@
+httk.data.db.stored_properties
+==============================
+
+.. py:module:: httk.data.db.stored_properties
+
+.. autoapi-nested-parse::
+
+   SQL plans for property-mapped durable entry backings.
+
+   This module translates the backend-neutral
+   :class:`httk.core.storage.StoredPropertyProjection` callbacks declared by one concrete
+   record backing into SQLAlchemy predicates.  A logical entry family supplies its
+   entry type and OPTIMADE definition; every backing configured for that family in
+   the :class:`~httk.data.db.store.SqlStore` supplies only the properties it can
+   actually represent.
+
+   The plan is deliberately independent of serving.  It exposes concrete-record
+   responses and one SQL searcher per backing, leaving a later protocol adapter to
+   apply public ids, merge backing result streams, and construct envelopes.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.stored_properties.StoredPropertySqlConfigurationError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.stored_properties.StoredPropertySqlCandidateStream
+   httk.data.db.stored_properties.StoredPropertySqlPlan
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.stored_properties.stored_property_sql_plan
+
+
+Module Contents
+---------------
+
+.. py:exception:: StoredPropertySqlConfigurationError
+
+   Bases: :py:obj:`ValueError`
+
+
+   A configured family/backing cannot realize its declared entry definition.
+
+
+.. py:class:: StoredPropertySqlCandidateStream
+
+   One raw, SQL-bounded backing stream for a later federation merge.
+
+   ``searcher`` outputs only ``sid``, canonical ``content_id``, and one raw
+   SQL value per requested sort property.  Iterating it therefore never
+   hydrates a record; a federation can select its final page before fetching
+   any object graph.
+
+   :param backing: The concrete record class represented by the stream.
+   :param backing_name: The stable persisted name of the backing.
+   :param searcher: The SQL searcher yielding the candidate projections.
+   :param sort_count: The number of requested sort projections in each row.
+
+
+   .. py:attribute:: backing
+      :type:  type
+
+
+   .. py:attribute:: backing_name
+      :type:  str
+
+
+   .. py:attribute:: searcher
+      :type:  httk.data.db.searcher.SqlSearcher
+
+
+   .. py:attribute:: sort_count
+      :type:  int
+
+
+.. py:class:: StoredPropertySqlPlan(store, family, layout, entry_type, definition, backings)
+
+   Validated responses and SQL queries for one configured logical entry family.
+
+   The plan has no federation semantics: :meth:`filter_searchers` returns one
+   independent searcher per configured concrete backing.  That explicit shape
+   preserves backing-local property semantics for a future protocol adapter.
+
+   :param store: The SQL store containing the configured family.
+   :param family: The logical entry-family class.
+   :param layout: The resolved persisted layout for the family.
+   :param entry_type: The served entry type name.
+   :param definition: The entry definition used for property validation.
+   :param backings: The validated concrete backing plans in persisted order.
+
+
+   .. py:attribute:: store
+
+
+   .. py:attribute:: family
+
+
+   .. py:attribute:: layout
+
+
+   .. py:attribute:: entry_type
+
+
+   .. py:attribute:: definition
+
+
+   .. py:property:: backings
+      :type: tuple[type, Ellipsis]
+
+
+      Return the configured concrete record classes in persisted order.
+
+      :return: The configured backing classes.
+
+
+   .. py:method:: records()
+
+      Yield protocol-boundary rows projected from concrete backing records.
+
+      :yield: A projected protocol-boundary row.
+
+
+
+   .. py:method:: filter_searchers(filter_string, *, sort = (), public_id_prefix = '')
+
+      Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list.
+
+      :param filter_string: The OPTIMADE filter or parsed filter tree.
+      :param sort: The property sort keys and directions.
+      :param public_id_prefix: The prefix used when filtering or sorting ids.
+      :return: One searcher for each configured backing.
+
+
+
+   .. py:method:: candidate_searchers(filter_string = None, *, sort = (), public_id_prefix = '')
+
+      Return ID-only concrete streams for a bounded federated page.
+
+      ``None`` emits the query context's portable true predicate.  It never
+      adds an ``ORDER BY`` unless a sort was explicitly requested.  The
+      supplied public-id prefix participates in both the intrinsic id
+      filter handlers and id sort expression.
+
+      :param filter_string: The OPTIMADE filter, parsed filter tree, or no filter.
+      :param sort: The property sort keys and directions.
+      :param public_id_prefix: The prefix used when filtering or sorting ids.
+      :return: One candidate stream for each configured backing.
+
+
+
+   .. py:method:: response_row(backing, record, *, public_id = None)
+
+      Render one hydrated backing record at the protocol boundary.
+
+      :param backing: The configured concrete class of ``record``.
+      :param record: The hydrated backing record to project.
+      :param public_id: The public id to use, or the record's canonical id when omitted.
+      :return: The protocol-boundary response row.
+      :raises StoredPropertySqlConfigurationError: If ``backing`` is not configured for the family.
+
+
+
+.. py:function:: stored_property_sql_plan(store, family)
+
+   Validate and return the SQL property plan for one configured logical family.
+
+   The family must be present in ``store.entry_layout``; unconfigured family
+   classes and their records cannot accidentally become part of a durable
+   entry source.  ``id`` and ``type`` are intrinsic: a concrete backing's
+   canonical ``content_id`` and the family's fixed entry type respectively.
+   Backings must not try to redeclare either property.
+
+   :param store: The SQL store containing the configured family.
+   :param family: The logical entry-family class to validate.
+   :return: The validated SQL property plan.
+   :raises StoredPropertySqlConfigurationError: If the family or any backing is inconsistent with its definition.
+
+

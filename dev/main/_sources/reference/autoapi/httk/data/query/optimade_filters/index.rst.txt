@@ -1,0 +1,513 @@
+httk.data.query.optimade_filters
+================================
+
+.. py:module:: httk.data.query.optimade_filters
+
+.. autoapi-nested-parse::
+
+   Translate OPTIMADE filter syntax trees into backend search expressions.
+
+   This module turns the OPTIMADE filter language — parsed by
+   :func:`httk.core.optimade.parse_optimade_filter` into a :py:type:`httk.core.optimade.FilterAst`
+   nested-tuple syntax tree — into :class:`~httk.data.query.SearchExpression`
+   objects over the backend-agnostic store/searcher protocols of
+   :mod:`httk.data.query`. It is pure and store-independent: any
+   :class:`~httk.data.query.Store` whose search variables expose the queried
+   fields can execute the translated expressions.
+
+   The translation is driven by three inputs:
+
+   - ``property_fulltypes`` — a minimal mapping from recognized property names to
+     their OPTIMADE ``fulltype`` strings (``"string"``, ``"integer"``, ``"float"``,
+     ``"boolean"``, ``"timestamp"``, ``"dict"``, ``"unknown"``, or ``"list of
+     ..."``), used to type-check and convert filter constants;
+   - ``handlers`` — a :data:`HandlerTable` mapping property names to the callables
+     that build the actual search expressions (see
+     :func:`~httk.data.query.optimade_filters.simple_property_handlers` for the generic property-key-driven builder,
+     and :func:`~httk.data.query.optimade_filters.relationship_id_handler` for ``<type>.id`` relationship entries);
+   - ``recognized_prefixes`` — property-name prefixes the serving side claims:
+     an unknown property carrying such a prefix is an error
+     (``"unrecognized-property"``), while any other unknown property silently
+     matches nothing, as the OPTIMADE specification prescribes.
+
+   Failures raise :class:`FilterTranslationError`, which carries a neutral
+   ``category`` (no HTTP semantics); consumers map categories onto their
+   transport's error codes.
+
+   **Relationship filtering** (dotted identifiers such as ``references.doi``) is
+   supported for relationship types named in ``relationship_targets``:
+   ``<type>.id HAS ...`` translates directly through the handler table, and any
+   other depth-1 dotted filter is resolved by a two-phase semi-join through a
+   supplied :data:`RelatedPropertyResolver` (see :func:`~httk.data.query.optimade_filters.translate_filter_ast`).
+   Each dotted filter node is resolved *independently*: in ``references.doi
+   CONTAINS "x" AND references.year >= 2000``, some related reference must match
+   the doi condition and some (possibly different) related reference must match
+   the year condition.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.data.query.optimade_filters.FilterTranslationCategory
+   httk.data.query.optimade_filters.HandlerTable
+   httk.data.query.optimade_filters.RelatedPropertyResolver
+   httk.data.query.optimade_filters.constant_types
+   httk.data.query.optimade_filters.invert_op
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.query.optimade_filters.FilterTranslationError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.query.optimade_filters.format_value
+   httk.data.query.optimade_filters.true_handler
+   httk.data.query.optimade_filters.false_handler
+   httk.data.query.optimade_filters.unknown_unknown_handler
+   httk.data.query.optimade_filters.known_unknown_handler
+   httk.data.query.optimade_filters.field_unknown_handler
+   httk.data.query.optimade_filters.unknown_comparison_handler
+   httk.data.query.optimade_filters.unknown_stringmatching_handler
+   httk.data.query.optimade_filters.unknown_has_handler
+   httk.data.query.optimade_filters.unknown_length_handler
+   httk.data.query.optimade_filters.string_handler
+   httk.data.query.optimade_filters.stringmatching_handler
+   httk.data.query.optimade_filters.constant_comparison_handler
+   httk.data.query.optimade_filters.constant_stringmatching_handler
+   httk.data.query.optimade_filters.number_handler
+   httk.data.query.optimade_filters.timestamp_handler
+   httk.data.query.optimade_filters.set_handler
+   httk.data.query.optimade_filters.constant_set_handler
+   httk.data.query.optimade_filters.translate_filter_ast
+   httk.data.query.optimade_filters.simple_property_handlers
+   httk.data.query.optimade_filters.relationship_id_handler
+   httk.data.query.optimade_filters.filter_searcher
+
+
+Module Contents
+---------------
+
+.. py:type:: FilterTranslationCategory
+   :canonical: Literal['unrecognized-property', 'not-implemented', 'type-mismatch', 'internal']
+
+
+   Why a filter could not be translated (see :class:`FilterTranslationError`).
+
+.. py:type:: HandlerTable
+   :canonical: Mapping[str, Mapping[str, Callable[..., Any]]]
+
+
+   Per-property translation callables, keyed by property name.
+
+   The inner mapping's keys name the filter-operation families: ``'comparison'``
+   (``=``, ``!=``, ``<``, ``<=``, ``>``, ``>=``), ``'stringmatching'``
+   (``CONTAINS``/``STARTS``/``ENDS``), ``'HAS'`` (the set operations),
+   ``'length'`` (``LENGTH``), and ``'unknown'`` (``IS KNOWN``/``IS UNKNOWN``).
+   A ``'HAS'`` handler is called as ``handler(property, ops, values,
+   search_variable, has_type)`` and returns a plain
+   :class:`~httk.data.query.SearchExpression`. The caller applies ``NOT`` as
+   ``~``; handlers do not receive negation state or report post-filter placement.
+   Dotted ``'<type>.id'`` entries provide relationship-id filtering (see
+   :func:`~httk.data.query.optimade_filters.relationship_id_handler`).
+
+.. py:type:: RelatedPropertyResolver
+   :canonical: Callable[[str, FilterAst], tuple[str, ...]]
+
+
+   Resolve a depth-1 relationship filter to the matching related-entry ids.
+
+   Called as ``resolver(related_type, sub_ast)`` where ``sub_ast`` is the filter
+   node with the ``<related_type>.`` prefix stripped from its identifier (and
+   without any surrounding ``NOT``); returns the ids of the related entries
+   matching the sub-filter, evaluated against the related type's own properties.
+
+.. py:exception:: FilterTranslationError(message, category, detail = None)
+
+   Bases: :py:obj:`Exception`
+
+
+   Report that a filter cannot be translated into a search expression.
+
+   The exception message describes the failure; :attr:`category` classifies it
+   neutrally (this module knows nothing about transports, so consumers map
+   each category onto their own error codes):
+
+   - ``"unrecognized-property"`` — the filter names an unknown property
+     carrying a recognized prefix (a caller error);
+   - ``"type-mismatch"`` — a filter constant does not match the property's
+     declared type (a caller error);
+   - ``"not-implemented"`` — the filter uses a construct this translation (or
+     the supplied handler table) does not support;
+   - ``"internal"`` — an inconsistency in the translation itself.
+
+   ``detail`` optionally carries extra machine-readable context.
+
+   :param message: The human-readable translation failure.
+   :param category: The neutral failure category.
+   :param detail: Optional machine-readable failure context.
+
+
+   .. py:attribute:: category
+      :type:  FilterTranslationCategory
+
+
+   .. py:attribute:: detail
+      :value: None
+
+
+
+.. py:data:: constant_types
+   :value: ('String', 'Number', 'Boolean')
+
+
+   Parsed filter token kinds that represent literal constants.
+
+.. py:data:: invert_op
+
+   Comparison operators after swapping a constant from left to right.
+
+.. py:function:: format_value(fulltype, val, allow_null = False)
+
+   Convert a filter constant node to a Python value of the property's ``fulltype``.
+
+   :param fulltype: The OPTIMADE fulltype expected by the property.
+   :param val: The parsed filter constant node.
+   :param allow_null: Whether a parsed null constant is accepted.
+   :return: The converted Python filter value.
+   :raises FilterTranslationError: With category ``"type-mismatch"`` when the
+       constant does not fit the declared type, or ``"not-implemented"`` for
+       dictionary-typed properties.
+
+
+.. py:function:: true_handler(search_variable)
+
+   Build a constant-true expression over ``search_variable``.
+
+   :param search_variable: The backend search variable receiving the expression.
+   :return: An expression that matches every row.
+
+
+.. py:function:: false_handler(search_variable)
+
+   Build a constant-false expression over ``search_variable``.
+
+   :param search_variable: The backend search variable receiving the expression.
+   :return: An expression that matches no row.
+
+
+.. py:function:: unknown_unknown_handler(entry, search_variable, unknown_type)
+
+   Translate unknown-value tests for an unrecognized property.
+
+   :param entry: The property name, retained for handler compatibility.
+   :param search_variable: The backend search variable receiving the expression.
+   :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+   :return: The corresponding constant expression.
+   :raises FilterTranslationError: If ``unknown_type`` is not supported.
+
+
+.. py:function:: known_unknown_handler(entry, search_variable, unknown_type)
+
+   Translate known-value tests for a property with known nullability.
+
+   :param entry: The property name, retained for handler compatibility.
+   :param search_variable: The backend search variable receiving the expression.
+   :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+   :return: The corresponding constant expression.
+   :raises FilterTranslationError: If ``unknown_type`` is not supported.
+
+
+.. py:function:: field_unknown_handler(entry, search_variable, unknown_type)
+
+   Test nullability against the mapped backend field.
+
+   :param entry: The backend field name to inspect.
+   :param search_variable: The backend search variable receiving the expression.
+   :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+   :return: The nullability expression for the field.
+   :raises FilterTranslationError: If ``unknown_type`` is not supported.
+
+
+.. py:function:: unknown_comparison_handler(entry, ops, values, search_variable)
+
+   Build a false expression for comparison on an unknown property.
+
+   :param entry: The unknown property name.
+   :param ops: The parsed comparison operators.
+   :param values: The parsed comparison values.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: An expression that matches no row.
+
+
+.. py:function:: unknown_stringmatching_handler(entry, values, stringmatching_type, search_variable)
+
+   Build a false expression for string matching on an unknown property.
+
+   :param entry: The unknown property name.
+   :param values: The parsed match value.
+   :param stringmatching_type: The parsed string-matching operator.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: An expression that matches no row.
+
+
+.. py:function:: unknown_has_handler(entry, op, value, search_variable, has_type)
+
+   Build a false expression for set filtering on an unknown property.
+
+   :param entry: The unknown property name.
+   :param op: The parsed set operators.
+   :param value: The parsed set values.
+   :param search_variable: The backend search variable receiving the expression.
+   :param has_type: The parsed HAS-family operator.
+   :return: An expression that matches no row.
+
+
+.. py:function:: unknown_length_handler(entry, op, value, search_variable)
+
+   Build a false expression for length filtering on an unknown property.
+
+   :param entry: The unknown property name.
+   :param op: The parsed length comparison operator.
+   :param value: The parsed length value.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: An expression that matches no row.
+
+
+.. py:function:: string_handler(entry, op, value, search_variable)
+
+   Translate a scalar comparison onto a backend field.
+
+   :param entry: The backend field name.
+   :param op: The comparison operator.
+   :param value: The converted filter value.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: The field comparison expression.
+
+
+.. py:function:: stringmatching_handler(entry, value, stringmatching_type, search_variable)
+
+   Translate ``CONTAINS``/``STARTS``/``ENDS`` onto the field's literal matchers.
+
+   The filter constant is passed through **unescaped**: the search-field protocol's
+   ``contains``/``startswith``/``endswith`` take literal text, so ``%`` and
+   ``_`` match themselves (as OPTIMADE requires). Any escaping a backend's
+   pattern language needs is that backend's own business.
+
+   :param entry: The backend field name.
+   :param value: The literal filter text.
+   :param stringmatching_type: The ``CONTAINS``, ``STARTS``, or ``ENDS`` operator.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: The literal string-matching expression.
+   :raises FilterTranslationError: If ``stringmatching_type`` is not supported.
+
+
+.. py:function:: constant_comparison_handler(val1, op, val2, search_variable)
+
+   Fold ``val1 <op> val2`` (both constants) to a constant expression.
+
+   ``val1`` is the *value being compared* and ``val2`` the *filter constant*,
+   the same left-to-right convention as :func:`constant_set_handler`;
+   :func:`~httk.data.query.optimade_filters.translate_filter_ast` has already inverted ``op`` for
+   constant-on-the-left filters, so this ordering is the filter's own.
+
+   :param val1: The value being compared.
+   :param op: The comparison operator.
+   :param val2: The filter constant.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: A constant expression representing the comparison result.
+
+
+.. py:function:: constant_stringmatching_handler(val1, val2, stringmatching_type, search_variable)
+
+   Fold ``val1 <CONTAINS|STARTS|ENDS> val2`` (both constants) to a constant expression.
+
+   ``val1`` is the *value being matched* and ``val2`` the *filter text*, the
+   same left-to-right convention as :func:`constant_set_handler`.
+
+   :param val1: The value being matched.
+   :param val2: The filter text.
+   :param stringmatching_type: The ``CONTAINS``, ``STARTS``, or ``ENDS`` operator.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: A constant expression representing the match result.
+   :raises FilterTranslationError: If ``stringmatching_type`` is not supported.
+
+
+.. py:function:: number_handler(entry, op, value, search_variable)
+
+   Translate a numeric comparison onto a backend field.
+
+   :param entry: The backend field name.
+   :param op: The comparison operator.
+   :param value: The converted numeric filter value.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: The field comparison expression.
+
+
+.. py:function:: timestamp_handler(entry, op, value, search_variable)
+
+   Normalize an RFC 3339 timestamp and translate its comparison.
+
+   :param entry: The backend field name.
+   :param op: The comparison operator.
+   :param value: The RFC 3339 timestamp filter value.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: The normalized timestamp comparison expression.
+   :raises FilterTranslationError: If ``value`` is not an offset-aware RFC 3339 timestamp.
+
+
+.. py:function:: set_handler(entry, ops, values, has_type, search_variable)
+
+   Translate one HAS family node over the list-valued field ``entry``.
+
+   ``HAS ALL`` becomes a conjunction of one-value ``has_any`` calls (each
+   constraining an independently joined child row); ``HAS ANY`` and ``HAS
+   ONLY`` map straight onto ``has_any``/``has_only``. Negation is *not* the
+   handler's business: a surrounding ``NOT`` inverts the returned expression,
+   and the backend's ``~`` knows how to negate a set predicate.
+
+   :param entry: The backend list-valued field name.
+   :param ops: The parsed set comparison operators.
+   :param values: The converted set values.
+   :param has_type: The HAS-family operator.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: The list-membership expression.
+   :raises FilterTranslationError: If ``has_type`` is not supported.
+
+
+.. py:function:: constant_set_handler(val1, ops, val2, has_type, search_variable)
+
+   Fold a HAS-family operation over two constant sets.
+
+   :param val1: The list value being tested.
+   :param ops: The parsed set comparison operators.
+   :param val2: The filter values.
+   :param has_type: The HAS-family operator.
+   :param search_variable: The backend search variable receiving the expression.
+   :return: A constant expression representing the set result.
+   :raises FilterTranslationError: If ``has_type`` is not supported.
+
+
+.. py:function:: translate_filter_ast(node, search_variable, property_fulltypes, handlers, recognized_prefixes, *, relationship_targets = (), related_property_resolver = None)
+
+   Translate one filter syntax-tree node into a search expression.
+
+   ``node`` is a :py:type:`~httk.core.optimade.FilterAst` node (as produced by
+   :func:`httk.core.optimade.parse_optimade_filter`); ``search_variable`` is the
+   backend search variable the expression is built against;
+   ``property_fulltypes``, ``handlers``, and ``recognized_prefixes`` drive the
+   translation as described in the module docstring.
+
+   Returns the translated expression, ready to hand to
+   :meth:`~httk.data.query.Searcher.add`. ``NOT`` translates to the backend's
+   ``~``; a backend whose set predicates need a second (post-filter)
+   evaluation position derives that from the expression itself, so the caller
+   never has to.
+
+   **Relationship filtering:** an identifier dotted with a name in
+   ``relationship_targets`` (e.g. ``('Identifier', 'references', 'doi')``)
+   filters on the properties of related entries. ``<type>.id HAS ...`` is
+   served directly by the ``'<type>.id'`` handler-table entry. Every other
+   depth-1 dotted filter — comparisons (including ``<type>.id = ...``),
+   string matching, ``IS KNOWN``/``IS UNKNOWN``, and the HAS family over
+   related list properties — is resolved by a two-phase semi-join: the
+   ``<type>.`` prefix is stripped from the node, the resulting sub-filter is
+   passed to ``related_property_resolver`` (without any surrounding ``NOT`` —
+   inversion applies to the resulting id-set membership), and the returned ids
+   are substituted back as ``<type>.id HAS ANY <ids>`` (an empty id set
+   translates to a constant-false expression). Each dotted node is resolved
+   **independently**: ``references.doi CONTAINS "x" AND references.year >=
+   2000`` matches entries where *some* related reference matches the doi
+   condition and *some* — possibly different — related reference matches the
+   year condition. Without a resolver, dotted filters other than ``<type>.id
+   HAS ...`` are not implemented; nested (deeper than depth-1) paths and
+   dotted ``LENGTH`` filters are never supported.
+
+   :param node: The parsed OPTIMADE filter AST node.
+   :param search_variable: The backend search variable receiving the expression.
+   :param property_fulltypes: Fulltypes keyed by recognized property name.
+   :param handlers: Property-specific translation handlers.
+   :param recognized_prefixes: Prefixes whose unknown properties are errors.
+   :param relationship_targets: Related entry types that support dotted filters.
+   :param related_property_resolver: Optional resolver for related-property filters.
+   :return: The translated backend search expression.
+   :raises FilterTranslationError: If the filter cannot be translated; see
+       :class:`FilterTranslationError` for the failure categories.
+
+
+.. py:function:: simple_property_handlers(entry_type, property_keys, property_fulltypes)
+
+   Build a filter handler table for an entry type from a property-key map.
+
+   Provides default handlers for standard ``id`` (matched against the
+   :data:`~httk.data.query.protocols.ID_FIELD` field) and ``type`` (a constant
+   equal to ``entry_type``). Entries in ``property_keys`` replace those defaults
+   when their names overlap. For every
+   property named in ``property_keys`` (which maps property names to backend
+   field names), handlers are generated from the property's fulltype in
+   ``property_fulltypes`` (default ``"string"``): string properties get
+   comparison and stringmatching handlers; integer and float properties get a
+   numeric comparison handler; ``list of ...`` properties get a HAS (set
+   membership) handler. Every generated property also gets a ``known``
+   unknown handler.
+
+   :param entry_type: The served entry type used by the constant ``type`` handler.
+   :param property_keys: Mapping from served property names to backend field names.
+   :param property_fulltypes: Fulltypes keyed by served property name.
+   :return: A handler table keyed by served property name.
+
+
+.. py:function:: relationship_id_handler(rel_key)
+
+   A ``'<type>.id'`` handler-table entry matching related ids over a list-valued field.
+
+   ``rel_key`` names a list-valued backend field holding the related entry
+   ids; the returned ``{'HAS': ...}`` mapping serves ``<type>.id HAS ...``
+   filters (and the semi-join rewrites of other dotted filters) with the
+   standard set-operation semantics of :func:`~httk.data.query.optimade_filters.set_handler`.
+
+   :param rel_key: The backend field name for related entry identifiers.
+   :return: A handler mapping containing the ``HAS`` operation.
+
+
+.. py:function:: filter_searcher(store, target, filter_string, *, entry_type, property_fulltypes, property_keys = None, handlers = None, recognized_prefixes = (), relationship_targets = (), related_property_resolver = None)
+
+   Build a :class:`~httk.data.query.Searcher` over ``store`` applying an OPTIMADE filter.
+
+   ``filter_string`` is an OPTIMADE filter string (parsed with
+   :func:`httk.core.optimade.parse_optimade_filter`) or an already-parsed
+   :py:type:`~httk.core.optimade.FilterAst`. The searcher binds one search variable to
+   ``target`` (the store-specific query target, declared as the searcher
+   output named ``entry_type``) and applies the translated filter. When
+   ``handlers`` is not supplied, a default table is built with
+   :func:`~httk.data.query.optimade_filters.simple_property_handlers` from ``property_keys`` (or, when
+   ``property_keys`` is also None, from an identity map over
+   ``property_fulltypes``). The
+   remaining keyword arguments are passed through to
+   :func:`~httk.data.query.optimade_filters.translate_filter_ast`.
+
+   :param store: The backend store on which to build the searcher.
+   :param target: The backend query target to bind.
+   :param filter_string: An OPTIMADE filter string or parsed filter AST.
+   :param entry_type: The output name and served entry type.
+   :param property_fulltypes: Fulltypes keyed by recognized property name.
+   :param property_keys: Optional mapping from property names to backend field names.
+   :param handlers: Optional prebuilt property handler table.
+   :param recognized_prefixes: Prefixes whose unknown properties are errors.
+   :param relationship_targets: Related entry types that support dotted filters.
+   :param related_property_resolver: Optional resolver for related-property filters.
+   :return: A searcher with the translated filter already applied.
+   :raises FilterTranslationError: If the filter cannot be translated.
+   :raises httk.core.optimade.ParserSyntaxError: If a filter string does not parse.
+
+

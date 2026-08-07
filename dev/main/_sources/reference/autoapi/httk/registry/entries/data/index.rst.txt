@@ -1,0 +1,11 @@
+httk.registry.entries.data
+==========================
+
+.. py:module:: httk.registry.entries.data
+
+.. autoapi-nested-parse::
+
+   Register entry providers implemented by :mod:`httk.data`.
+
+
+

@@ -1,0 +1,1193 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../../../genindex.html"><link rel="search" title="Search" href="../../../../../search.html"><link rel="next" title="httk.data.query" href="../query/index.html"><link rel="prev" title="httk.data.entry_providers" href="../entry_providers/index.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.federated_store - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../index.html">Reference</a><input aria-label="Toggle navigation of Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../../../../_sources/reference/autoapi/httk/data/federated_store/index.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-httk.data.federated_store">
+<span id="httk-data-federated-store"></span><h1>httk.data.federated_store<a class="headerlink" href="#module-httk.data.federated_store" title="Link to this heading">¶</a></h1>
+<p>Frozen query planning and sequential execution for a federated store.</p>
+<p>Federated expressions are deliberately represented by a private, backend-neutral
+AST. Child searcher expressions are used only while validating that each
+participating source accepts an operation; every execution replays that AST
+into fresh child searchers.</p>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedStoreError" title="httk.data.federated_store.FederatedStoreError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedStoreError</span></code></a></p></td>
+<td><p>Report that a federation-level store operation failed.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedSourceError</span></code></a></p></td>
+<td><p>Report that a named source rejected or failed a federated operation.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedResultColumn" title="httk.data.federated_store.FederatedResultColumn"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedResultColumn</span></code></a></p></td>
+<td><p>Expose one scalar projection lazily from a federated result set.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet" title="httk.data.federated_store.FederatedResultSet"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedResultSet</span></code></a></p></td>
+<td><p>Represent a frozen, lazy, re-iterable federated result plan.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedTarget" title="httk.data.federated_store.FederatedTarget"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedTarget</span></code></a></p></td>
+<td><p>Bind one logical target to exact concrete targets for named sources.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedStore" title="httk.data.federated_store.FederatedStore"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedStore</span></code></a></p></td>
+<td><p>Fan out read-only queries over an ordered collection of borrowed stores.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedVariable" title="httk.data.federated_store.FederatedVariable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedVariable</span></code></a></p></td>
+<td><p>Represent the one root variable supported by a federated query.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedField" title="httk.data.federated_store.FederatedField"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedField</span></code></a></p></td>
+<td><p>Represent a backend-neutral path from a federated root variable.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedExpression</span></code></a></p></td>
+<td><p>Represent a federated expression backed by the neutral private AST.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher" title="httk.data.federated_store.FederatedSearcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedSearcher</span></code></a></p></td>
+<td><p>Build and validate one portable, single-root federated query.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedStoreError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedStoreError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedStoreError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedStoreError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#RuntimeError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
+<p>Report that a federation-level store operation failed.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSourceError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedSourceError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operation</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSourceError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSourceError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#httk.data.federated_store.FederatedStoreError" title="httk.data.federated_store.FederatedStoreError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FederatedStoreError</span></code></a></p>
+<p>Report that a named source rejected or failed a federated operation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The source name that failed.</p></li>
+<li><p><strong>operation</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The federation operation being performed.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSourceError.source">
+<span class="sig-name descname"><span class="pre">source</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSourceError.source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSourceError.source" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSourceError.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSourceError.operation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSourceError.operation" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultColumn">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedResultColumn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultColumn"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultColumn" title="Link to this definition">¶</a></dt>
+<dd><p>Expose one scalar projection lazily from a federated result set.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>result</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedResultSet" title="httk.data.federated_store.FederatedResultSet"><em>FederatedResultSet</em></a>) – The result set supplying rows.</p></li>
+<li><p><strong>index</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The zero-based projection index.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultColumn.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultColumn.name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultColumn.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedResultSet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plan</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet" title="Link to this definition">¶</a></dt>
+<dd><p>Represent a frozen, lazy, re-iterable federated result plan.</p>
+<p>Results execute source-major in federation source order, preserve duplicate
+rows, and remain read-only views over the borrowed stores.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedStore" title="httk.data.federated_store.FederatedStore"><em>FederatedStore</em></a>) – The federation whose sources execute the plan.</p></li>
+<li><p><strong>plan</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The validated frozen federation plan.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.names" title="Link to this definition">¶</a></dt>
+<dd><p>Return the declared projection names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The result projection names in declaration order.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Ellipsis]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.first">
+<span class="sig-name descname"><span class="pre">first</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.first"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.first" title="Link to this definition">¶</a></dt>
+<dd><p>Return the first result row, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when no row matches.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The first matching row, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../query/index.html#httk.data.query.ResultRow" title="httk.data.query.ResultRow">httk.data.query.ResultRow</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.one">
+<span class="sig-name descname"><span class="pre">one</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.one"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.one" title="Link to this definition">¶</a></dt>
+<dd><p>Return the only result row.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The sole matching result row.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.NoResultError" title="httk.data.query.protocols.NoResultError"><strong>httk.data.query.protocols.NoResultError</strong></a> – If no row matches.</p></li>
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.MultipleResultsError" title="httk.data.query.protocols.MultipleResultsError"><strong>httk.data.query.protocols.MultipleResultsError</strong></a> – If more than one row matches.</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../query/index.html#httk.data.query.ResultRow" title="httk.data.query.ResultRow">httk.data.query.ResultRow</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.scalars">
+<span class="sig-name descname"><span class="pre">scalars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.scalars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.scalars" title="Link to this definition">¶</a></dt>
+<dd><p>Iterate over one named projection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – The projection name, required when more than one output exists.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An iterator over the selected projection values.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no name is supplied for multiple outputs.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> is not a declared output.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterator" title="(in Python v3.14)">collections.abc.Iterator</a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)">object</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.column">
+<span class="sig-name descname"><span class="pre">column</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.column"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.column" title="Link to this definition">¶</a></dt>
+<dd><p>Return a lazy scalar column by projection name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The scalar projection name.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A lazy column view over the projection.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> is not a declared output.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> identifies an object output.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedResultColumn" title="httk.data.federated_store.FederatedResultColumn">FederatedResultColumn</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedResultSet.cursor">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedResultSet.cursor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedResultSet.cursor" title="Link to this definition">¶</a></dt>
+<dd><p>Reject cursor access because federation cursors are unsupported.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Never returns.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – Always, because federated cursors are not implemented.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterator" title="(in Python v3.14)">collections.abc.Iterator</a>[<a class="reference internal" href="../query/index.html#httk.data.query.ResultRow" title="httk.data.query.ResultRow">httk.data.query.ResultRow</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedTarget">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedTarget</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedTarget"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedTarget" title="Link to this definition">¶</a></dt>
+<dd><p>Bind one logical target to exact concrete targets for named sources.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – The nonempty logical target name.</p></li>
+<li><p><strong>targets</strong> – Concrete targets keyed by federation source name.</p></li>
+<li><p><strong>_owner</strong> – The federation that owns this target binding.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">targets</span></code> is not a mapping or <code class="docutils literal notranslate"><span class="pre">_owner</span></code> is not a federation.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the name, source set, or source names are invalid.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedTarget.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedTarget.name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedTarget.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedTarget.targets">
+<span class="sig-name descname"><span class="pre">targets</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><span class="pre">collections.abc.Mapping</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><span class="pre">object</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedTarget.targets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedTarget.targets" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedStore">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedStore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sources</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedStore"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedStore" title="Link to this definition">¶</a></dt>
+<dd><p>Fan out read-only queries over an ordered collection of borrowed stores.</p>
+<p>The union is source-major, lazy, and non-deduplicating. Queries require the
+strict common query surface accepted by every participating source, and
+counts are exact sums of the unpaged source counts. This live borrowed-store
+view is distinct from the persisted registry in
+<a class="reference internal" href="../db/stored_federation/index.html#module-httk.data.db.stored_federation" title="httk.data.db.stored_federation"><code class="xref py py-mod docutils literal notranslate"><span class="pre">httk.data.db.stored_federation</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>sources</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference internal" href="../query/index.html#httk.data.query.Store" title="httk.data.query.Store"><em>httk.data.query.Store</em></a><em>]</em>) – Child stores keyed by stable federation source name.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">sources</span></code> is not a mapping.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If fewer than two sources or an invalid source name is supplied.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedStore.source_names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">source_names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedStore.source_names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedStore.source_names" title="Link to this definition">¶</a></dt>
+<dd><p>Return the immutable source names in constructor iteration order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The source names in constructor order.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Ellipsis]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedStore.target">
+<span class="sig-name descname"><span class="pre">target</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedStore.target"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedStore.target" title="Link to this definition">¶</a></dt>
+<dd><p>Create an immutable target mapping for an intentional source subset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The logical target name.</p></li>
+<li><p><strong>targets</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a><em>]</em>) – Concrete targets keyed by federation source name.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The validated target binding.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">targets</span></code> is not a mapping.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If a target name or source name is invalid.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedTarget" title="httk.data.federated_store.FederatedTarget">FederatedTarget</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedStore.searcher">
+<span class="sig-name descname"><span class="pre">searcher</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedStore.searcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedStore.searcher" title="Link to this definition">¶</a></dt>
+<dd><p>Create an unbound federated searcher without touching child stores.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A new mutable query builder.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher" title="httk.data.federated_store.FederatedSearcher">FederatedSearcher</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedVariable">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedVariable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">searcher</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">variables</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedVariable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedVariable" title="Link to this definition">¶</a></dt>
+<dd><p>Represent the one root variable supported by a federated query.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>searcher</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedSearcher" title="httk.data.federated_store.FederatedSearcher"><em>FederatedSearcher</em></a>) – The owning federated searcher.</p></li>
+<li><p><strong>variables</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference internal" href="../query/index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a><em>]</em>) – Child variables keyed by source name.</p></li>
+<li><p><strong>targets</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a><em>]</em>) – Concrete child targets keyed by source name.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedVariable.always_true">
+<span class="sig-name descname"><span class="pre">always_true</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedVariable.always_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedVariable.always_true" title="Link to this definition">¶</a></dt>
+<dd><p>Build an expression that matches every federated row.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A federated expression matching every row.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedVariable.always_false">
+<span class="sig-name descname"><span class="pre">always_false</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedVariable.always_false"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedVariable.always_false" title="Link to this definition">¶</a></dt>
+<dd><p>Build an expression that matches no federated row.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A federated expression matching no row.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedField</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField" title="Link to this definition">¶</a></dt>
+<dd><p>Represent a backend-neutral path from a federated root variable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variable</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedVariable" title="httk.data.federated_store.FederatedVariable"><em>FederatedVariable</em></a>) – The federated root variable owning the path.</p></li>
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – The field path relative to that variable.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.contains">
+<span class="sig-name descname"><span class="pre">contains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.contains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.contains" title="Link to this definition">¶</a></dt>
+<dd><p>Match literal values containing <code class="docutils literal notranslate"><span class="pre">text</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>text</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The literal substring to find.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.startswith">
+<span class="sig-name descname"><span class="pre">startswith</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.startswith"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.startswith" title="Link to this definition">¶</a></dt>
+<dd><p>Match literal values beginning with <code class="docutils literal notranslate"><span class="pre">prefix</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The literal prefix to find.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.endswith">
+<span class="sig-name descname"><span class="pre">endswith</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">suffix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.endswith"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.endswith" title="Link to this definition">¶</a></dt>
+<dd><p>Match literal values ending with <code class="docutils literal notranslate"><span class="pre">suffix</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>suffix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The literal suffix to find.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.has">
+<span class="sig-name descname"><span class="pre">has</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.has"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.has" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The list member to match.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.has_any">
+<span class="sig-name descname"><span class="pre">has_any</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.has_any"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.has_any" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing any of <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>*values</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The list members to match.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.has_only">
+<span class="sig-name descname"><span class="pre">has_only</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.has_only"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.has_only" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing no values outside <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>*values</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The complete allowed list-member set.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedField.is_in">
+<span class="sig-name descname"><span class="pre">is_in</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedField.is_in"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedField.is_in" title="Link to this definition">¶</a></dt>
+<dd><p>Match a scalar field whose value is one of <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>*values</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The accepted field values.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The resulting federated expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.federated_store.FederatedExpression" title="httk.data.federated_store.FederatedExpression">FederatedExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedExpression">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedExpression</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">searcher</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ast</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedExpression"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedExpression" title="Link to this definition">¶</a></dt>
+<dd><p>Represent a federated expression backed by the neutral private AST.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>searcher</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedSearcher" title="httk.data.federated_store.FederatedSearcher"><em>FederatedSearcher</em></a>) – The owning federated searcher.</p></li>
+<li><p><strong>ast</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The validated private expression tree.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.federated_store.</span></span><span class="sig-name descname"><span class="pre">FederatedSearcher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher" title="Link to this definition">¶</a></dt>
+<dd><p>Build and validate one portable, single-root federated query.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>store</strong> (<a class="reference internal" href="#httk.data.federated_store.FederatedStore" title="httk.data.federated_store.FederatedStore"><em>FederatedStore</em></a>) – The federation whose child stores provide the query surface.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.offset">
+<span class="sig-name descname"><span class="pre">offset</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.offset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.offset" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.origin">
+<span class="sig-name descname"><span class="pre">origin</span></span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.origin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.origin" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.variable">
+<span class="sig-name descname"><span class="pre">variable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.variable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.variable" title="Link to this definition">¶</a></dt>
+<dd><p>Bind one shared or explicit target against child searcher prototypes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>target</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – A shared child target or a source-specific target binding.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The federated root variable.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError" title="httk.data.query.protocols.UnsupportedQueryError"><strong>httk.data.query.protocols.UnsupportedQueryError</strong></a> – If a second root or foreign target is supplied.</p></li>
+<li><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><strong>FederatedSourceError</strong></a> – If a source rejects target binding.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedVariable" title="httk.data.federated_store.FederatedVariable">FederatedVariable</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.add">
+<span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expression</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.add" title="Link to this definition">¶</a></dt>
+<dd><p>Validate and retain a portable condition for the future frozen plan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>expression</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – An expression produced by this searcher.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError" title="httk.data.query.protocols.UnsupportedQueryError"><strong>httk.data.query.protocols.UnsupportedQueryError</strong></a> – If the expression belongs to another searcher.</p></li>
+<li><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><strong>FederatedSourceError</strong></a> – If a source rejects the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.output">
+<span class="sig-name descname"><span class="pre">output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.output" title="Link to this definition">¶</a></dt>
+<dd><p>Declare a record, scalar field, or origin output for a future plan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The root variable, field, or <code class="docutils literal notranslate"><span class="pre">origin</span></code> sentinel to project.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The nonempty output name.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> is empty or already declared.</p></li>
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError" title="httk.data.query.protocols.UnsupportedQueryError"><strong>httk.data.query.protocols.UnsupportedQueryError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">value</span></code> is not owned by this searcher.</p></li>
+<li><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><strong>FederatedSourceError</strong></a> – If a source rejects the output.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.add_sort">
+<span class="sig-name descname"><span class="pre">add_sort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">descending</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.add_sort"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.add_sort" title="Link to this definition">¶</a></dt>
+<dd><p>Reject global sorting until a portable sort-semantics contract exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>field</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – The requested sort field.</p></li>
+<li><p><strong>descending</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether the requested order is descending.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError" title="httk.data.query.protocols.UnsupportedQueryError"><strong>httk.data.query.protocols.UnsupportedQueryError</strong></a> – Always, because global federation sorting
+has no portable contract.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.count">
+<span class="sig-name descname"><span class="pre">count</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.count" title="Link to this definition">¶</a></dt>
+<dd><p>Return the exact unpaged count of the current filtered union.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The exact sum of matching rows across participating sources.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.CountUnavailableError" title="httk.data.query.protocols.CountUnavailableError"><strong>httk.data.query.protocols.CountUnavailableError</strong></a> – If a source cannot provide an exact count.</p></li>
+<li><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><strong>FederatedSourceError</strong></a> – If a source fails while counting.</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.set_limit">
+<span class="sig-name descname"><span class="pre">set_limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">limit</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.set_limit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.set_limit" title="Link to this definition">¶</a></dt>
+<dd><p>Set the global output limit; a negative value clears it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The nonnegative limit, or a negative value to clear it.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">limit</span></code> is not an integer.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.add_offset">
+<span class="sig-name descname"><span class="pre">add_offset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.add_offset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.add_offset" title="Link to this definition">¶</a></dt>
+<dd><p>Add a global source-union offset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The nonnegative number of union rows to skip.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">offset</span></code> is not an integer.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">offset</span></code> is negative.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.federated_store.FederatedSearcher.results">
+<span class="sig-name descname"><span class="pre">results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">outputs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/federated_store.html#FederatedSearcher.results"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.federated_store.FederatedSearcher.results" title="Link to this definition">¶</a></dt>
+<dd><p>Freeze a projection plan into a lazy, re-iterable result set.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>**outputs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><em>object</em></a>) – Optional output names mapped to root variables or fields.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The lazy frozen result set.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no outputs are declared or an output name is invalid.</p></li>
+<li><p><a class="reference internal" href="../query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError" title="httk.data.query.protocols.UnsupportedQueryError"><strong>httk.data.query.protocols.UnsupportedQueryError</strong></a> – If an output does not belong to this searcher.</p></li>
+<li><p><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError" title="httk.data.federated_store.FederatedSourceError"><strong>FederatedSourceError</strong></a> – If a source rejects an output.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet" title="httk.data.federated_store.FederatedResultSet">FederatedResultSet</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../query/index.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">httk.data.query</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../entry_providers/index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">httk.data.entry_providers</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">httk.data.federated_store</a><ul>
+<li><a class="reference internal" href="#exceptions">Exceptions</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedStoreError"><code class="docutils literal notranslate"><span class="pre">FederatedStoreError</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError"><code class="docutils literal notranslate"><span class="pre">FederatedSourceError</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError.source"><code class="docutils literal notranslate"><span class="pre">FederatedSourceError.source</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSourceError.operation"><code class="docutils literal notranslate"><span class="pre">FederatedSourceError.operation</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultColumn"><code class="docutils literal notranslate"><span class="pre">FederatedResultColumn</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultColumn.name"><code class="docutils literal notranslate"><span class="pre">FederatedResultColumn.name</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.names"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.names</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.first"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.first()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.one"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.one()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.scalars"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.scalars()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.column"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.column()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedResultSet.cursor"><code class="docutils literal notranslate"><span class="pre">FederatedResultSet.cursor()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedTarget"><code class="docutils literal notranslate"><span class="pre">FederatedTarget</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedTarget.name"><code class="docutils literal notranslate"><span class="pre">FederatedTarget.name</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedTarget.targets"><code class="docutils literal notranslate"><span class="pre">FederatedTarget.targets</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedStore"><code class="docutils literal notranslate"><span class="pre">FederatedStore</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedStore.source_names"><code class="docutils literal notranslate"><span class="pre">FederatedStore.source_names</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedStore.target"><code class="docutils literal notranslate"><span class="pre">FederatedStore.target()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedStore.searcher"><code class="docutils literal notranslate"><span class="pre">FederatedStore.searcher()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedVariable"><code class="docutils literal notranslate"><span class="pre">FederatedVariable</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedVariable.always_true"><code class="docutils literal notranslate"><span class="pre">FederatedVariable.always_true()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedVariable.always_false"><code class="docutils literal notranslate"><span class="pre">FederatedVariable.always_false()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField"><code class="docutils literal notranslate"><span class="pre">FederatedField</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.contains"><code class="docutils literal notranslate"><span class="pre">FederatedField.contains()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.startswith"><code class="docutils literal notranslate"><span class="pre">FederatedField.startswith()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.endswith"><code class="docutils literal notranslate"><span class="pre">FederatedField.endswith()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.has"><code class="docutils literal notranslate"><span class="pre">FederatedField.has()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.has_any"><code class="docutils literal notranslate"><span class="pre">FederatedField.has_any()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.has_only"><code class="docutils literal notranslate"><span class="pre">FederatedField.has_only()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedField.is_in"><code class="docutils literal notranslate"><span class="pre">FederatedField.is_in()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedExpression"><code class="docutils literal notranslate"><span class="pre">FederatedExpression</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.offset"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.offset</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.origin"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.origin</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.variable"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.variable()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.add"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.add()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.output"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.output()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.add_sort"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.add_sort()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.count"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.count()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.set_limit"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.set_limit()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.add_offset"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.add_offset()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.federated_store.FederatedSearcher.results"><code class="docutils literal notranslate"><span class="pre">FederatedSearcher.results()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

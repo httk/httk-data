@@ -1,0 +1,473 @@
+httk.data.query.protocols
+=========================
+
+.. py:module:: httk.data.query.protocols
+
+.. autoapi-nested-parse::
+
+   Typed protocols for the store/searcher query contract.
+
+   These protocols define the backend-agnostic query interface shared by httk
+   data stores: the database layer in httk-data implements them over SQL, and
+   serving modules (such as *httk-serve*, whose in-memory store also conforms)
+   program against them. They mirror the query interface of the httk v1 database
+   layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can
+   stand in for a real store in tests.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.data.query.protocols.ID_FIELD
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.query.protocols.UnsupportedQueryError
+   httk.data.query.protocols.CountUnavailableError
+   httk.data.query.protocols.NoResultError
+   httk.data.query.protocols.MultipleResultsError
+   httk.data.query.protocols.PaginationCursorError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.query.protocols.PageOrder
+   httk.data.query.protocols.ContinuationToken
+   httk.data.query.protocols.ResultPage
+   httk.data.query.protocols.PageableResultSetLike
+   httk.data.query.protocols.ResultRow
+   httk.data.query.protocols.ResultRowLike
+   httk.data.query.protocols.ResultSetLike
+   httk.data.query.protocols.SearchExpression
+   httk.data.query.protocols.SearchField
+   httk.data.query.protocols.SearchVariable
+   httk.data.query.protocols.SearchResult
+   httk.data.query.protocols.Searcher
+   httk.data.query.protocols.Store
+
+
+Module Contents
+---------------
+
+.. py:data:: ID_FIELD
+   :type:  Final
+   :value: '__id'
+
+
+   The backend field name used for the served entry identifier.
+
+.. py:exception:: UnsupportedQueryError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Report that a valid query operation is outside a store's supported profile.
+
+
+.. py:exception:: CountUnavailableError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Report that a store cannot provide an exact query count.
+
+
+.. py:exception:: NoResultError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found no matching result.
+
+
+.. py:exception:: MultipleResultsError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found multiple results.
+
+
+.. py:exception:: PaginationCursorError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Report that a continuation cursor is malformed, expired, or belongs to another result plan.
+
+
+.. py:class:: PageOrder
+
+   Order a continuation page by one named scalar result projection.
+
+   ``name`` identifies the name supplied to ``results()`` (or
+   :meth:`Searcher.output`), never a backend column object.  The result-set
+   implementation validates that it is a root scalar projection before it
+   generates SQL.
+
+   :param name: The declared scalar output name used for ordering.
+   :param descending: Whether to order this field in descending order.
+   :param nulls: Whether null values sort first or last.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: descending
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: nulls
+      :type:  Literal['first', 'last']
+      :value: 'last'
+
+
+
+.. py:class:: ContinuationToken
+
+   Bases: :py:obj:`str`
+
+
+   Carry an opaque URL-safe continuation value.
+
+   It is a ``str`` subclass so normal JSON serializers preserve it as a
+   scalar value.  Applications should pass a token returned by a page back
+   unchanged; data backends validate its version, structure, and result-plan
+   fingerprint before using any decoded value as a bound parameter.
+
+   :param value: The opaque continuation value.
+
+
+.. py:class:: ResultPage
+
+   Represent an immutable continuation-page result.
+
+   ``rows`` is always a tuple.  Returned rows are ordinary persistent result
+   rows, not the expiring proxies produced by ``SqlResultSet.cursor()``.
+   ``total`` is populated only when the caller explicitly asks for it.
+
+   :param rows: The persistent rows returned by the page.
+   :param next: The token for the next page, if one exists.
+   :param previous: The token for the previous page, if one exists.
+   :param total: The exact result count when requested, otherwise ``None``.
+
+
+   .. py:attribute:: rows
+      :type:  tuple[ResultRowLike, Ellipsis]
+
+
+   .. py:attribute:: next
+      :type:  ContinuationToken | None
+
+
+   .. py:attribute:: previous
+      :type:  ContinuationToken | None
+
+
+   .. py:attribute:: total
+      :type:  int | None
+      :value: None
+
+
+
+.. py:class:: PageableResultSetLike
+
+   Bases: :py:obj:`Protocol`
+
+
+   Expose optional continuation-page capability on a frozen result set.
+
+   This deliberately extends neither :class:`ResultSetLike` nor
+   :class:`Searcher`: stores that do not support seek pagination remain fully
+   conforming to the required portable contracts.
+
+
+   .. py:method:: page(*, size, order_by, cursor = None, include_total = False)
+
+      Return one ordered continuation page.
+
+
+
+.. py:class:: ResultRow(values, names, resolver = None, guard = None)
+
+   Represent one named result row by position, name, or attribute.
+
+   :param values: The row values in declaration order.
+   :param names: The corresponding output names.
+   :param resolver: An optional lazy value resolver.
+   :param guard: An optional callback that rejects access to expired values.
+
+
+   .. py:property:: names
+      :type: tuple[str, Ellipsis]
+
+
+      Return the declared output names.
+
+
+   .. py:property:: values
+      :type: tuple[Any, Ellipsis]
+
+
+      Return the row values in declaration order.
+
+
+.. py:class:: ResultRowLike
+
+   Bases: :py:obj:`Protocol`
+
+
+   Require named access to one result row.
+
+
+   .. py:property:: names
+      :type: tuple[str, Ellipsis]
+
+
+      Return the row's declared output names.
+
+
+.. py:class:: ResultSetLike
+
+   Bases: :py:obj:`Protocol`
+
+
+   Require the common operations of a materialized result set.
+
+
+   .. py:method:: first()
+
+      Return the first row, or ``None`` when no row matches.
+
+
+
+   .. py:method:: one()
+
+      Return the only row, or raise when the count is not one.
+
+
+
+   .. py:method:: scalars(name = None)
+
+      Iterate over one named scalar output.
+
+
+
+.. py:class:: SearchExpression
+
+   Bases: :py:obj:`Protocol`
+
+
+   Require composable backend search expressions.
+
+
+.. py:class:: SearchField
+
+   Bases: :py:obj:`Protocol`
+
+
+   Expose a queryable field of a search variable.
+
+   In addition to the methods below, fields support the rich comparison
+   operators (``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``), returning
+   :class:`SearchExpression`. The handlers invoke those via
+   ``getattr(field, '__eq__')(value)`` since the comparison dunders cannot be
+   typed as expression-returning.
+
+   The three string-matching methods take **literal** text: no wildcard or
+   pattern syntax whatsoever crosses this contract, so ``%`` and ``_`` (and
+   any other metacharacter) match themselves. A backend is therefore free to
+   implement them with SQL ``LIKE`` over an escaped pattern, with a regular
+   expression, or with a full-text index — the choice is invisible here.
+
+
+   .. py:method:: has(value)
+
+      Match a list field containing ``value``.
+
+
+
+   .. py:method:: has_any(*values)
+
+      Match a list field containing any of ``values``.
+
+
+
+   .. py:method:: has_only(*values)
+
+      Match a list field containing no values outside ``values``.
+
+
+
+   .. py:method:: is_in(*values)
+
+      Match a root scalar field whose value is one of ``values``.
+
+      ``None`` is an explicit member: it matches a null field value, and its
+      negation excludes nulls rather than inheriting SQL's three-valued
+      ``NOT IN (..., NULL)`` behavior.
+
+      Backends define the corresponding semantics for child or set fields;
+      for example, a backend may use the existing ``has_only``-style
+      all-values reading for a child field.
+
+
+
+   .. py:method:: contains(text)
+
+      Match values containing ``text`` as a literal substring.
+
+
+
+   .. py:method:: startswith(prefix)
+
+      Match values beginning with the literal ``prefix``.
+
+
+
+   .. py:method:: endswith(suffix)
+
+      Match values ending with the literal ``suffix``.
+
+
+
+.. py:class:: SearchVariable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Bind a query variable to a target type whose attributes yield fields.
+
+   ``always_true``/``always_false`` are reserved names: they are real methods
+   of the variable, never stored fields resolved through ``__getattr__``.
+   They exist so a translation layer can express a constant truth value
+   without inventing a probe field. A ``field == field`` probe is NULL-unsound,
+   since it yields NULL (not true) for a NULL field.
+
+
+   .. py:method:: always_true()
+
+      An expression that matches every row.
+
+
+
+   .. py:method:: always_false()
+
+      An expression that matches no row.
+
+
+
+.. py:class:: SearchResult
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   Represent one match with declared output values and names.
+
+   ``values`` holds one entry per :meth:`Searcher.output` call in declaration
+   order; it is a tuple, so ``values, names = result`` and ``result[0][0]``
+   both work.
+
+
+   .. py:attribute:: values
+      :type:  tuple[Any, Ellipsis]
+
+
+   .. py:attribute:: names
+      :type:  tuple[str, Ellipsis]
+
+
+.. py:class:: Searcher
+
+   Bases: :py:obj:`Protocol`
+
+
+   Build one query and iterate its results.
+
+   Iteration yields one :class:`SearchResult` per match, so ``item[0][0]`` is
+   the first declared output of the match (typically the matched row object).
+   The expressions received by ``add`` are always ones produced by this same
+   backend's search variables, so implementations may type them as their own
+   expression class; a backend that needs a second (post-filter) evaluation
+   position decides that from the expression itself, not from the caller.
+
+
+   .. py:attribute:: offset
+      :type:  int
+
+
+   .. py:method:: variable(target)
+
+      Bind a query variable to ``target``.
+
+
+
+   .. py:method:: output(variable, name)
+
+      Declare ``variable`` as a named result output.
+
+
+
+   .. py:method:: add(expression)
+
+      Add a filter expression to the query.
+
+
+
+   .. py:method:: count()
+
+      Return the exact count of the current query.
+
+
+
+   .. py:method:: set_limit(limit)
+
+      Set the query limit.
+
+
+
+   .. py:method:: add_offset(offset)
+
+      Add an offset to the query.
+
+
+
+   .. py:method:: add_sort(field, descending)
+
+      Add a field sort to the query.
+
+
+
+   .. py:method:: results(**outputs)
+
+      Return a result set for the requested named outputs.
+
+
+
+.. py:class:: Store
+
+   Bases: :py:obj:`Protocol`
+
+
+   Require a store that can create a query searcher.
+
+
+   .. py:method:: searcher()
+
+      Create an empty searcher.
+
+
+

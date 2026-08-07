@@ -1,0 +1,113 @@
+httk.data.db.rows
+=================
+
+.. py:module:: httk.data.db.rows
+
+.. autoapi-nested-parse::
+
+   Batched storage rows with lazy, exact field reconstruction.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.rows.StaleResultError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.rows.RowHydrator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.rows.decode_field
+   httk.data.db.rows.row_class
+
+
+Module Contents
+---------------
+
+.. py:exception:: StaleResultError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A search result sid disappeared before its lazy row was hydrated.
+
+
+.. py:class:: RowHydrator(store, schema_or_cls, sids, *, context = None)
+
+   Hydrate a sid sequence in 500-row batches without touching field values yet.
+
+   :param store: The store that owns the rows.
+   :param schema_or_cls: The resolved schema or storable class to hydrate.
+   :param sids: The row identifiers to hydrate.
+   :param context: The shared recursive hydration context, if one exists.
+
+
+   .. py:method:: row(sid)
+
+      Return the lazy row for ``sid``.
+
+      :param sid: The row identifier.
+      :return: The lazy row proxy.
+      :raises KeyError: If ``sid`` is not in this hydrator's sequence.
+
+      Database presence is validated when the row's chunk is loaded or the
+      row is materialized.
+
+
+
+   .. py:method:: materialize_many()
+
+      Materialize every row in this batch while retaining recursive chunk batching.
+
+      :return: The materialized rows in the input order.
+      :raises httk.data.db.rows.StaleResultError: If a requested row no longer exists.
+
+
+
+   .. py:method:: materialize(sid)
+
+      Materialize and return one row.
+
+      :param sid: The row identifier.
+      :return: The materialized storable instance.
+      :raises KeyError: If ``sid`` is not in this hydrator's sequence.
+      :raises httk.data.db.schema.SchemaError: If eager hydration encounters a reference cycle.
+      :raises httk.data.db.rows.StaleResultError: If the row no longer exists.
+
+
+
+.. py:function:: decode_field(store, schema, spec, sid, row)
+
+   Decode one pinned parent-row value.
+
+   :param store: The store supplying recursive row hydration.
+   :param schema: The schema of the parent row.
+   :param spec: The field specification to decode.
+   :param sid: The parent row identifier.
+   :param row: The pinned parent row.
+   :return: The decoded field value.
+   :raises TypeError: If the field needs its row chunk for child or reference hydration.
+
+
+.. py:function:: row_class(cls)
+
+   Return the cached lazy subclass for a frozen storable dataclass.
+
+   :param cls: The frozen storable dataclass to proxy.
+   :return: The cached lazy row subclass.
+   :raises httk.data.db.schema.SchemaError: If the class uses unsupported slots or custom equality or hashing.
+
+

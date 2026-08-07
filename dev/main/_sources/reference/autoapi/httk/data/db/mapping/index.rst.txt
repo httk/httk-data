@@ -1,0 +1,117 @@
+httk.data.db.mapping
+====================
+
+.. py:module:: httk.data.db.mapping
+
+.. autoapi-nested-parse::
+
+   Schema-to-SQL mapping: build SQLAlchemy Core tables from resolved :class:`~httk.data.db.schema.TableSchema` IR.
+
+   :func:`table_for` turns one resolved schema into a :class:`sqlalchemy.Table`
+   registered in a :class:`sqlalchemy.MetaData` (idempotently: an already-built
+   table is returned as-is), recursing into referenced and child-element storable
+   classes so that every foreign-key target exists in the same metadata.
+   :func:`sqlalchemy_metadata` is the convenience wrapper that maps a batch of
+   schemas into one fresh metadata.
+
+   The relational layout produced here is exactly the one the schema IR
+   documents, plus the store-managed columns:
+
+   - every parent table gets an ``sid`` integer primary key (autoincrementing,
+     with an attached ``<table>_sid_seq`` sequence for dialects such as DuckDB
+     that need one; SQLite ignores it) and — only under the ``"content_id"``
+     dedup policy — a unique-indexed ``content_id`` text column;
+   - every child table gets a ``<parent table>_sid`` integer foreign key (NOT
+     NULL, indexed) and a ``<field>_index`` integer ordering column ahead of its
+     element columns; storable elements become a ``<field>_sid`` foreign key to
+     the element class's table.
+
+   Index names are deterministic and table-scoped — ``ix_<table>_<column>`` for
+   plain indexes, ``uq_<table>_<column>`` for unique ones, columns joined by
+   underscores for composites — truncated with a stable hash suffix when they
+   would exceed common identifier-length limits.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.data.db.mapping.SID_COLUMN
+   httk.data.db.mapping.CONTENT_ID_COLUMN
+   httk.data.db.mapping.DISPATCH_CONTENT_ID_COLUMN
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.mapping.sqlalchemy_metadata
+   httk.data.db.mapping.entry_dispatch_table_name
+   httk.data.db.mapping.backing_dispatch_column_name
+   httk.data.db.mapping.dispatch_table_for
+   httk.data.db.mapping.table_for
+
+
+Module Contents
+---------------
+
+.. py:data:: SID_COLUMN
+   :type:  Final
+   :value: 'sid'
+
+
+   The store-managed integer primary-key column present on every table.
+
+.. py:data:: CONTENT_ID_COLUMN
+   :type:  Final
+   :value: 'content_id'
+
+
+   The store-managed content-identity column of tables with the ``"content_id"`` dedup policy.
+
+.. py:data:: DISPATCH_CONTENT_ID_COLUMN
+   :type:  Final
+   :value: 'content_id'
+
+
+   The content identity primary key of an entry-family dispatch table.
+
+.. py:function:: sqlalchemy_metadata(schemas)
+
+   A fresh :class:`sqlalchemy.MetaData` holding the tables of ``schemas`` (recursively).
+
+
+.. py:function:: entry_dispatch_table_name(family_name)
+
+   The deterministic reserved table name for one registered entry family.
+
+
+.. py:function:: backing_dispatch_column_name(backing_name)
+
+   The deterministic nullable foreign-key column for one backing in a dispatch table.
+
+
+.. py:function:: dispatch_table_for(family_name, backings, metadata)
+
+   Build the one-of-many dispatch table for an entry family.
+
+   A single-backing family has no dispatch table and must not call this
+   helper. The primary key is the backing record's canonical content id;
+   every nullable backing sid is unique on its own, and the named check
+   constraint makes precisely one of them non-null.
+
+
+.. py:function:: table_for(schema, metadata)
+
+   The :class:`sqlalchemy.Table` of ``schema`` within ``metadata``, building it on first use.
+
+   Building is idempotent per metadata — if the table is already registered it
+   is returned unchanged — and recursive: the child tables of the schema and
+   the tables of every referenced storable class (reference fields and
+   storable child elements alike) are built into the same metadata, so all
+   foreign keys resolve.
+
+

@@ -1,0 +1,89 @@
+httk.data.db.engine
+===================
+
+.. py:module:: httk.data.db.engine
+
+.. autoapi-nested-parse::
+
+   Database engine lifecycle: :class:`Database` wraps a SQLAlchemy engine behind an httk-facing API.
+
+   A :class:`Database` names *where* data lives — an SQLite file, an in-memory
+   SQLite database, a DuckDB file — and owns the connection pool that reaches it.
+   It deliberately exposes no SQL surface of its own: the store layer
+   (:class:`~httk.data.db.store.SqlStore`) asks it for connections internally, and
+   user code only constructs one (usually via :meth:`Database.sqlite` or
+   :meth:`Database.duckdb`) and passes it on. There is no global engine registry
+   and no interpreter-exit hook; dispose of a database explicitly with
+   :meth:`Database.dispose` or use it as a context manager.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.engine.Database
+
+
+Module Contents
+---------------
+
+.. py:class:: Database(engine)
+
+   A relational database reachable through a wrapped SQLAlchemy engine.
+
+   Construct one with :meth:`sqlite` or :meth:`duckdb` (or, for other
+   SQLAlchemy-supported backends, by passing a preconfigured engine directly).
+   The instance is a context manager; leaving the ``with`` block disposes the
+   engine's connection pool.
+
+   :param engine: The configured SQLAlchemy engine to wrap.
+
+
+   .. py:method:: sqlite(path = None)
+      :classmethod:
+
+
+      Create an SQLite database stored in ``path``, or in memory when ``path`` is None.
+
+      The in-memory variant is configured (via a static connection pool with a
+      shared, thread-unrestricted connection) so that every connection drawn
+      from the engine sees the one and same database; file-backed databases
+      use SQLAlchemy's default pooling.
+
+      :param path: The database file path, or ``None`` for an in-memory database.
+      :return: The configured database wrapper.
+
+
+
+   .. py:method:: duckdb(path = None)
+      :classmethod:
+
+
+      Create a DuckDB database stored in ``path``, or in memory when ``path`` is None.
+
+      :param path: The database file path, or ``None`` for an in-memory database.
+      :return: The configured database wrapper.
+      :raises ImportError: If the ``duckdb_engine`` SQLAlchemy dialect is not installed;
+          install the ``httk-data[duckdb]`` extra to use it.
+
+
+
+   .. py:property:: engine
+      :type: sqlalchemy.Engine
+
+
+      Return the underlying SQLAlchemy engine for the storage layer.
+
+      :return: The wrapped SQLAlchemy engine.
+
+
+   .. py:method:: dispose()
+
+      Dispose the current connection pool; later use creates a new pool.
+
+      :return: None.
+
+
+

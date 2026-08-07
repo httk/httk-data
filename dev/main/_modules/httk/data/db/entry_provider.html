@@ -1,0 +1,907 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.db.entry_provider - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/index.html">Reference</a><input aria-label="Toggle navigation of Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/autoapi/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/autoapi/httk/registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for httk.data.db.entry_provider</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Serve stored dataclasses through the httk-core entry-provider contract.</span>
+
+<span class="sd">:class:`StoreEntryProvider` bridges the SQL storage layer to the neutral</span>
+<span class="sd">:class:`~httk.core.EntryProvider` contract: it serves the rows of one or more</span>
+<span class="sd">storable classes in a :class:`~httk.data.db.store.SqlStore` as described,</span>
+<span class="sd">JSON-able entry-type records, so a serving module (such as *httk-serve*)</span>
+<span class="sd">can expose a database as an OPTIMADE API without either side depending on the</span>
+<span class="sd">other.</span>
+
+<span class="sd">For each served class the provider either passes through a supplied</span>
+<span class="sd">:class:`~httk.core.EntryTypeDefinition` (validated to describe every served</span>
+<span class="sd">property) or auto-generates one from the class&#39;s resolved</span>
+<span class="sd">:class:`~httk.data.db.schema.TableSchema`: the OPTIMADE core ``id``/``type``</span>
+<span class="sd">properties plus one :meth:`~httk.core.PropertyDefinition.from_simple`</span>
+<span class="sd">definition per servable stored field, each named with a registered</span>
+<span class="sd">database-specific ``prefix`` (default ``&quot;_httk_&quot;``) and merged in via</span>
+<span class="sd">:meth:`~httk.core.EntryTypeDefinition.extended` — the same construction route</span>
+<span class="sd">the other httk entry providers use.</span>
+
+<span class="sd">The schema-to-OPTIMADE type mapping is:</span>
+
+<span class="sd">- ``str``/``int``/``bool``/``float`` fields — ``string``/``integer``/</span>
+<span class="sd">  ``boolean``/``float``;</span>
+<span class="sd">- rational fields (:class:`fractions.Fraction`, :class:`~httk.core.FracScalar`,</span>
+<span class="sd">  :class:`~httk.core.SurdScalar`) — ``float``, served as the nearest float</span>
+<span class="sd">  (stored values themselves remain exact; only the *served* value is</span>
+<span class="sd">  approximate);</span>
+<span class="sd">- :class:`datetime.datetime` fields — ``timestamp``, served as ISO-8601 text;</span>
+<span class="sd">- fixed-shape (``Shape(r, c)``) and variable-rows (``Shape(0, c)``)</span>
+<span class="sd">  :class:`~httk.core.FracVector` fields — ``list of list of float`` (the fixed</span>
+<span class="sd">  shape also declares its dimension sizes);</span>
+<span class="sd">- ``list``/``tuple`` fields of scalars or of the codec types above — ``list</span>
+<span class="sd">  of`` the mapped element type.</span>
+
+<span class="sd">Not every stored field can be served as a property: ``bytes`` fields (and</span>
+<span class="sd">fields encoded by a custom, non-built-in value codec) have no OPTIMADE value</span>
+<span class="sd">representation and are skipped, while reference fields and child fields of</span>
+<span class="sd">storable elements surface through :meth:`StoreEntryProvider.relationships`</span>
+<span class="sd">instead — when their target class is itself served, each record declares its</span>
+<span class="sd">related entries as a flat tuple of :class:`~httk.core.RelatedEntry` values,</span>
+<span class="sd">carrying the ``role``/``description`` metadata of an optional</span>
+<span class="sd">:class:`~httk.core.storage.Related` field marker (``Related(serve=False)`` suppresses</span>
+<span class="sd">the field as a relationship).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Mapping</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">sqlalchemy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.core</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">EntryProvider</span><span class="p">,</span>
+    <span class="n">EntryTypeDefinition</span><span class="p">,</span>
+    <span class="n">FracVector</span><span class="p">,</span>
+    <span class="n">PropertyDefinition</span><span class="p">,</span>
+    <span class="n">RelatedEntry</span><span class="p">,</span>
+    <span class="n">known_definition_prefixes</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.core.storage</span><span class="w"> </span><span class="kn">import</span> <span class="n">RelationshipLink</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.codecs</span><span class="w"> </span><span class="kn">import</span> <span class="n">codec_named</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.mapping</span><span class="w"> </span><span class="kn">import</span> <span class="n">SID_COLUMN</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">resolve_schema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.searcher</span><span class="w"> </span><span class="kn">import</span> <span class="n">SqlColumn</span><span class="p">,</span> <span class="n">_query_index</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">SqlStore</span><span class="p">,</span> <span class="n">_as_fixed_tensor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">ID_FIELD</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;StoreEntryProvider&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;auto_definition&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;served_specs&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<span class="c1">#: How a scalar column kind maps onto an OPTIMADE fulltype (bytes has none).</span>
+<span class="n">_SCALAR_FULLTYPES</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;str&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;int&quot;</span><span class="p">:</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bool&quot;</span><span class="p">:</span> <span class="s2">&quot;boolean&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;float&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">#: How a built-in value codec maps onto an OPTIMADE fulltype (custom codecs have none).</span>
+<span class="n">_CODEC_FULLTYPES</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;float&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fraction&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fracscalar&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;surdscalar&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;datetime&quot;</span><span class="p">:</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_default_id</span><span class="p">(</span><span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sid</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">entry_type</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">sid</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_LinkScan</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One relationship-link scan: which table to read and how to interpret its rows.</span>
+
+<span class="sd">    Each stored row of ``declaring`` expresses one FROM→TO relationship: the</span>
+<span class="sd">    FROM-side sid is read from ``source_column`` and the TO-side sid from</span>
+<span class="sd">    ``target_column`` (a reference field&#39;s foreign-key column, or the declaring</span>
+<span class="sd">    table&#39;s own sid column for a ``None`` endpoint).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">declaring</span><span class="p">:</span> <span class="nb">type</span>
+    <span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span>
+    <span class="n">link</span><span class="p">:</span> <span class="n">RelationshipLink</span>
+    <span class="n">source_column</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">target_column</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">from_cls</span><span class="p">:</span> <span class="nb">type</span>
+    <span class="n">to_cls</span><span class="p">:</span> <span class="nb">type</span>
+    <span class="n">to_type</span><span class="p">:</span> <span class="nb">str</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_fulltype_of</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The OPTIMADE fulltype a field is served as, or None when it is not servable.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;scalar&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_SCALAR_FULLTYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;encoded&quot;</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">_CODEC_FULLTYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;fixed_array&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;list of list of float&quot;</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;child&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;list of list of float&quot;</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>  <span class="c1"># storable elements surface through relationships()</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">element</span> <span class="o">=</span> <span class="n">_CODEC_FULLTYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">element</span> <span class="o">=</span> <span class="n">_SCALAR_FULLTYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">child</span><span class="o">.</span><span class="n">element_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span> <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">child</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">element</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;list of </span><span class="si">{</span><span class="n">element</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="kc">None</span>  <span class="c1"># reference: surfaces through relationships()</span>
+
+
+<div class="viewcode-block" id="served_specs">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.served_specs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">served_specs</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The served ``(property name, field spec, fulltype)`` triples of a storable class.</span>
+
+<span class="sd">    One triple per servable stored field of ``schema`` (see the module</span>
+<span class="sd">    docstring for which fields are servable and how their types map), each</span>
+<span class="sd">    named ``{prefix}custom_{field}`` in the ``custom_`` sub-namespace.</span>
+
+<span class="sd">    :param schema: The resolved schema whose fields are inspected.</span>
+<span class="sd">    :param prefix: The registered prefix used for served property names.</span>
+<span class="sd">    :return: The servable property, field-specification, and fulltype triples.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">served</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">fields</span><span class="p">:</span>
+        <span class="n">fulltype</span> <span class="o">=</span> <span class="n">_fulltype_of</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fulltype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">served</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">custom_</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="n">fulltype</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">served</span></div>
+
+
+
+<div class="viewcode-block" id="auto_definition">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.auto_definition">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">auto_definition</span><span class="p">(</span><span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntryTypeDefinition</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Auto-generate the :class:`~httk.core.EntryTypeDefinition` of a storable class.</span>
+
+<span class="sd">    The definition carries the OPTIMADE core ``id``/``type`` properties plus</span>
+<span class="sd">    one :meth:`~httk.core.PropertyDefinition.from_simple` definition per triple</span>
+<span class="sd">    of :func:`served_specs`, named in the ``custom_`` sub-namespace of</span>
+<span class="sd">    ``prefix`` so generated names cannot collide with curated prefixed</span>
+<span class="sd">    definitions, merged in via</span>
+<span class="sd">    :meth:`~httk.core.EntryTypeDefinition.extended` (so ``prefix`` must be a</span>
+<span class="sd">    registered definition prefix).</span>
+
+<span class="sd">    :param entry_type: The entry type name to define.</span>
+<span class="sd">    :param schema: The resolved schema of the stored class.</span>
+<span class="sd">    :param prefix: The registered prefix used for generated property names.</span>
+<span class="sd">    :return: The generated entry-type definition.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">cls</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">cls</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">EntryTypeDefinition</span><span class="p">(</span>
+        <span class="n">entry_type</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;The &#39;</span><span class="si">{</span><span class="n">entry_type</span><span class="si">}</span><span class="s2">&#39; entry type, generated from the stored class </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">,</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">PropertyDefinition</span><span class="o">.</span><span class="n">from_simple</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The unique entry id.&quot;</span><span class="p">,</span> <span class="n">required_response</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">PropertyDefinition</span><span class="o">.</span><span class="n">from_simple</span><span class="p">(</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The name of the entry type.&quot;</span><span class="p">,</span> <span class="n">required_response</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">),</span>
+        <span class="p">},</span>
+    <span class="p">)</span>
+    <span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PropertyDefinition</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="n">fulltype</span> <span class="ow">in</span> <span class="n">served_specs</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">prefix</span><span class="p">):</span>
+        <span class="n">kind</span> <span class="o">=</span> <span class="s2">&quot;stored property&quot;</span> <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">derived</span> <span class="k">else</span> <span class="s2">&quot;stored field&quot;</span>
+        <span class="n">dimensions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;fixed_array&quot;</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">dimensions</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;names&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;rows&quot;</span><span class="p">,</span> <span class="s2">&quot;cols&quot;</span><span class="p">],</span> <span class="s2">&quot;sizes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">shape</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span><span class="o">.</span><span class="n">cols</span><span class="p">]}</span>
+        <span class="n">extra</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">PropertyDefinition</span><span class="o">.</span><span class="n">from_simple</span><span class="p">(</span>
+            <span class="n">name</span><span class="p">,</span>
+            <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;The </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">&#39; of </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">,</span>
+            <span class="n">fulltype</span><span class="o">=</span><span class="n">fulltype</span><span class="p">,</span>
+            <span class="n">dimensions</span><span class="o">=</span><span class="n">dimensions</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">base</span><span class="o">.</span><span class="n">extended</span><span class="p">(</span><span class="n">extra</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="StoreEntryProvider">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StoreEntryProvider</span><span class="p">(</span><span class="n">EntryProvider</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serves the stored rows of storable classes as httk-core entry types.</span>
+
+<span class="sd">    ``classes`` maps each served entry-type name to its storable dataclass;</span>
+<span class="sd">    the classes&#39; tables are read through ``store``. ``definitions`` optionally</span>
+<span class="sd">    supplies the :class:`~httk.core.EntryTypeDefinition` of an entry type</span>
+<span class="sd">    (validated: it must describe every property the provider serves for it);</span>
+<span class="sd">    entry types without a supplied definition get one auto-generated from the</span>
+<span class="sd">    class&#39;s schema, with every schema-derived property name carrying</span>
+<span class="sd">    ``prefix`` (which must be registered, see</span>
+<span class="sd">    :func:`~httk.core.register_definition_prefix`). ``id_of`` maps</span>
+<span class="sd">    ``(entry_type, sid, instance)`` to the served entry id; the default is</span>
+<span class="sd">    ``&quot;&lt;entry_type&gt;-&lt;sid&gt;&quot;``. ``link_classes`` supplies additional storable</span>
+<span class="sd">    classes for link metadata validation.</span>
+
+<span class="sd">    See the module docstring for which stored fields are served as properties</span>
+<span class="sd">    (and how their types map), which are skipped, and which surface through</span>
+<span class="sd">    :meth:`relationships` instead.</span>
+
+<span class="sd">    :param store: The SQL store containing the served records.</span>
+<span class="sd">    :param classes: The served entry-type names and their storable classes.</span>
+<span class="sd">    :param definitions: Optional definitions to use instead of auto-generation.</span>
+<span class="sd">    :param prefix: The registered prefix for generated property names.</span>
+<span class="sd">    :param id_of: The function that maps a served record to its public id.</span>
+<span class="sd">    :param link_classes: Additional storable classes supplied for link metadata validation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">SqlStore</span><span class="p">,</span>
+        <span class="n">classes</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">definitions</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">EntryTypeDefinition</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;_httk_&quot;</span><span class="p">,</span>
+        <span class="n">id_of</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">link_classes</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">prefix</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">known_definition_prefixes</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;the property-name prefix </span><span class="si">{</span><span class="n">prefix</span><span class="si">!r}</span><span class="s2"> is not registered; register it with &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;httk.core.register_definition_prefix() (registered prefixes: &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">known_definition_prefixes</span><span class="p">())</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="o">=</span> <span class="n">store</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">classes</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span> <span class="o">=</span> <span class="n">prefix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_id_of</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">id_of</span> <span class="k">if</span> <span class="n">id_of</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_default_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_entry_type_of</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="bp">cls</span><span class="p">:</span> <span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">TableSchema</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">resolve_schema</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_links_by_from</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">_LinkScan</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_link_inventory</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">link_classes</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_definitions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">EntryTypeDefinition</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">definitions</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="n">unknown</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_definitions</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">unknown</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;definitions were supplied for entry types this provider does not serve: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">unknown</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">entry_type</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="p">:</span>
+            <span class="n">definition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_definitions</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">definition</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">described</span> <span class="o">=</span> <span class="n">definition</span><span class="o">.</span><span class="n">properties</span>
+                <span class="n">missing</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">property_keys</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">described</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;the supplied definition for entry type </span><span class="si">{</span><span class="n">entry_type</span><span class="si">!r}</span><span class="s2"> does not describe the &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;served propert</span><span class="si">{</span><span class="s1">&#39;y&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;ies&#39;</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_link_inventory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">link_classes</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">_LinkScan</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Collect every RelationshipLink of the served and link classes, indexed by FROM-side entry type.</span>
+
+<span class="sd">        Both endpoint classes of every link must be served; a link class whose</span>
+<span class="sd">        schema declares no links is a likely user error and rejected.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">served</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="n">inventory</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">_LinkScan</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">declaring</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="o">*</span><span class="n">link_classes</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">declaring</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">declaring</span><span class="p">)</span>
+            <span class="n">schema</span> <span class="o">=</span> <span class="n">resolve_schema</span><span class="p">(</span><span class="n">declaring</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">declaring</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">served</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">schema</span><span class="o">.</span><span class="n">links</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;link class </span><span class="si">{</span><span class="n">declaring</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> declares no relationship links (StorageInfo.links &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;is empty); remove it from link_classes or declare its links&quot;</span>
+                <span class="p">)</span>
+            <span class="k">for</span> <span class="n">link</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">links</span><span class="p">:</span>
+                <span class="n">from_cls</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">link</span><span class="o">.</span><span class="n">source</span><span class="p">)</span><span class="o">.</span><span class="n">target</span> <span class="k">if</span> <span class="n">link</span><span class="o">.</span><span class="n">source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">declaring</span>
+                <span class="n">to_cls</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">link</span><span class="o">.</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">target</span> <span class="k">if</span> <span class="n">link</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">declaring</span>
+                <span class="k">assert</span> <span class="n">from_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">to_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="c1"># link endpoints are reference fields</span>
+                <span class="n">from_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_entry_type_of</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">from_cls</span><span class="p">)</span>
+                <span class="n">to_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_entry_type_of</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">to_cls</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">from_type</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">to_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">missing</span> <span class="o">=</span> <span class="n">from_cls</span> <span class="k">if</span> <span class="n">from_type</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">to_cls</span>
+                    <span class="n">side</span> <span class="o">=</span> <span class="s2">&quot;FROM&quot;</span> <span class="k">if</span> <span class="n">from_type</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;TO&quot;</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;RelationshipLink(</span><span class="si">{</span><span class="n">link</span><span class="o">.</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, </span><span class="si">{</span><span class="n">link</span><span class="o">.</span><span class="n">target</span><span class="si">!r}</span><span class="s2">) on </span><span class="si">{</span><span class="n">declaring</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;the </span><span class="si">{</span><span class="n">side</span><span class="si">}</span><span class="s2">-side class </span><span class="si">{</span><span class="n">missing</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is not served by this provider; every &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;link endpoint must resolve to a served entry type&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">inventory</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">from_type</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">_LinkScan</span><span class="p">(</span>
+                        <span class="n">declaring</span><span class="o">=</span><span class="n">declaring</span><span class="p">,</span>
+                        <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span>
+                        <span class="n">link</span><span class="o">=</span><span class="n">link</span><span class="p">,</span>
+                        <span class="n">source_column</span><span class="o">=</span><span class="p">(</span>
+                            <span class="n">schema</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">link</span><span class="o">.</span><span class="n">source</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="n">link</span><span class="o">.</span><span class="n">source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">SID_COLUMN</span>
+                        <span class="p">),</span>
+                        <span class="n">target_column</span><span class="o">=</span><span class="p">(</span>
+                            <span class="n">schema</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">link</span><span class="o">.</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="n">link</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">SID_COLUMN</span>
+                        <span class="p">),</span>
+                        <span class="n">from_cls</span><span class="o">=</span><span class="n">from_cls</span><span class="p">,</span>
+                        <span class="n">to_cls</span><span class="o">=</span><span class="n">to_cls</span><span class="p">,</span>
+                        <span class="n">to_type</span><span class="o">=</span><span class="n">to_type</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="n">inventory</span>
+
+    <span class="c1"># ------------------------------------------------------------------ the served subset</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_require_entry_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">type</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="p">[</span><span class="n">entry_type</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;StoreEntryProvider serves only the entry type(s): </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_classes</span><span class="p">))</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_served_specs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The served ``(property name, field spec, fulltype)`` triples of ``entry_type``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">served_specs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">[</span><span class="n">entry_type</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_relationship_specs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">FieldSpec</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The ``(field spec, related entry type)`` pairs whose target class is also served.</span>
+
+<span class="sd">        Fields suppressed with ``Related(serve=False)`` are excluded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pairs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">FieldSpec</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">[</span><span class="n">entry_type</span><span class="p">]</span><span class="o">.</span><span class="n">fields</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;reference&quot;</span><span class="p">,</span> <span class="s2">&quot;child&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">related</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">spec</span><span class="o">.</span><span class="n">related</span><span class="o">.</span><span class="n">serve</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">related</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_entry_type_of</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">related</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">spec</span><span class="p">,</span> <span class="n">related</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">pairs</span>
+
+    <span class="c1"># ------------------------------------------------------------------ the provider contract</span>
+
+<div class="viewcode-block" id="StoreEntryProvider.entry_types">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.entry_types">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">entry_types</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">EntryTypeDefinition</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the definitions of all served entry types.</span>
+
+<span class="sd">        :return: The served entry-type definitions keyed by entry type.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">entry_type</span><span class="p">:</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_definitions</span><span class="p">[</span><span class="n">entry_type</span><span class="p">]</span> <span class="k">if</span> <span class="n">entry_type</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_definitions</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_definition</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">entry_type</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classes</span>
+        <span class="p">}</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_auto_definition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntryTypeDefinition</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">auto_definition</span><span class="p">(</span><span class="n">entry_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">[</span><span class="n">entry_type</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">)</span>
+
+<div class="viewcode-block" id="StoreEntryProvider.property_keys">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.property_keys">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">property_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the served property-to-storage-key mapping for an entry type.</span>
+
+<span class="sd">        :param entry_type: The served entry type to inspect.</span>
+<span class="sd">        :return: The public property names and their storage keys.</span>
+<span class="sd">        :raises KeyError: If ``entry_type`` is not served.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_entry_type</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+        <span class="n">property_keys</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">ID_FIELD</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;type&quot;</span><span class="p">}</span>
+        <span class="n">property_keys</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">name</span><span class="p">:</span> <span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_spec</span><span class="p">,</span> <span class="n">_fulltype</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_served_specs</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)})</span>
+        <span class="k">return</span> <span class="n">property_keys</span></div>
+
+
+<div class="viewcode-block" id="StoreEntryProvider.records">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.records">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">records</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Yield JSON-able records for a served entry type.</span>
+
+<span class="sd">        :param entry_type: The served entry type whose records are read.</span>
+<span class="sd">        :yield: A served record.</span>
+<span class="sd">        :raises KeyError: If ``entry_type`` is not served.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_require_entry_type</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+        <span class="n">served</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_served_specs</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">[</span><span class="n">entry_type</span><span class="p">]</span>
+        <span class="n">searcher</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">searcher</span><span class="p">()</span>
+        <span class="n">variable</span> <span class="o">=</span> <span class="n">searcher</span><span class="o">.</span><span class="n">variable</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+        <span class="n">sid_column</span> <span class="o">=</span> <span class="n">SqlColumn</span><span class="p">(</span><span class="n">searcher</span><span class="p">,</span> <span class="n">variable</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span>
+        <span class="n">searcher</span><span class="o">.</span><span class="n">output</span><span class="p">(</span><span class="n">variable</span><span class="p">,</span> <span class="s2">&quot;obj&quot;</span><span class="p">)</span>
+        <span class="n">searcher</span><span class="o">.</span><span class="n">output</span><span class="p">(</span><span class="n">sid_column</span><span class="p">,</span> <span class="s2">&quot;sid&quot;</span><span class="p">)</span>
+        <span class="n">matches</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">((</span><span class="n">obj</span><span class="p">,</span> <span class="n">sid</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">sid</span><span class="p">),</span> <span class="n">_names</span> <span class="ow">in</span> <span class="n">searcher</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">obj</span><span class="p">,</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">matches</span><span class="p">:</span>
+            <span class="n">row</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">ID_FIELD</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_id_of</span><span class="p">(</span><span class="n">entry_type</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">sid</span><span class="p">),</span> <span class="n">obj</span><span class="p">),</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">entry_type</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="n">_fulltype</span> <span class="ow">in</span> <span class="n">served</span><span class="p">:</span>
+                <span class="n">row</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">_json_value</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="p">))</span>
+            <span class="k">yield</span> <span class="n">row</span></div>
+
+
+<div class="viewcode-block" id="StoreEntryProvider.relationships">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.relationships">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">relationships</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">RelatedEntry</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return relationships grouped by source entry id.</span>
+
+<span class="sd">        Relationships come from stored reference fields and child fields</span>
+<span class="sd">        targeting served storable classes; loose-edge projections are not part</span>
+<span class="sd">        of this provider contract.</span>
+
+<span class="sd">        :param entry_type: The served entry type whose relationships are read.</span>
+<span class="sd">        :return: Related entries keyed by source entry id.</span>
+<span class="sd">        :raises KeyError: If ``entry_type`` is not served.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_require_entry_type</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+        <span class="n">relation_specs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_relationship_specs</span><span class="p">(</span><span class="n">entry_type</span><span class="p">)</span>
+        <span class="n">link_scans</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_links_by_from</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">entry_type</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation_specs</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">link_scans</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span>
+        <span class="k">if</span> <span class="n">store</span><span class="o">.</span><span class="n">_missing_tables_for_read</span><span class="p">((</span><span class="bp">cls</span><span class="p">,)):</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="n">link_scans</span> <span class="o">=</span> <span class="p">[</span><span class="n">scan</span> <span class="k">for</span> <span class="n">scan</span> <span class="ow">in</span> <span class="n">link_scans</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="o">.</span><span class="n">_missing_tables_for_read</span><span class="p">((</span><span class="n">scan</span><span class="o">.</span><span class="n">declaring</span><span class="p">,))]</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schemas</span><span class="p">[</span><span class="n">entry_type</span><span class="p">]</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">reference_specs</span> <span class="o">=</span> <span class="p">[(</span><span class="n">spec</span><span class="p">,</span> <span class="n">related</span><span class="p">)</span> <span class="k">for</span> <span class="n">spec</span><span class="p">,</span> <span class="n">related</span> <span class="ow">in</span> <span class="n">relation_specs</span> <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span><span class="p">]</span>
+        <span class="n">child_specs</span> <span class="o">=</span> <span class="p">[(</span><span class="n">spec</span><span class="p">,</span> <span class="n">related</span><span class="p">)</span> <span class="k">for</span> <span class="n">spec</span><span class="p">,</span> <span class="n">related</span> <span class="ow">in</span> <span class="n">relation_specs</span> <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;child&quot;</span><span class="p">]</span>
+        <span class="c1"># With the default id function in use, ids depend only on (entry type,</span>
+        <span class="c1"># sid) and per-object fetches would be pure overhead.</span>
+        <span class="n">fast_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_id_of</span> <span class="ow">is</span> <span class="n">_default_id</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">stored_id</span><span class="p">(</span><span class="n">connection</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">related_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">related_cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span> <span class="n">sid</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_id_of</span><span class="p">(</span>
+                <span class="n">related_type</span><span class="p">,</span>
+                <span class="n">sid</span><span class="p">,</span>
+                <span class="kc">None</span> <span class="k">if</span> <span class="n">fast_ids</span> <span class="k">else</span> <span class="n">store</span><span class="o">.</span><span class="n">_fetch</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">related_cls</span><span class="p">,</span> <span class="n">sid</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">RelatedEntry</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">with</span> <span class="n">store</span><span class="o">.</span><span class="n">_read_connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
+            <span class="c1"># The related (target class, target sid, related entry type,</span>
+            <span class="c1"># description, role) tuples per record sid: forward reference fields</span>
+            <span class="c1"># first (in field order), then child fields (by row order), then</span>
+            <span class="c1"># link-derived relationships (link declaration order, row-sid order).</span>
+            <span class="n">related_by_sid</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">reference_specs</span><span class="p">:</span>
+                <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">]]</span> <span class="o">+</span> <span class="p">[</span><span class="n">table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">spec</span><span class="p">,</span> <span class="n">_related</span> <span class="ow">in</span> <span class="n">reference_specs</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="o">*</span><span class="n">columns</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])):</span>
+                    <span class="n">sid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="k">for</span> <span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">related</span><span class="p">),</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">reference_specs</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                            <span class="n">marker</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">related</span>
+                            <span class="n">related_by_sid</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">sid</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                                <span class="p">(</span>
+                                    <span class="n">spec</span><span class="o">.</span><span class="n">target</span><span class="p">,</span>
+                                    <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">),</span>
+                                    <span class="n">related</span><span class="p">,</span>
+                                    <span class="n">marker</span><span class="o">.</span><span class="n">description</span> <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                                    <span class="n">marker</span><span class="o">.</span><span class="n">role</span> <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                                <span class="p">)</span>
+                            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">spec</span><span class="p">,</span> <span class="n">related</span> <span class="ow">in</span> <span class="n">child_specs</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">child</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="n">child_table</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">child</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span>
+                <span class="n">parent_column</span> <span class="o">=</span> <span class="n">child_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">schema</span><span class="o">.</span><span class="n">table_name</span><span class="si">}</span><span class="s2">_sid&quot;</span><span class="p">]</span>
+                <span class="n">element_column</span> <span class="o">=</span> <span class="n">child_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">child</span><span class="o">.</span><span class="n">element_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+                <span class="n">statement</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">parent_column</span><span class="p">,</span> <span class="n">element_column</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span>
+                    <span class="n">parent_column</span><span class="p">,</span> <span class="n">child_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">_index&quot;</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="n">marker</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">related</span>
+                <span class="k">for</span> <span class="n">parent_sid</span><span class="p">,</span> <span class="n">element_sid</span> <span class="ow">in</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">statement</span><span class="p">):</span>
+                    <span class="n">related_by_sid</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">parent_sid</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">(</span>
+                            <span class="n">spec</span><span class="o">.</span><span class="n">target</span><span class="p">,</span>
+                            <span class="nb">int</span><span class="p">(</span><span class="n">element_sid</span><span class="p">),</span>
+                            <span class="n">related</span><span class="p">,</span>
+                            <span class="n">marker</span><span class="o">.</span><span class="n">description</span> <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                            <span class="n">marker</span><span class="o">.</span><span class="n">role</span> <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+            <span class="k">for</span> <span class="n">scan</span> <span class="ow">in</span> <span class="n">link_scans</span><span class="p">:</span>
+                <span class="n">link_table</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">scan</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span>
+                <span class="n">statement</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                    <span class="n">link_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">scan</span><span class="o">.</span><span class="n">source_column</span><span class="p">],</span> <span class="n">link_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">scan</span><span class="o">.</span><span class="n">target_column</span><span class="p">]</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">link_table</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">from_sid</span><span class="p">,</span> <span class="n">to_sid</span> <span class="ow">in</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">statement</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">from_sid</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">to_sid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">related_by_sid</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">from_sid</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">scan</span><span class="o">.</span><span class="n">to_cls</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">to_sid</span><span class="p">),</span> <span class="n">scan</span><span class="o">.</span><span class="n">to_type</span><span class="p">,</span> <span class="n">scan</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">scan</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">role</span><span class="p">)</span>
+                    <span class="p">)</span>
+            <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">related_by_sid</span><span class="p">):</span>
+                <span class="n">record_id</span> <span class="o">=</span> <span class="n">stored_id</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">entry_type</span><span class="p">,</span> <span class="bp">cls</span><span class="p">,</span> <span class="n">sid</span><span class="p">)</span>
+                <span class="n">entries</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">RelatedEntry</span><span class="p">(</span>
+                        <span class="n">related</span><span class="p">,</span>
+                        <span class="n">stored_id</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">related</span><span class="p">,</span> <span class="n">target_cls</span><span class="p">,</span> <span class="n">target_sid</span><span class="p">),</span>
+                        <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+                        <span class="n">role</span><span class="o">=</span><span class="n">role</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">target_cls</span><span class="p">,</span> <span class="n">target_sid</span><span class="p">,</span> <span class="n">related</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">role</span> <span class="ow">in</span> <span class="n">related_by_sid</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span>
+                <span class="p">]</span>
+                <span class="c1"># Dedup by exact RelatedEntry equality, preserving first</span>
+                <span class="c1"># occurrence; entries differing only in metadata are both kept.</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">record_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">entries</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_json_value</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON-able served form of one stored field value (see the module docstring).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;scalar&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;encoded&quot;</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">codec</span> <span class="o">=</span> <span class="n">codec_named</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">codec</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">value</span><span class="p">)[</span><span class="n">_query_index</span><span class="p">(</span><span class="n">codec</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;fixed_array&quot;</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">_as_fixed_tensor</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">to_floats</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;child&quot;</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">tensor</span> <span class="o">=</span> <span class="n">FracVector</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tensor</span><span class="o">.</span><span class="n">dim</span> <span class="ow">in</span> <span class="p">((),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,)):</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">tensor</span><span class="o">.</span><span class="n">to_floats</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">codec</span> <span class="o">=</span> <span class="n">codec_named</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">_query_index</span><span class="p">(</span><span class="n">codec</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">codec</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">element</span><span class="p">)[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

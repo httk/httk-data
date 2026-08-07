@@ -1,0 +1,210 @@
+httk.data.db.stored_federation
+==============================
+
+.. py:module:: httk.data.db.stored_federation
+
+.. autoapi-nested-parse::
+
+   Bounded, durable federation of stored entry-family property plans.
+
+   Unlike :mod:`httk.data.federated_store`, which is the general portable query
+   protocol, this module joins only configured
+   :class:`~httk.data.db.store.SqlStore` entry families.
+   It can therefore retain a stable backing inventory, push candidate filtering
+   and bounds into SQL, and delay record hydration until a global page is known.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.stored_federation.DuplicateEntryIdError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.stored_federation.StoredEntrySource
+   httk.data.db.stored_federation.StoredEntryOrigin
+   httk.data.db.stored_federation.StoredEntryPage
+   httk.data.db.stored_federation.StoredEntryFederation
+
+
+Module Contents
+---------------
+
+.. py:class:: StoredEntrySource
+
+   One named configured family in one durable SQL store.
+
+   ``public_id_prefix`` is concatenated with every backing's canonical
+   content id.  It is intentionally not required to be unique: callers may
+   retain a legacy unprefixed source, in which case collisions are detected
+   when their visible ids are fetched or explicitly audited.
+
+   :param store: The durable SQL store containing the entry family.
+   :param entry_family: The logical entry-family class to serve.
+   :param name: The unique name used to identify this source.
+   :param public_id_prefix: The prefix prepended to canonical content ids.
+
+
+   .. py:attribute:: store
+      :type:  httk.data.db.store.SqlStore
+
+
+   .. py:attribute:: entry_family
+      :type:  type
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: public_id_prefix
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: StoredEntryOrigin
+
+   The durable source of one public entry id.
+
+   :param source: The configured source name.
+   :param source_index: The source's position in the federation.
+   :param backing: The concrete backing name.
+   :param content_id: The canonical content id claimed by the backing.
+
+
+   .. py:attribute:: source
+      :type:  str
+
+
+   .. py:attribute:: source_index
+      :type:  int
+
+
+   .. py:attribute:: backing
+      :type:  str
+
+
+   .. py:attribute:: content_id
+      :type:  str
+
+
+.. py:exception:: DuplicateEntryIdError(public_id, origins)
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Several durable origins claim the same public entry id.
+
+   Call :meth:`StoredEntryFederation.audit_duplicate_ids` to perform the
+   intentionally explicit complete audit; ordinary pages inspect only the
+   candidates they would otherwise return.
+
+   :param public_id: The public id claimed by multiple origins.
+   :param origins: The durable origins claiming the id.
+
+
+   .. py:attribute:: public_id
+
+
+   .. py:attribute:: origins
+
+
+.. py:class:: StoredEntryPage
+
+   One immutable globally paginated response.
+
+   ``total_count`` is the exact filtered count before global offset/limit.
+   The sentinel establishing :attr:`more_data_available` is ID-only and is
+   never present in :attr:`rows`.
+
+   :param rows: The rows visible in this page.
+   :param total_count: The exact filtered count before paging bounds.
+   :param more_data_available: Whether another row exists after this page.
+
+
+   .. py:attribute:: rows
+      :type:  tuple[collections.abc.Mapping[str, Any], Ellipsis]
+
+
+   .. py:attribute:: total_count
+      :type:  int
+
+
+   .. py:attribute:: more_data_available
+      :type:  bool
+
+
+.. py:class:: StoredEntryFederation(sources)
+
+   Merge one or more configured durable entry-family sources.
+
+   Sources preserve caller order.  Without a sort, rows remain in source,
+   persisted-backing, and native database order and candidate SQL contains no
+   ``ORDER BY``.  With a sort, each backing stream orders in SQL and this
+   object performs a bounded heap merge with a deterministic public-id/source
+   /backing tie-breaker.
+
+   Pages probe all sibling backings in prefixes shared by multiple sources.
+   Within-source corruption is otherwise audit-only; use
+   :meth:`audit_duplicate_ids` to detect it.
+
+   :param sources: The configured sources to merge in caller order.
+
+
+   .. py:property:: sources
+      :type: tuple[StoredEntrySource, Ellipsis]
+
+
+      Return the immutable declared source order.
+
+      :return: The declared sources in caller order.
+
+
+   .. py:method:: query(filter_string = None, *, sort = (), offset = 0, limit = None)
+
+      Return one globally merged page with an exact filtered total.
+
+      ``limit=0`` intentionally runs only count plus an ID-only sentinel:
+      it is suitable for metadata initialization and never duplicate-probes
+      or hydrates a candidate.
+
+      :param filter_string: The OPTIMADE filter, parsed filter tree, or no filter.
+      :param sort: The property sort keys and directions.
+      :param offset: The number of matching rows to skip globally.
+      :param limit: The maximum number of rows to return, or no maximum.
+      :return: The globally merged page.
+      :raises DuplicateEntryIdError: If a visible id has multiple cross-source origins.
+
+
+
+   .. py:method:: fetch(public_id)
+
+      Fetch one public id and detect a collision among its possible origins.
+
+      :param public_id: The public id to fetch.
+      :return: The fetched response row, or ``None`` when it is absent.
+      :raises DuplicateEntryIdError: If the id has multiple origins.
+
+
+
+   .. py:method:: audit_duplicate_ids(*, batch_size = _AUDIT_BATCH_SIZE)
+
+      Lazily scan sorted ID-only batches and raise on the first collision.
+
+      The audit includes duplicate ids across backings within one source as
+      well as duplicates across sources.
+
+      :param batch_size: The maximum number of candidate ids read per batch.
+      :return: None.
+      :raises DuplicateEntryIdError: If any public id has multiple origins.
+
+
+

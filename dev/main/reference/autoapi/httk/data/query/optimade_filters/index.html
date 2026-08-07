@@ -1,0 +1,1253 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../../../../genindex.html"><link rel="search" title="Search" href="../../../../../../search.html"><link rel="next" title="httk.data.query.portable" href="../portable/index.html"><link rel="prev" title="httk.data.query" href="../index.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.query.optimade_filters - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../../index.html">Reference</a><input aria-label="Toggle navigation of Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 current has-children"><a class="reference internal" href="../index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 current has-children"><a class="reference internal" href="../index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" checked="" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l4 current current-page"><a class="current reference internal" href="#">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../../../../../_sources/reference/autoapi/httk/data/query/optimade_filters/index.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-httk.data.query.optimade_filters">
+<span id="httk-data-query-optimade-filters"></span><h1>httk.data.query.optimade_filters<a class="headerlink" href="#module-httk.data.query.optimade_filters" title="Link to this heading">¶</a></h1>
+<p>Translate OPTIMADE filter syntax trees into backend search expressions.</p>
+<p>This module turns the OPTIMADE filter language — parsed by
+<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.parse_optimade_filter" title="(in httk-core dev:main)"><code class="xref py py-func docutils literal notranslate"><span class="pre">httk.core.optimade.parse_optimade_filter()</span></code></a> into a <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.FilterAst" title="(in httk-core dev:main)"><code class="xref py py-type docutils literal notranslate"><span class="pre">httk.core.optimade.FilterAst</span></code></a>
+nested-tuple syntax tree — into <a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchExpression</span></code></a>
+objects over the backend-agnostic store/searcher protocols of
+<a class="reference internal" href="../index.html#module-httk.data.query" title="httk.data.query"><code class="xref py py-mod docutils literal notranslate"><span class="pre">httk.data.query</span></code></a>. It is pure and store-independent: any
+<a class="reference internal" href="../index.html#httk.data.query.Store" title="httk.data.query.Store"><code class="xref py py-class docutils literal notranslate"><span class="pre">Store</span></code></a> whose search variables expose the queried
+fields can execute the translated expressions.</p>
+<p>The translation is driven by three inputs:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">property_fulltypes</span></code> — a minimal mapping from recognized property names to
+their OPTIMADE <code class="docutils literal notranslate"><span class="pre">fulltype</span></code> strings (<code class="docutils literal notranslate"><span class="pre">&quot;string&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;integer&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;float&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;boolean&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;timestamp&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;dict&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;unknown&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;list</span> <span class="pre">of</span>
+<span class="pre">...&quot;</span></code>), used to type-check and convert filter constants;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">handlers</span></code> — a <a class="reference internal" href="#httk.data.query.optimade_filters.HandlerTable" title="httk.data.query.optimade_filters.HandlerTable"><code class="xref py py-data docutils literal notranslate"><span class="pre">HandlerTable</span></code></a> mapping property names to the callables
+that build the actual search expressions (see
+<a class="reference internal" href="#httk.data.query.optimade_filters.simple_property_handlers" title="httk.data.query.optimade_filters.simple_property_handlers"><code class="xref py py-func docutils literal notranslate"><span class="pre">simple_property_handlers()</span></code></a> for the generic property-key-driven builder,
+and <a class="reference internal" href="#httk.data.query.optimade_filters.relationship_id_handler" title="httk.data.query.optimade_filters.relationship_id_handler"><code class="xref py py-func docutils literal notranslate"><span class="pre">relationship_id_handler()</span></code></a> for <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span></code> relationship entries);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">recognized_prefixes</span></code> — property-name prefixes the serving side claims:
+an unknown property carrying such a prefix is an error
+(<code class="docutils literal notranslate"><span class="pre">&quot;unrecognized-property&quot;</span></code>), while any other unknown property silently
+matches nothing, as the OPTIMADE specification prescribes.</p></li>
+</ul>
+<p>Failures raise <a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><code class="xref py py-class docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a>, which carries a neutral
+<code class="docutils literal notranslate"><span class="pre">category</span></code> (no HTTP semantics); consumers map categories onto their
+transport’s error codes.</p>
+<p><strong>Relationship filtering</strong> (dotted identifiers such as <code class="docutils literal notranslate"><span class="pre">references.doi</span></code>) is
+supported for relationship types named in <code class="docutils literal notranslate"><span class="pre">relationship_targets</span></code>:
+<code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span> <span class="pre">HAS</span> <span class="pre">...</span></code> translates directly through the handler table, and any
+other depth-1 dotted filter is resolved by a two-phase semi-join through a
+supplied <a class="reference internal" href="#httk.data.query.optimade_filters.RelatedPropertyResolver" title="httk.data.query.optimade_filters.RelatedPropertyResolver"><code class="xref py py-data docutils literal notranslate"><span class="pre">RelatedPropertyResolver</span></code></a> (see <a class="reference internal" href="#httk.data.query.optimade_filters.translate_filter_ast" title="httk.data.query.optimade_filters.translate_filter_ast"><code class="xref py py-func docutils literal notranslate"><span class="pre">translate_filter_ast()</span></code></a>).
+Each dotted filter node is resolved <em>independently</em>: in <code class="docutils literal notranslate"><span class="pre">references.doi</span>
+<span class="pre">CONTAINS</span> <span class="pre">&quot;x&quot;</span> <span class="pre">AND</span> <span class="pre">references.year</span> <span class="pre">&gt;=</span> <span class="pre">2000</span></code>, some related reference must match
+the doi condition and some (possibly different) related reference must match
+the year condition.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationCategory" title="httk.data.query.optimade_filters.FilterTranslationCategory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilterTranslationCategory</span></code></a></p></td>
+<td><p>Why a filter could not be translated (see <a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><code class="xref py py-class docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.HandlerTable" title="httk.data.query.optimade_filters.HandlerTable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HandlerTable</span></code></a></p></td>
+<td><p>Per-property translation callables, keyed by property name.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.RelatedPropertyResolver" title="httk.data.query.optimade_filters.RelatedPropertyResolver"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RelatedPropertyResolver</span></code></a></p></td>
+<td><p>Resolve a depth-1 relationship filter to the matching related-entry ids.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.constant_types" title="httk.data.query.optimade_filters.constant_types"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_types</span></code></a></p></td>
+<td><p>Parsed filter token kinds that represent literal constants.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.invert_op" title="httk.data.query.optimade_filters.invert_op"><code class="xref py py-obj docutils literal notranslate"><span class="pre">invert_op</span></code></a></p></td>
+<td><p>Comparison operators after swapping a constant from left to right.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a></p></td>
+<td><p>Report that a filter cannot be translated into a search expression.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.format_value" title="httk.data.query.optimade_filters.format_value"><code class="xref py py-obj docutils literal notranslate"><span class="pre">format_value</span></code></a>(fulltype, val[, allow_null])</p></td>
+<td><p>Convert a filter constant node to a Python value of the property's <code class="docutils literal notranslate"><span class="pre">fulltype</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.true_handler" title="httk.data.query.optimade_filters.true_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">true_handler</span></code></a>(search_variable)</p></td>
+<td><p>Build a constant-true expression over <code class="docutils literal notranslate"><span class="pre">search_variable</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.false_handler" title="httk.data.query.optimade_filters.false_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">false_handler</span></code></a>(search_variable)</p></td>
+<td><p>Build a constant-false expression over <code class="docutils literal notranslate"><span class="pre">search_variable</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_unknown_handler" title="httk.data.query.optimade_filters.unknown_unknown_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unknown_unknown_handler</span></code></a>(entry, search_variable, ...)</p></td>
+<td><p>Translate unknown-value tests for an unrecognized property.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.known_unknown_handler" title="httk.data.query.optimade_filters.known_unknown_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">known_unknown_handler</span></code></a>(entry, search_variable, unknown_type)</p></td>
+<td><p>Translate known-value tests for a property with known nullability.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.field_unknown_handler" title="httk.data.query.optimade_filters.field_unknown_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">field_unknown_handler</span></code></a>(entry, search_variable, unknown_type)</p></td>
+<td><p>Test nullability against the mapped backend field.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_comparison_handler" title="httk.data.query.optimade_filters.unknown_comparison_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unknown_comparison_handler</span></code></a>(entry, ops, values, ...)</p></td>
+<td><p>Build a false expression for comparison on an unknown property.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_stringmatching_handler" title="httk.data.query.optimade_filters.unknown_stringmatching_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unknown_stringmatching_handler</span></code></a>(entry, values, ...)</p></td>
+<td><p>Build a false expression for string matching on an unknown property.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_has_handler" title="httk.data.query.optimade_filters.unknown_has_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unknown_has_handler</span></code></a>(entry, op, value, search_variable, ...)</p></td>
+<td><p>Build a false expression for set filtering on an unknown property.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_length_handler" title="httk.data.query.optimade_filters.unknown_length_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unknown_length_handler</span></code></a>(entry, op, value, search_variable)</p></td>
+<td><p>Build a false expression for length filtering on an unknown property.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.string_handler" title="httk.data.query.optimade_filters.string_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">string_handler</span></code></a>(entry, op, value, search_variable)</p></td>
+<td><p>Translate a scalar comparison onto a backend field.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.stringmatching_handler" title="httk.data.query.optimade_filters.stringmatching_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stringmatching_handler</span></code></a>(entry, value, ...)</p></td>
+<td><p>Translate <code class="docutils literal notranslate"><span class="pre">CONTAINS</span></code>/<code class="docutils literal notranslate"><span class="pre">STARTS</span></code>/<code class="docutils literal notranslate"><span class="pre">ENDS</span></code> onto the field's literal matchers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.constant_comparison_handler" title="httk.data.query.optimade_filters.constant_comparison_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_comparison_handler</span></code></a>(val1, op, val2, ...)</p></td>
+<td><p>Fold <code class="docutils literal notranslate"><span class="pre">val1</span> <span class="pre">&lt;op&gt;</span> <span class="pre">val2</span></code> (both constants) to a constant expression.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.constant_stringmatching_handler" title="httk.data.query.optimade_filters.constant_stringmatching_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_stringmatching_handler</span></code></a>(val1, val2, ...)</p></td>
+<td><p>Fold <code class="docutils literal notranslate"><span class="pre">val1</span> <span class="pre">&lt;CONTAINS|STARTS|ENDS&gt;</span> <span class="pre">val2</span></code> (both constants) to a constant expression.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.number_handler" title="httk.data.query.optimade_filters.number_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">number_handler</span></code></a>(entry, op, value, search_variable)</p></td>
+<td><p>Translate a numeric comparison onto a backend field.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.timestamp_handler" title="httk.data.query.optimade_filters.timestamp_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">timestamp_handler</span></code></a>(entry, op, value, search_variable)</p></td>
+<td><p>Normalize an RFC 3339 timestamp and translate its comparison.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.set_handler" title="httk.data.query.optimade_filters.set_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_handler</span></code></a>(entry, ops, values, has_type, search_variable)</p></td>
+<td><p>Translate one HAS family node over the list-valued field <code class="docutils literal notranslate"><span class="pre">entry</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.constant_set_handler" title="httk.data.query.optimade_filters.constant_set_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_set_handler</span></code></a>(val1, ops, val2, has_type, ...)</p></td>
+<td><p>Fold a HAS-family operation over two constant sets.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.translate_filter_ast" title="httk.data.query.optimade_filters.translate_filter_ast"><code class="xref py py-obj docutils literal notranslate"><span class="pre">translate_filter_ast</span></code></a>(node, search_variable, ...[, ...])</p></td>
+<td><p>Translate one filter syntax-tree node into a search expression.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.simple_property_handlers" title="httk.data.query.optimade_filters.simple_property_handlers"><code class="xref py py-obj docutils literal notranslate"><span class="pre">simple_property_handlers</span></code></a>(entry_type, property_keys, ...)</p></td>
+<td><p>Build a filter handler table for an entry type from a property-key map.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.relationship_id_handler" title="httk.data.query.optimade_filters.relationship_id_handler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relationship_id_handler</span></code></a>(rel_key)</p></td>
+<td><p>A <code class="docutils literal notranslate"><span class="pre">'&lt;type&gt;.id'</span></code> handler-table entry matching related ids over a list-valued field.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.optimade_filters.filter_searcher" title="httk.data.query.optimade_filters.filter_searcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">filter_searcher</span></code></a>(store, target, filter_string, *, ...)</p></td>
+<td><p>Build a <a class="reference internal" href="../index.html#httk.data.query.Searcher" title="httk.data.query.Searcher"><code class="xref py py-class docutils literal notranslate"><span class="pre">Searcher</span></code></a> over <code class="docutils literal notranslate"><span class="pre">store</span></code> applying an OPTIMADE filter.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py type">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.FilterTranslationCategory">
+<span class="property"><span class="k"><span class="pre">type</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">FilterTranslationCategory</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'unrecognized-property'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'not-implemented'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'type-mismatch'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'internal'</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#FilterTranslationCategory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.FilterTranslationCategory" title="Link to this definition">¶</a></dt>
+<dd><p>Why a filter could not be translated (see <a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><code class="xref py py-class docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a>).</p>
+</dd></dl>
+
+<dl class="py type">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.HandlerTable">
+<span class="property"><span class="k"><span class="pre">type</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">HandlerTable</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#HandlerTable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.HandlerTable" title="Link to this definition">¶</a></dt>
+<dd><p>Per-property translation callables, keyed by property name.</p>
+<p>The inner mapping’s keys name the filter-operation families: <code class="docutils literal notranslate"><span class="pre">'comparison'</span></code>
+(<code class="docutils literal notranslate"><span class="pre">=</span></code>, <code class="docutils literal notranslate"><span class="pre">!=</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>), <code class="docutils literal notranslate"><span class="pre">'stringmatching'</span></code>
+(<code class="docutils literal notranslate"><span class="pre">CONTAINS</span></code>/<code class="docutils literal notranslate"><span class="pre">STARTS</span></code>/<code class="docutils literal notranslate"><span class="pre">ENDS</span></code>), <code class="docutils literal notranslate"><span class="pre">'HAS'</span></code> (the set operations),
+<code class="docutils literal notranslate"><span class="pre">'length'</span></code> (<code class="docutils literal notranslate"><span class="pre">LENGTH</span></code>), and <code class="docutils literal notranslate"><span class="pre">'unknown'</span></code> (<code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">KNOWN</span></code>/<code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">UNKNOWN</span></code>).
+A <code class="docutils literal notranslate"><span class="pre">'HAS'</span></code> handler is called as <code class="docutils literal notranslate"><span class="pre">handler(property,</span> <span class="pre">ops,</span> <span class="pre">values,</span>
+<span class="pre">search_variable,</span> <span class="pre">has_type)</span></code> and returns a plain
+<a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchExpression</span></code></a>. The caller applies <code class="docutils literal notranslate"><span class="pre">NOT</span></code> as
+<code class="docutils literal notranslate"><span class="pre">~</span></code>; handlers do not receive negation state or report post-filter placement.
+Dotted <code class="docutils literal notranslate"><span class="pre">'&lt;type&gt;.id'</span></code> entries provide relationship-id filtering (see
+<a class="reference internal" href="#httk.data.query.optimade_filters.relationship_id_handler" title="httk.data.query.optimade_filters.relationship_id_handler"><code class="xref py py-func docutils literal notranslate"><span class="pre">relationship_id_handler()</span></code></a>).</p>
+</dd></dl>
+
+<dl class="py type">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.RelatedPropertyResolver">
+<span class="property"><span class="k"><span class="pre">type</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">RelatedPropertyResolver</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">FilterAst</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#RelatedPropertyResolver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.RelatedPropertyResolver" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve a depth-1 relationship filter to the matching related-entry ids.</p>
+<p>Called as <code class="docutils literal notranslate"><span class="pre">resolver(related_type,</span> <span class="pre">sub_ast)</span></code> where <code class="docutils literal notranslate"><span class="pre">sub_ast</span></code> is the filter
+node with the <code class="docutils literal notranslate"><span class="pre">&lt;related_type&gt;.</span></code> prefix stripped from its identifier (and
+without any surrounding <code class="docutils literal notranslate"><span class="pre">NOT</span></code>); returns the ids of the related entries
+matching the sub-filter, evaluated against the related type’s own properties.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.FilterTranslationError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">FilterTranslationError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detail</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#FilterTranslationError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.FilterTranslationError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#Exception" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Exception</span></code></a></p>
+<p>Report that a filter cannot be translated into a search expression.</p>
+<p>The exception message describes the failure; <a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError.category" title="httk.data.query.optimade_filters.FilterTranslationError.category"><code class="xref py py-attr docutils literal notranslate"><span class="pre">category</span></code></a> classifies it
+neutrally (this module knows nothing about transports, so consumers map
+each category onto their own error codes):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;unrecognized-property&quot;</span></code> — the filter names an unknown property
+carrying a recognized prefix (a caller error);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;type-mismatch&quot;</span></code> — a filter constant does not match the property’s
+declared type (a caller error);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;not-implemented&quot;</span></code> — the filter uses a construct this translation (or
+the supplied handler table) does not support;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;internal&quot;</span></code> — an inconsistency in the translation itself.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">detail</span></code> optionally carries extra machine-readable context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The human-readable translation failure.</p></li>
+<li><p><strong>category</strong> (<a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationCategory" title="httk.data.query.optimade_filters.FilterTranslationCategory"><em>FilterTranslationCategory</em></a>) – The neutral failure category.</p></li>
+<li><p><strong>detail</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional machine-readable failure context.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.FilterTranslationError.category">
+<span class="sig-name descname"><span class="pre">category</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationCategory" title="httk.data.query.optimade_filters.FilterTranslationCategory"><span class="pre">FilterTranslationCategory</span></a></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#FilterTranslationError.category"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.FilterTranslationError.category" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.FilterTranslationError.detail">
+<span class="sig-name descname"><span class="pre">detail</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#FilterTranslationError.detail"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.FilterTranslationError.detail" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.constant_types">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">constant_types</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('String',</span> <span class="pre">'Number',</span> <span class="pre">'Boolean')</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#constant_types"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.constant_types" title="Link to this definition">¶</a></dt>
+<dd><p>Parsed filter token kinds that represent literal constants.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.invert_op">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">invert_op</span></span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#invert_op"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.invert_op" title="Link to this definition">¶</a></dt>
+<dd><p>Comparison operators after swapping a constant from left to right.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.format_value">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">format_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fulltype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_null</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#format_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.format_value" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a filter constant node to a Python value of the property’s <code class="docutils literal notranslate"><span class="pre">fulltype</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fulltype</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The OPTIMADE fulltype expected by the property.</p></li>
+<li><p><strong>val</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><em>Any</em><em>, </em><em>Ellipsis</em><em>]</em>) – The parsed filter constant node.</p></li>
+<li><p><strong>allow_null</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether a parsed null constant is accepted.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The converted Python filter value.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – With category <code class="docutils literal notranslate"><span class="pre">&quot;type-mismatch&quot;</span></code> when the
+constant does not fit the declared type, or <code class="docutils literal notranslate"><span class="pre">&quot;not-implemented&quot;</span></code> for
+dictionary-typed properties.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Any</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.true_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">true_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#true_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.true_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a constant-true expression over <code class="docutils literal notranslate"><span class="pre">search_variable</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches every row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.false_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">false_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#false_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.false_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a constant-false expression over <code class="docutils literal notranslate"><span class="pre">search_variable</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches no row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.unknown_unknown_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">unknown_unknown_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unknown_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#unknown_unknown_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.unknown_unknown_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate unknown-value tests for an unrecognized property.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The property name, retained for handler compatibility.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+<li><p><strong>unknown_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The <code class="docutils literal notranslate"><span class="pre">IS_KNOWN</span></code> or <code class="docutils literal notranslate"><span class="pre">IS_UNKNOWN</span></code> operator.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The corresponding constant expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">unknown_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.known_unknown_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">known_unknown_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unknown_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#known_unknown_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.known_unknown_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate known-value tests for a property with known nullability.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The property name, retained for handler compatibility.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+<li><p><strong>unknown_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The <code class="docutils literal notranslate"><span class="pre">IS_KNOWN</span></code> or <code class="docutils literal notranslate"><span class="pre">IS_UNKNOWN</span></code> operator.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The corresponding constant expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">unknown_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.field_unknown_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">field_unknown_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unknown_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#field_unknown_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.field_unknown_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Test nullability against the mapped backend field.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name to inspect.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+<li><p><strong>unknown_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The <code class="docutils literal notranslate"><span class="pre">IS_KNOWN</span></code> or <code class="docutils literal notranslate"><span class="pre">IS_UNKNOWN</span></code> operator.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The nullability expression for the field.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">unknown_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.unknown_comparison_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">unknown_comparison_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ops</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#unknown_comparison_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.unknown_comparison_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a false expression for comparison on an unknown property.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The unknown property name.</p></li>
+<li><p><strong>ops</strong> (<em>Any</em>) – The parsed comparison operators.</p></li>
+<li><p><strong>values</strong> (<em>Any</em>) – The parsed comparison values.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches no row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.unknown_stringmatching_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">unknown_stringmatching_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringmatching_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#unknown_stringmatching_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.unknown_stringmatching_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a false expression for string matching on an unknown property.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The unknown property name.</p></li>
+<li><p><strong>values</strong> (<em>Any</em>) – The parsed match value.</p></li>
+<li><p><strong>stringmatching_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The parsed string-matching operator.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches no row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.unknown_has_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">unknown_has_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">has_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#unknown_has_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.unknown_has_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a false expression for set filtering on an unknown property.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The unknown property name.</p></li>
+<li><p><strong>op</strong> (<em>Any</em>) – The parsed set operators.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – The parsed set values.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+<li><p><strong>has_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The parsed HAS-family operator.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches no row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.unknown_length_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">unknown_length_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#unknown_length_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.unknown_length_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Build a false expression for length filtering on an unknown property.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The unknown property name.</p></li>
+<li><p><strong>op</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The parsed length comparison operator.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – The parsed length value.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An expression that matches no row.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.string_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">string_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#string_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.string_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate a scalar comparison onto a backend field.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name.</p></li>
+<li><p><strong>op</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The comparison operator.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – The converted filter value.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The field comparison expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.stringmatching_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">stringmatching_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringmatching_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#stringmatching_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.stringmatching_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate <code class="docutils literal notranslate"><span class="pre">CONTAINS</span></code>/<code class="docutils literal notranslate"><span class="pre">STARTS</span></code>/<code class="docutils literal notranslate"><span class="pre">ENDS</span></code> onto the field’s literal matchers.</p>
+<p>The filter constant is passed through <strong>unescaped</strong>: the search-field protocol’s
+<code class="docutils literal notranslate"><span class="pre">contains</span></code>/<code class="docutils literal notranslate"><span class="pre">startswith</span></code>/<code class="docutils literal notranslate"><span class="pre">endswith</span></code> take literal text, so <code class="docutils literal notranslate"><span class="pre">%</span></code> and
+<code class="docutils literal notranslate"><span class="pre">_</span></code> match themselves (as OPTIMADE requires). Any escaping a backend’s
+pattern language needs is that backend’s own business.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name.</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The literal filter text.</p></li>
+<li><p><strong>stringmatching_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The <code class="docutils literal notranslate"><span class="pre">CONTAINS</span></code>, <code class="docutils literal notranslate"><span class="pre">STARTS</span></code>, or <code class="docutils literal notranslate"><span class="pre">ENDS</span></code> operator.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The literal string-matching expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">stringmatching_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.constant_comparison_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">constant_comparison_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#constant_comparison_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.constant_comparison_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Fold <code class="docutils literal notranslate"><span class="pre">val1</span> <span class="pre">&lt;op&gt;</span> <span class="pre">val2</span></code> (both constants) to a constant expression.</p>
+<p><code class="docutils literal notranslate"><span class="pre">val1</span></code> is the <em>value being compared</em> and <code class="docutils literal notranslate"><span class="pre">val2</span></code> the <em>filter constant</em>,
+the same left-to-right convention as <a class="reference internal" href="#httk.data.query.optimade_filters.constant_set_handler" title="httk.data.query.optimade_filters.constant_set_handler"><code class="xref py py-func docutils literal notranslate"><span class="pre">constant_set_handler()</span></code></a>;
+<a class="reference internal" href="#httk.data.query.optimade_filters.translate_filter_ast" title="httk.data.query.optimade_filters.translate_filter_ast"><code class="xref py py-func docutils literal notranslate"><span class="pre">translate_filter_ast()</span></code></a> has already inverted <code class="docutils literal notranslate"><span class="pre">op</span></code> for
+constant-on-the-left filters, so this ordering is the filter’s own.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>val1</strong> (<em>Any</em>) – The value being compared.</p></li>
+<li><p><strong>op</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The comparison operator.</p></li>
+<li><p><strong>val2</strong> (<em>Any</em>) – The filter constant.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A constant expression representing the comparison result.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.constant_stringmatching_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">constant_stringmatching_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringmatching_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#constant_stringmatching_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.constant_stringmatching_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Fold <code class="docutils literal notranslate"><span class="pre">val1</span> <span class="pre">&lt;CONTAINS|STARTS|ENDS&gt;</span> <span class="pre">val2</span></code> (both constants) to a constant expression.</p>
+<p><code class="docutils literal notranslate"><span class="pre">val1</span></code> is the <em>value being matched</em> and <code class="docutils literal notranslate"><span class="pre">val2</span></code> the <em>filter text</em>, the
+same left-to-right convention as <a class="reference internal" href="#httk.data.query.optimade_filters.constant_set_handler" title="httk.data.query.optimade_filters.constant_set_handler"><code class="xref py py-func docutils literal notranslate"><span class="pre">constant_set_handler()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>val1</strong> (<em>Any</em>) – The value being matched.</p></li>
+<li><p><strong>val2</strong> (<em>Any</em>) – The filter text.</p></li>
+<li><p><strong>stringmatching_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The <code class="docutils literal notranslate"><span class="pre">CONTAINS</span></code>, <code class="docutils literal notranslate"><span class="pre">STARTS</span></code>, or <code class="docutils literal notranslate"><span class="pre">ENDS</span></code> operator.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A constant expression representing the match result.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">stringmatching_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.number_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">number_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#number_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.number_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate a numeric comparison onto a backend field.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name.</p></li>
+<li><p><strong>op</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The comparison operator.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – The converted numeric filter value.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The field comparison expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.timestamp_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">timestamp_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#timestamp_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.timestamp_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Normalize an RFC 3339 timestamp and translate its comparison.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name.</p></li>
+<li><p><strong>op</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The comparison operator.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – The RFC 3339 timestamp filter value.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The normalized timestamp comparison expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">value</span></code> is not an offset-aware RFC 3339 timestamp.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.set_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">set_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ops</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">has_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#set_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.set_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Translate one HAS family node over the list-valued field <code class="docutils literal notranslate"><span class="pre">entry</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">HAS</span> <span class="pre">ALL</span></code> becomes a conjunction of one-value <code class="docutils literal notranslate"><span class="pre">has_any</span></code> calls (each
+constraining an independently joined child row); <code class="docutils literal notranslate"><span class="pre">HAS</span> <span class="pre">ANY</span></code> and <code class="docutils literal notranslate"><span class="pre">HAS</span>
+<span class="pre">ONLY</span></code> map straight onto <code class="docutils literal notranslate"><span class="pre">has_any</span></code>/<code class="docutils literal notranslate"><span class="pre">has_only</span></code>. Negation is <em>not</em> the
+handler’s business: a surrounding <code class="docutils literal notranslate"><span class="pre">NOT</span></code> inverts the returned expression,
+and the backend’s <code class="docutils literal notranslate"><span class="pre">~</span></code> knows how to negate a set predicate.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend list-valued field name.</p></li>
+<li><p><strong>ops</strong> (<em>Any</em>) – The parsed set comparison operators.</p></li>
+<li><p><strong>values</strong> (<em>Any</em>) – The converted set values.</p></li>
+<li><p><strong>has_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The HAS-family operator.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The list-membership expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">has_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.constant_set_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">constant_set_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ops</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">has_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#constant_set_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.constant_set_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Fold a HAS-family operation over two constant sets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>val1</strong> (<em>Any</em>) – The list value being tested.</p></li>
+<li><p><strong>ops</strong> (<em>Any</em>) – The parsed set comparison operators.</p></li>
+<li><p><strong>val2</strong> (<em>Any</em>) – The filter values.</p></li>
+<li><p><strong>has_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The HAS-family operator.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A constant expression representing the set result.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">has_type</span></code> is not supported.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.translate_filter_ast">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">translate_filter_ast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_fulltypes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">handlers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recognized_prefixes</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationship_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">related_property_resolver</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#translate_filter_ast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.translate_filter_ast" title="Link to this definition">¶</a></dt>
+<dd><p>Translate one filter syntax-tree node into a search expression.</p>
+<p><code class="docutils literal notranslate"><span class="pre">node</span></code> is a <a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.FilterAst" title="(in httk-core dev:main)"><code class="xref py py-type docutils literal notranslate"><span class="pre">FilterAst</span></code></a> node (as produced by
+<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.parse_optimade_filter" title="(in httk-core dev:main)"><code class="xref py py-func docutils literal notranslate"><span class="pre">httk.core.optimade.parse_optimade_filter()</span></code></a>); <code class="docutils literal notranslate"><span class="pre">search_variable</span></code> is the
+backend search variable the expression is built against;
+<code class="docutils literal notranslate"><span class="pre">property_fulltypes</span></code>, <code class="docutils literal notranslate"><span class="pre">handlers</span></code>, and <code class="docutils literal notranslate"><span class="pre">recognized_prefixes</span></code> drive the
+translation as described in the module docstring.</p>
+<p>Returns the translated expression, ready to hand to
+<a class="reference internal" href="../index.html#httk.data.query.Searcher.add" title="httk.data.query.Searcher.add"><code class="xref py py-meth docutils literal notranslate"><span class="pre">add()</span></code></a>. <code class="docutils literal notranslate"><span class="pre">NOT</span></code> translates to the backend’s
+<code class="docutils literal notranslate"><span class="pre">~</span></code>; a backend whose set predicates need a second (post-filter)
+evaluation position derives that from the expression itself, so the caller
+never has to.</p>
+<p><strong>Relationship filtering:</strong> an identifier dotted with a name in
+<code class="docutils literal notranslate"><span class="pre">relationship_targets</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">('Identifier',</span> <span class="pre">'references',</span> <span class="pre">'doi')</span></code>)
+filters on the properties of related entries. <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span> <span class="pre">HAS</span> <span class="pre">...</span></code> is
+served directly by the <code class="docutils literal notranslate"><span class="pre">'&lt;type&gt;.id'</span></code> handler-table entry. Every other
+depth-1 dotted filter — comparisons (including <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span> <span class="pre">=</span> <span class="pre">...</span></code>),
+string matching, <code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">KNOWN</span></code>/<code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">UNKNOWN</span></code>, and the HAS family over
+related list properties — is resolved by a two-phase semi-join: the
+<code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.</span></code> prefix is stripped from the node, the resulting sub-filter is
+passed to <code class="docutils literal notranslate"><span class="pre">related_property_resolver</span></code> (without any surrounding <code class="docutils literal notranslate"><span class="pre">NOT</span></code> —
+inversion applies to the resulting id-set membership), and the returned ids
+are substituted back as <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span> <span class="pre">HAS</span> <span class="pre">ANY</span> <span class="pre">&lt;ids&gt;</span></code> (an empty id set
+translates to a constant-false expression). Each dotted node is resolved
+<strong>independently</strong>: <code class="docutils literal notranslate"><span class="pre">references.doi</span> <span class="pre">CONTAINS</span> <span class="pre">&quot;x&quot;</span> <span class="pre">AND</span> <span class="pre">references.year</span> <span class="pre">&gt;=</span>
+<span class="pre">2000</span></code> matches entries where <em>some</em> related reference matches the doi
+condition and <em>some</em> — possibly different — related reference matches the
+year condition. Without a resolver, dotted filters other than <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span>
+<span class="pre">HAS</span> <span class="pre">...</span></code> are not implemented; nested (deeper than depth-1) paths and
+dotted <code class="docutils literal notranslate"><span class="pre">LENGTH</span></code> filters are never supported.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>node</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.FilterAst" title="(in httk-core dev:main)"><em>httk.core.optimade.FilterAst</em></a>) – The parsed OPTIMADE filter AST node.</p></li>
+<li><p><strong>search_variable</strong> (<a class="reference internal" href="../index.html#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><em>httk.data.query.SearchVariable</em></a>) – The backend search variable receiving the expression.</p></li>
+<li><p><strong>property_fulltypes</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Fulltypes keyed by recognized property name.</p></li>
+<li><p><strong>handlers</strong> (<a class="reference internal" href="#httk.data.query.optimade_filters.HandlerTable" title="httk.data.query.optimade_filters.HandlerTable"><em>HandlerTable</em></a>) – Property-specific translation handlers.</p></li>
+<li><p><strong>recognized_prefixes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – Prefixes whose unknown properties are errors.</p></li>
+<li><p><strong>relationship_targets</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – Related entry types that support dotted filters.</p></li>
+<li><p><strong>related_property_resolver</strong> (<a class="reference internal" href="#httk.data.query.optimade_filters.RelatedPropertyResolver" title="httk.data.query.optimade_filters.RelatedPropertyResolver"><em>RelatedPropertyResolver</em></a><em> | </em><em>None</em>) – Optional resolver for related-property filters.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The translated backend search expression.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If the filter cannot be translated; see
+<a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><code class="xref py py-class docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a> for the failure categories.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression">httk.data.query.SearchExpression</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.simple_property_handlers">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">simple_property_handlers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_fulltypes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#simple_property_handlers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.simple_property_handlers" title="Link to this definition">¶</a></dt>
+<dd><p>Build a filter handler table for an entry type from a property-key map.</p>
+<p>Provides default handlers for standard <code class="docutils literal notranslate"><span class="pre">id</span></code> (matched against the
+<a class="reference internal" href="../protocols/index.html#httk.data.query.protocols.ID_FIELD" title="httk.data.query.protocols.ID_FIELD"><code class="xref py py-data docutils literal notranslate"><span class="pre">ID_FIELD</span></code></a> field) and <code class="docutils literal notranslate"><span class="pre">type</span></code> (a constant
+equal to <code class="docutils literal notranslate"><span class="pre">entry_type</span></code>). Entries in <code class="docutils literal notranslate"><span class="pre">property_keys</span></code> replace those defaults
+when their names overlap. For every
+property named in <code class="docutils literal notranslate"><span class="pre">property_keys</span></code> (which maps property names to backend
+field names), handlers are generated from the property’s fulltype in
+<code class="docutils literal notranslate"><span class="pre">property_fulltypes</span></code> (default <code class="docutils literal notranslate"><span class="pre">&quot;string&quot;</span></code>): string properties get
+comparison and stringmatching handlers; integer and float properties get a
+numeric comparison handler; <code class="docutils literal notranslate"><span class="pre">list</span> <span class="pre">of</span> <span class="pre">...</span></code> properties get a HAS (set
+membership) handler. Every generated property also gets a <code class="docutils literal notranslate"><span class="pre">known</span></code>
+unknown handler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The served entry type used by the constant <code class="docutils literal notranslate"><span class="pre">type</span></code> handler.</p></li>
+<li><p><strong>property_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Mapping from served property names to backend field names.</p></li>
+<li><p><strong>property_fulltypes</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Fulltypes keyed by served property name.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A handler table keyed by served property name.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)">collections.abc.Mapping</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)">collections.abc.Callable</a>[Ellipsis, Any]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.relationship_id_handler">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">relationship_id_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rel_key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#relationship_id_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.relationship_id_handler" title="Link to this definition">¶</a></dt>
+<dd><p>A <code class="docutils literal notranslate"><span class="pre">'&lt;type&gt;.id'</span></code> handler-table entry matching related ids over a list-valued field.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rel_key</span></code> names a list-valued backend field holding the related entry
+ids; the returned <code class="docutils literal notranslate"><span class="pre">{'HAS':</span> <span class="pre">...}</span></code> mapping serves <code class="docutils literal notranslate"><span class="pre">&lt;type&gt;.id</span> <span class="pre">HAS</span> <span class="pre">...</span></code>
+filters (and the semi-join rewrites of other dotted filters) with the
+standard set-operation semantics of <a class="reference internal" href="#httk.data.query.optimade_filters.set_handler" title="httk.data.query.optimade_filters.set_handler"><code class="xref py py-func docutils literal notranslate"><span class="pre">set_handler()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rel_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The backend field name for related entry identifiers.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A handler mapping containing the <code class="docutils literal notranslate"><span class="pre">HAS</span></code> operation.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)">collections.abc.Mapping</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)">collections.abc.Callable</a>[Ellipsis, Any]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.optimade_filters.filter_searcher">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.optimade_filters.</span></span><span class="sig-name descname"><span class="pre">filter_searcher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_string</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">entry_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_fulltypes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">handlers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recognized_prefixes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationship_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">related_property_resolver</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/httk/data/query/optimade_filters.html#filter_searcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.optimade_filters.filter_searcher" title="Link to this definition">¶</a></dt>
+<dd><p>Build a <a class="reference internal" href="../index.html#httk.data.query.Searcher" title="httk.data.query.Searcher"><code class="xref py py-class docutils literal notranslate"><span class="pre">Searcher</span></code></a> over <code class="docutils literal notranslate"><span class="pre">store</span></code> applying an OPTIMADE filter.</p>
+<p><code class="docutils literal notranslate"><span class="pre">filter_string</span></code> is an OPTIMADE filter string (parsed with
+<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.parse_optimade_filter" title="(in httk-core dev:main)"><code class="xref py py-func docutils literal notranslate"><span class="pre">httk.core.optimade.parse_optimade_filter()</span></code></a>) or an already-parsed
+<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.FilterAst" title="(in httk-core dev:main)"><code class="xref py py-type docutils literal notranslate"><span class="pre">FilterAst</span></code></a>. The searcher binds one search variable to
+<code class="docutils literal notranslate"><span class="pre">target</span></code> (the store-specific query target, declared as the searcher
+output named <code class="docutils literal notranslate"><span class="pre">entry_type</span></code>) and applies the translated filter. When
+<code class="docutils literal notranslate"><span class="pre">handlers</span></code> is not supplied, a default table is built with
+<a class="reference internal" href="#httk.data.query.optimade_filters.simple_property_handlers" title="httk.data.query.optimade_filters.simple_property_handlers"><code class="xref py py-func docutils literal notranslate"><span class="pre">simple_property_handlers()</span></code></a> from <code class="docutils literal notranslate"><span class="pre">property_keys</span></code> (or, when
+<code class="docutils literal notranslate"><span class="pre">property_keys</span></code> is also None, from an identity map over
+<code class="docutils literal notranslate"><span class="pre">property_fulltypes</span></code>). The
+remaining keyword arguments are passed through to
+<a class="reference internal" href="#httk.data.query.optimade_filters.translate_filter_ast" title="httk.data.query.optimade_filters.translate_filter_ast"><code class="xref py py-func docutils literal notranslate"><span class="pre">translate_filter_ast()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store</strong> (<a class="reference internal" href="../index.html#httk.data.query.Store" title="httk.data.query.Store"><em>httk.data.query.Store</em></a>) – The backend store on which to build the searcher.</p></li>
+<li><p><strong>target</strong> (<em>Any</em>) – The backend query target to bind.</p></li>
+<li><p><strong>filter_string</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.FilterAst" title="(in httk-core dev:main)"><em>httk.core.optimade.FilterAst</em></a>) – An OPTIMADE filter string or parsed filter AST.</p></li>
+<li><p><strong>entry_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The output name and served entry type.</p></li>
+<li><p><strong>property_fulltypes</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Fulltypes keyed by recognized property name.</p></li>
+<li><p><strong>property_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping" title="(in Python v3.14)"><em>collections.abc.Mapping</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Optional mapping from property names to backend field names.</p></li>
+<li><p><strong>handlers</strong> (<a class="reference internal" href="#httk.data.query.optimade_filters.HandlerTable" title="httk.data.query.optimade_filters.HandlerTable"><em>HandlerTable</em></a><em> | </em><em>None</em>) – Optional prebuilt property handler table.</p></li>
+<li><p><strong>recognized_prefixes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – Prefixes whose unknown properties are errors.</p></li>
+<li><p><strong>relationship_targets</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – Related entry types that support dotted filters.</p></li>
+<li><p><strong>related_property_resolver</strong> (<a class="reference internal" href="#httk.data.query.optimade_filters.RelatedPropertyResolver" title="httk.data.query.optimade_filters.RelatedPropertyResolver"><em>RelatedPropertyResolver</em></a><em> | </em><em>None</em>) – Optional resolver for related-property filters.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A searcher with the translated filter already applied.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError" title="httk.data.query.optimade_filters.FilterTranslationError"><strong>FilterTranslationError</strong></a> – If the filter cannot be translated.</p></li>
+<li><p><a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/optimade/index.html#httk.core.optimade.ParserSyntaxError" title="(in httk-core dev:main)"><strong>httk.core.optimade.ParserSyntaxError</strong></a> – If a filter string does not parse.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="../index.html#httk.data.query.Searcher" title="httk.data.query.Searcher">httk.data.query.Searcher</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../portable/index.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">httk.data.query.portable</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">httk.data.query</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">httk.data.query.optimade_filters</a><ul>
+<li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#exceptions">Exceptions</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationCategory"><code class="docutils literal notranslate"><span class="pre">FilterTranslationCategory</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.HandlerTable"><code class="docutils literal notranslate"><span class="pre">HandlerTable</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.RelatedPropertyResolver"><code class="docutils literal notranslate"><span class="pre">RelatedPropertyResolver</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError"><code class="docutils literal notranslate"><span class="pre">FilterTranslationError</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError.category"><code class="docutils literal notranslate"><span class="pre">FilterTranslationError.category</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.FilterTranslationError.detail"><code class="docutils literal notranslate"><span class="pre">FilterTranslationError.detail</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.constant_types"><code class="docutils literal notranslate"><span class="pre">constant_types</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.invert_op"><code class="docutils literal notranslate"><span class="pre">invert_op</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.format_value"><code class="docutils literal notranslate"><span class="pre">format_value()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.true_handler"><code class="docutils literal notranslate"><span class="pre">true_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.false_handler"><code class="docutils literal notranslate"><span class="pre">false_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_unknown_handler"><code class="docutils literal notranslate"><span class="pre">unknown_unknown_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.known_unknown_handler"><code class="docutils literal notranslate"><span class="pre">known_unknown_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.field_unknown_handler"><code class="docutils literal notranslate"><span class="pre">field_unknown_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_comparison_handler"><code class="docutils literal notranslate"><span class="pre">unknown_comparison_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_stringmatching_handler"><code class="docutils literal notranslate"><span class="pre">unknown_stringmatching_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_has_handler"><code class="docutils literal notranslate"><span class="pre">unknown_has_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.unknown_length_handler"><code class="docutils literal notranslate"><span class="pre">unknown_length_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.string_handler"><code class="docutils literal notranslate"><span class="pre">string_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.stringmatching_handler"><code class="docutils literal notranslate"><span class="pre">stringmatching_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.constant_comparison_handler"><code class="docutils literal notranslate"><span class="pre">constant_comparison_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.constant_stringmatching_handler"><code class="docutils literal notranslate"><span class="pre">constant_stringmatching_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.number_handler"><code class="docutils literal notranslate"><span class="pre">number_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.timestamp_handler"><code class="docutils literal notranslate"><span class="pre">timestamp_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.set_handler"><code class="docutils literal notranslate"><span class="pre">set_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.constant_set_handler"><code class="docutils literal notranslate"><span class="pre">constant_set_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.translate_filter_ast"><code class="docutils literal notranslate"><span class="pre">translate_filter_ast()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.simple_property_handlers"><code class="docutils literal notranslate"><span class="pre">simple_property_handlers()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.relationship_id_handler"><code class="docutils literal notranslate"><span class="pre">relationship_id_handler()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.optimade_filters.filter_searcher"><code class="docutils literal notranslate"><span class="pre">filter_searcher()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

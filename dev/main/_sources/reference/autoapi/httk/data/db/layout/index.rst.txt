@@ -1,0 +1,186 @@
+httk.data.db.layout
+===================
+
+.. py:module:: httk.data.db.layout
+
+.. autoapi-nested-parse::
+
+   Versioned physical layout for :class:`httk.data.db.store.SqlStore`.
+
+   The SQL object mapper deliberately permits ordinary frozen dataclasses to be
+   introduced on demand.  A persisted store, however, also needs a small stable
+   contract for the entry families it serves.  This module owns that contract:
+   the protocol marker, its registry-name declaration, and deterministic dispatch
+   tables.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.data.db.layout.STORAGE_PROTOCOL_VERSION
+   httk.data.db.layout.METADATA_TABLE_NAME
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.layout.StorageLayoutUpgradeRequiredError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.layout.EntryFamilyLayout
+   httk.data.db.layout.StorageLayout
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.layout.normalize_entry_records
+   httk.data.db.layout.declaration_json
+   httk.data.db.layout.expected_metadata
+   httk.data.db.layout.metadata_table_for
+   httk.data.db.layout.actual_schema_objects
+   httk.data.db.layout.actual_table_names
+   httk.data.db.layout.read_store_metadata
+
+
+Module Contents
+---------------
+
+.. py:data:: STORAGE_PROTOCOL_VERSION
+   :type:  Final
+   :value: 'v2.0.3'
+
+
+   The persisted SqlStore layout protocol implemented by this package.
+
+.. py:data:: METADATA_TABLE_NAME
+   :type:  Final
+   :value: '_httk_store_metadata'
+
+
+   Reserved key/value table holding the store protocol and entry declaration.
+
+.. py:exception:: StorageLayoutUpgradeRequiredError(diff)
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A database does not exactly implement the current persisted store layout.
+
+   ``diff`` is immutable and JSON-shaped.  Its top-level keys are stable
+   categories (currently ``protocol``, ``declaration`` and ``schema``), so a
+   caller can present a precise upgrade diagnostic without parsing
+   the human-readable exception message.
+
+
+   .. py:attribute:: diff
+      :type:  collections.abc.Mapping[str, object]
+
+
+.. py:class:: EntryFamilyLayout
+
+   One immutable configured entry family and its concrete records.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: family
+      :type:  type
+
+
+   .. py:attribute:: record_names
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: records
+      :type:  tuple[type, Ellipsis]
+
+
+   .. py:attribute:: dispatch_table_name
+      :type:  str | None
+
+
+.. py:class:: StorageLayout
+
+   The immutable normalized entry declaration of an initialized store.
+
+
+   .. py:attribute:: protocol_version
+      :type:  str
+
+
+   .. py:attribute:: families
+      :type:  tuple[EntryFamilyLayout, Ellipsis]
+
+
+   .. py:property:: entry_records
+      :type: collections.abc.Mapping[type, tuple[type, Ellipsis]]
+
+
+      Configured family classes mapped to their ordered concrete record classes.
+
+
+   .. py:property:: declaration
+      :type: collections.abc.Mapping[str, tuple[str, Ellipsis]]
+
+
+      Configured stable family names mapped to their ordered stable record names.
+
+
+.. py:function:: normalize_entry_records(entry_records)
+
+   Validate an explicit class declaration and replace it with stable registry names.
+
+   Registry aliases are rejected rather than selected arbitrarily: a
+   persistent declaration must have exactly one stable spelling for every
+   supplied class.
+
+
+.. py:function:: declaration_json(layout)
+
+   Serialize a normalized declaration in its exact deterministic persisted form.
+
+
+.. py:function:: expected_metadata(layout)
+
+   Return SQLAlchemy metadata for all protocol-owned tables of ``layout``.
+
+
+.. py:function:: metadata_table_for(metadata)
+
+   Return the reserved protocol key/value table in ``metadata``.
+
+
+.. py:function:: actual_schema_objects(connection)
+
+   Return application schema-object names mapped to their stable object kinds.
+
+   The DuckDB SQLAlchemy inspector presently routes column inspection through
+   a PostgreSQL catalogue relation DuckDB does not expose, so the whole
+   layout path intentionally uses the dialect catalogues directly.
+
+
+.. py:function:: actual_table_names(connection)
+
+   Return application base-table names without SQLAlchemy reflection.
+
+
+.. py:function:: read_store_metadata(connection)
+
+   Read the marker values, or return ``None`` when no metadata table exists.
+
+

@@ -1,0 +1,1165 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../../../genindex.html"><link rel="search" title="Search" href="../../../../../search.html"><link rel="next" title="httk.data.query.optimade_filters" href="optimade_filters/index.html"><link rel="prev" title="httk.data.federated_store" href="../federated_store/index.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.query - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../../index.html">Reference</a><input aria-label="Toggle navigation of Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 current has-children"><a class="current reference internal" href="#">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../../index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" checked="" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 has-children"><a class="reference internal" href="../db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 current has-children current-page"><a class="current reference internal" href="#">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" checked="" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../../../../_sources/reference/autoapi/httk/data/query/index.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-httk.data.query">
+<span id="httk-data-query"></span><h1>httk.data.query<a class="headerlink" href="#module-httk.data.query" title="Link to this heading">¶</a></h1>
+<p>Define backend-agnostic query protocols and portable query capabilities.</p>
+<p>The <a class="reference internal" href="optimade_filters/index.html#module-httk.data.query.optimade_filters" title="httk.data.query.optimade_filters"><code class="xref py py-mod docutils literal notranslate"><span class="pre">httk.data.query.optimade_filters</span></code></a> module contains OPTIMADE filter-translation
+machinery for serving layers and is intentionally not lifted here.</p>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l1"><a class="reference internal" href="protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</div>
+</section>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.ID_FIELD" title="httk.data.query.ID_FIELD"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ID_FIELD</span></code></a></p></td>
+<td><p>The backend field name used for the served entry identifier.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.CountUnavailableError" title="httk.data.query.CountUnavailableError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CountUnavailableError</span></code></a></p></td>
+<td><p>Report that a store cannot provide an exact query count.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.MultipleResultsError" title="httk.data.query.MultipleResultsError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MultipleResultsError</span></code></a></p></td>
+<td><p>Report that a result-set <code class="docutils literal notranslate"><span class="pre">one()</span></code> operation found multiple results.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.NoResultError" title="httk.data.query.NoResultError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">NoResultError</span></code></a></p></td>
+<td><p>Report that a result-set <code class="docutils literal notranslate"><span class="pre">one()</span></code> operation found no matching result.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.PaginationCursorError" title="httk.data.query.PaginationCursorError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PaginationCursorError</span></code></a></p></td>
+<td><p>Report that a continuation cursor is malformed, expired, or belongs to another result plan.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.UnsupportedQueryError" title="httk.data.query.UnsupportedQueryError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">UnsupportedQueryError</span></code></a></p></td>
+<td><p>Report that a valid query operation is outside a store's supported profile.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities" title="httk.data.query.PortableQueryCapabilities"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PortableQueryCapabilities</span></code></a></p></td>
+<td><p>Describe the query operations guaranteed by one property definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.ContinuationToken" title="httk.data.query.ContinuationToken"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ContinuationToken</span></code></a></p></td>
+<td><p>Carry an opaque URL-safe continuation value.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.PageOrder" title="httk.data.query.PageOrder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PageOrder</span></code></a></p></td>
+<td><p>Order a continuation page by one named scalar result projection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.PageableResultSetLike" title="httk.data.query.PageableResultSetLike"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PageableResultSetLike</span></code></a></p></td>
+<td><p>Expose optional continuation-page capability on a frozen result set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.ResultPage" title="httk.data.query.ResultPage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ResultPage</span></code></a></p></td>
+<td><p>Represent an immutable continuation-page result.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.ResultRow" title="httk.data.query.ResultRow"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ResultRow</span></code></a></p></td>
+<td><p>Represent one named result row by position, name, or attribute.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.ResultRowLike" title="httk.data.query.ResultRowLike"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ResultRowLike</span></code></a></p></td>
+<td><p>Require named access to one result row.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.ResultSetLike" title="httk.data.query.ResultSetLike"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ResultSetLike</span></code></a></p></td>
+<td><p>Require the common operations of a materialized result set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SearchExpression</span></code></a></p></td>
+<td><p>Require composable backend search expressions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.SearchField" title="httk.data.query.SearchField"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SearchField</span></code></a></p></td>
+<td><p>Expose a queryable field of a search variable.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.SearchResult" title="httk.data.query.SearchResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SearchResult</span></code></a></p></td>
+<td><p>Represent one match with declared output values and names.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.SearchVariable" title="httk.data.query.SearchVariable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SearchVariable</span></code></a></p></td>
+<td><p>Bind a query variable to a target type whose attributes yield fields.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.Searcher" title="httk.data.query.Searcher"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Searcher</span></code></a></p></td>
+<td><p>Build one query and iterate its results.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.Store" title="httk.data.query.Store"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Store</span></code></a></p></td>
+<td><p>Require a store that can create a query searcher.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#httk.data.query.portable_query_capabilities" title="httk.data.query.portable_query_capabilities"><code class="xref py py-obj docutils literal notranslate"><span class="pre">portable_query_capabilities</span></code></a>(definition)</p></td>
+<td><p>Derive the portable operation subset for <code class="docutils literal notranslate"><span class="pre">definition</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#httk.data.query.portable_query_fields" title="httk.data.query.portable_query_fields"><code class="xref py py-obj docutils literal notranslate"><span class="pre">portable_query_fields</span></code></a>(entry_type, *[, include, exclude])</p></td>
+<td><p>Return the ordered portable query fields described by <code class="docutils literal notranslate"><span class="pre">entry_type</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="package-contents">
+<h2>Package Contents<a class="headerlink" href="#package-contents" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.PortableQueryCapabilities">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">PortableQueryCapabilities</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/portable.html#PortableQueryCapabilities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PortableQueryCapabilities" title="Link to this definition">¶</a></dt>
+<dd><p>Describe the query operations guaranteed by one property definition.</p>
+<p><code class="docutils literal notranslate"><span class="pre">query-support</span></code> expresses a cross-provider guarantee, not a particular
+server’s implementation detail.  <code class="docutils literal notranslate"><span class="pre">all</span> <span class="pre">optional</span></code> is deliberately
+fail-closed here: it gives a portable client no operation it can rely on.
+A server may offer more, but that is not represented by the definition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>query_support</strong> – The normalized declared query-support level.</p></li>
+<li><p><strong>operations</strong> – The portable operation families guaranteed by the definition.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.PortableQueryCapabilities.query_support">
+<span class="sig-name descname"><span class="pre">query_support</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><a class="headerlink" href="#httk.data.query.PortableQueryCapabilities.query_support" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.PortableQueryCapabilities.operations">
+<span class="sig-name descname"><span class="pre">operations</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#frozenset" title="(in Python v3.14)"><span class="pre">frozenset</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.PortableQueryCapabilities.operations" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.PortableQueryCapabilities.supports">
+<span class="sig-name descname"><span class="pre">supports</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">operation</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/portable.html#PortableQueryCapabilities.supports"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PortableQueryCapabilities.supports" title="Link to this definition">¶</a></dt>
+<dd><p>Report whether <code class="docutils literal notranslate"><span class="pre">operation</span></code> is guaranteed by this definition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>operation</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The operation family to test.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">True</span></code> when the operation is portable.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.portable_query_capabilities">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">portable_query_capabilities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">definition</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/portable.html#portable_query_capabilities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.portable_query_capabilities" title="Link to this definition">¶</a></dt>
+<dd><p>Derive the portable operation subset for <code class="docutils literal notranslate"><span class="pre">definition</span></code>.</p>
+<p>The operation names are <code class="docutils literal notranslate"><span class="pre">&quot;equality&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;ordering&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;stringmatching&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;set&quot;</span></code>.  They intentionally describe the
+query-language operation families rather than storage implementation.
+<code class="docutils literal notranslate"><span class="pre">IS</span> <span class="pre">[NOT]</span> <span class="pre">KNOWN</span></code> is part of the equality family because it is the NULL
+spelling of equality/inequality in the OPTIMADE filter language.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>definition</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.PropertyDefinition" title="(in httk-core dev:main)"><em>httk.core.PropertyDefinition</em></a>) – The OPTIMADE property definition to inspect.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The guaranteed portable query capabilities.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities" title="httk.data.query.PortableQueryCapabilities">PortableQueryCapabilities</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="httk.data.query.portable_query_fields">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">portable_query_fields</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entry_type</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">include</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/portable.html#portable_query_fields"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.portable_query_fields" title="Link to this definition">¶</a></dt>
+<dd><p>Return the ordered portable query fields described by <code class="docutils literal notranslate"><span class="pre">entry_type</span></code>.</p>
+<p>By default, this selects scalar fields and flat lists with at least one
+operation guaranteed by their definition. <code class="docutils literal notranslate"><span class="pre">include</span></code> is an explicit
+binding override for named existing properties; it is appended as a second
+ordered group after the derived fields, in entry-definition order among the
+included names, but does not manufacture query capabilities absent from that
+definition. <code class="docutils literal notranslate"><span class="pre">exclude</span></code> always wins. Both arguments reject unknown or
+duplicate names so binding mistakes cannot silently broaden a profile.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entry_type</strong> (<a class="reference external" href="https://docs.httk.org/httk-core/dev/main/reference/autoapi/httk/core/index.html#httk.core.EntryTypeDefinition" title="(in httk-core dev:main)"><em>httk.core.EntryTypeDefinition</em></a>) – The entry definition whose properties are inspected.</p></li>
+<li><p><strong>include</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable" title="(in Python v3.14)"><em>collections.abc.Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Existing property names to append to the derived selection.</p></li>
+<li><p><strong>exclude</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable" title="(in Python v3.14)"><em>collections.abc.Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Existing property names to remove from the selection.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Derived property names followed by explicitly included names.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">include</span></code> or <code class="docutils literal notranslate"><span class="pre">exclude</span></code> contains an unknown or
+duplicate property name.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Ellipsis]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="httk.data.query.ID_FIELD">
+<span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ID_FIELD</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Final</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__id'</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ID_FIELD"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ID_FIELD" title="Link to this definition">¶</a></dt>
+<dd><p>The backend field name used for the served entry identifier.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.ContinuationToken">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ContinuationToken</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ContinuationToken"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ContinuationToken" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code></a></p>
+<p>Carry an opaque URL-safe continuation value.</p>
+<p>It is a <code class="docutils literal notranslate"><span class="pre">str</span></code> subclass so normal JSON serializers preserve it as a
+scalar value.  Applications should pass a token returned by a page back
+unchanged; data backends validate its version, structure, and result-plan
+fingerprint before using any decoded value as a bound parameter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> – The opaque continuation value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.CountUnavailableError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">CountUnavailableError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#CountUnavailableError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.CountUnavailableError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#RuntimeError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RuntimeError</span></code></a></p>
+<p>Report that a store cannot provide an exact query count.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.MultipleResultsError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">MultipleResultsError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#MultipleResultsError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.MultipleResultsError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#LookupError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LookupError</span></code></a></p>
+<p>Report that a result-set <code class="docutils literal notranslate"><span class="pre">one()</span></code> operation found multiple results.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.NoResultError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">NoResultError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#NoResultError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.NoResultError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#LookupError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LookupError</span></code></a></p>
+<p>Report that a result-set <code class="docutils literal notranslate"><span class="pre">one()</span></code> operation found no matching result.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.PageOrder">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">PageOrder</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#PageOrder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PageOrder" title="Link to this definition">¶</a></dt>
+<dd><p>Order a continuation page by one named scalar result projection.</p>
+<p><code class="docutils literal notranslate"><span class="pre">name</span></code> identifies the name supplied to <code class="docutils literal notranslate"><span class="pre">results()</span></code> (or
+<a class="reference internal" href="#httk.data.query.Searcher.output" title="httk.data.query.Searcher.output"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Searcher.output()</span></code></a>), never a backend column object.  The result-set
+implementation validates that it is a root scalar projection before it
+generates SQL.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – The declared scalar output name used for ordering.</p></li>
+<li><p><strong>descending</strong> – Whether to order this field in descending order.</p></li>
+<li><p><strong>nulls</strong> – Whether null values sort first or last.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.PageOrder.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#httk.data.query.PageOrder.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.PageOrder.descending">
+<span class="sig-name descname"><span class="pre">descending</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#httk.data.query.PageOrder.descending" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.PageOrder.nulls">
+<span class="sig-name descname"><span class="pre">nulls</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'first'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'last'</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'last'</span></span><a class="headerlink" href="#httk.data.query.PageOrder.nulls" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.PageableResultSetLike">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">PageableResultSetLike</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#PageableResultSetLike"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PageableResultSetLike" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Expose optional continuation-page capability on a frozen result set.</p>
+<p>This deliberately extends neither <a class="reference internal" href="#httk.data.query.ResultSetLike" title="httk.data.query.ResultSetLike"><code class="xref py py-class docutils literal notranslate"><span class="pre">ResultSetLike</span></code></a> nor
+<a class="reference internal" href="#httk.data.query.Searcher" title="httk.data.query.Searcher"><code class="xref py py-class docutils literal notranslate"><span class="pre">Searcher</span></code></a>: stores that do not support seek pagination remain fully
+conforming to the required portable contracts.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.PageableResultSetLike.page">
+<span class="sig-name descname"><span class="pre">page</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order_by</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_total</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#PageableResultSetLike.page"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PageableResultSetLike.page" title="Link to this definition">¶</a></dt>
+<dd><p>Return one ordered continuation page.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.PaginationCursorError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">PaginationCursorError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#PaginationCursorError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.PaginationCursorError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueError</span></code></a></p>
+<p>Report that a continuation cursor is malformed, expired, or belongs to another result plan.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.ResultPage">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ResultPage</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultPage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultPage" title="Link to this definition">¶</a></dt>
+<dd><p>Represent an immutable continuation-page result.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rows</span></code> is always a tuple.  Returned rows are ordinary persistent result
+rows, not the expiring proxies produced by <code class="docutils literal notranslate"><span class="pre">SqlResultSet.cursor()</span></code>.
+<code class="docutils literal notranslate"><span class="pre">total</span></code> is populated only when the caller explicitly asks for it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rows</strong> – The persistent rows returned by the page.</p></li>
+<li><p><strong>next</strong> – The token for the next page, if one exists.</p></li>
+<li><p><strong>previous</strong> – The token for the previous page, if one exists.</p></li>
+<li><p><strong>total</strong> – The exact result count when requested, otherwise <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.ResultPage.rows">
+<span class="sig-name descname"><span class="pre">rows</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#httk.data.query.ResultRowLike" title="httk.data.query.ResultRowLike"><span class="pre">ResultRowLike</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.ResultPage.rows" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.ResultPage.next">
+<span class="sig-name descname"><span class="pre">next</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#httk.data.query.ContinuationToken" title="httk.data.query.ContinuationToken"><span class="pre">ContinuationToken</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><a class="headerlink" href="#httk.data.query.ResultPage.next" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.ResultPage.previous">
+<span class="sig-name descname"><span class="pre">previous</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#httk.data.query.ContinuationToken" title="httk.data.query.ContinuationToken"><span class="pre">ContinuationToken</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><a class="headerlink" href="#httk.data.query.ResultPage.previous" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.ResultPage.total">
+<span class="sig-name descname"><span class="pre">total</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#httk.data.query.ResultPage.total" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.ResultRow">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ResultRow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolver</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">guard</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultRow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultRow" title="Link to this definition">¶</a></dt>
+<dd><p>Represent one named result row by position, name, or attribute.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>values</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><em>Any</em><em>, </em><em>Ellipsis</em><em>]</em>) – The row values in declaration order.</p></li>
+<li><p><strong>names</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>Ellipsis</em><em>]</em>) – The corresponding output names.</p></li>
+<li><p><strong>resolver</strong> (<em>Any</em>) – An optional lazy value resolver.</p></li>
+<li><p><strong>guard</strong> (<em>Any</em>) – An optional callback that rejects access to expired values.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="httk.data.query.ResultRow.names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.ResultRow.names" title="Link to this definition">¶</a></dt>
+<dd><p>Return the declared output names.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="httk.data.query.ResultRow.values">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.ResultRow.values" title="Link to this definition">¶</a></dt>
+<dd><p>Return the row values in declaration order.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.ResultRowLike">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ResultRowLike</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultRowLike"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultRowLike" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Require named access to one result row.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="httk.data.query.ResultRowLike.names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.ResultRowLike.names" title="Link to this definition">¶</a></dt>
+<dd><p>Return the row’s declared output names.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.ResultSetLike">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">ResultSetLike</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultSetLike"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultSetLike" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Require the common operations of a materialized result set.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.ResultSetLike.first">
+<span class="sig-name descname"><span class="pre">first</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultSetLike.first"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultSetLike.first" title="Link to this definition">¶</a></dt>
+<dd><p>Return the first row, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when no row matches.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.ResultSetLike.one">
+<span class="sig-name descname"><span class="pre">one</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultSetLike.one"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultSetLike.one" title="Link to this definition">¶</a></dt>
+<dd><p>Return the only row, or raise when the count is not one.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.ResultSetLike.scalars">
+<span class="sig-name descname"><span class="pre">scalars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#ResultSetLike.scalars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.ResultSetLike.scalars" title="Link to this definition">¶</a></dt>
+<dd><p>Iterate over one named scalar output.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.SearchExpression">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">SearchExpression</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchExpression"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchExpression" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Require composable backend search expressions.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.SearchField">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">SearchField</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Expose a queryable field of a search variable.</p>
+<p>In addition to the methods below, fields support the rich comparison
+operators (<code class="docutils literal notranslate"><span class="pre">==</span></code>, <code class="docutils literal notranslate"><span class="pre">!=</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>), returning
+<a class="reference internal" href="#httk.data.query.SearchExpression" title="httk.data.query.SearchExpression"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchExpression</span></code></a>. The handlers invoke those via
+<code class="docutils literal notranslate"><span class="pre">getattr(field,</span> <span class="pre">'__eq__')(value)</span></code> since the comparison dunders cannot be
+typed as expression-returning.</p>
+<p>The three string-matching methods take <strong>literal</strong> text: no wildcard or
+pattern syntax whatsoever crosses this contract, so <code class="docutils literal notranslate"><span class="pre">%</span></code> and <code class="docutils literal notranslate"><span class="pre">_</span></code> (and
+any other metacharacter) match themselves. A backend is therefore free to
+implement them with SQL <code class="docutils literal notranslate"><span class="pre">LIKE</span></code> over an escaped pattern, with a regular
+expression, or with a full-text index — the choice is invisible here.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.has">
+<span class="sig-name descname"><span class="pre">has</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.has"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.has" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.has_any">
+<span class="sig-name descname"><span class="pre">has_any</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.has_any"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.has_any" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing any of <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.has_only">
+<span class="sig-name descname"><span class="pre">has_only</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.has_only"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.has_only" title="Link to this definition">¶</a></dt>
+<dd><p>Match a list field containing no values outside <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.is_in">
+<span class="sig-name descname"><span class="pre">is_in</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.is_in"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.is_in" title="Link to this definition">¶</a></dt>
+<dd><p>Match a root scalar field whose value is one of <code class="docutils literal notranslate"><span class="pre">values</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">None</span></code> is an explicit member: it matches a null field value, and its
+negation excludes nulls rather than inheriting SQL’s three-valued
+<code class="docutils literal notranslate"><span class="pre">NOT</span> <span class="pre">IN</span> <span class="pre">(...,</span> <span class="pre">NULL)</span></code> behavior.</p>
+<p>Backends define the corresponding semantics for child or set fields;
+for example, a backend may use the existing <code class="docutils literal notranslate"><span class="pre">has_only</span></code>-style
+all-values reading for a child field.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.contains">
+<span class="sig-name descname"><span class="pre">contains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.contains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.contains" title="Link to this definition">¶</a></dt>
+<dd><p>Match values containing <code class="docutils literal notranslate"><span class="pre">text</span></code> as a literal substring.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.startswith">
+<span class="sig-name descname"><span class="pre">startswith</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.startswith"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.startswith" title="Link to this definition">¶</a></dt>
+<dd><p>Match values beginning with the literal <code class="docutils literal notranslate"><span class="pre">prefix</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchField.endswith">
+<span class="sig-name descname"><span class="pre">endswith</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">suffix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchField.endswith"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchField.endswith" title="Link to this definition">¶</a></dt>
+<dd><p>Match values ending with the literal <code class="docutils literal notranslate"><span class="pre">suffix</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.SearchResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">SearchResult</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchResult" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">NamedTuple</span></code></p>
+<p>Represent one match with declared output values and names.</p>
+<p><code class="docutils literal notranslate"><span class="pre">values</span></code> holds one entry per <a class="reference internal" href="#httk.data.query.Searcher.output" title="httk.data.query.Searcher.output"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Searcher.output()</span></code></a> call in declaration
+order; it is a tuple, so <code class="docutils literal notranslate"><span class="pre">values,</span> <span class="pre">names</span> <span class="pre">=</span> <span class="pre">result</span></code> and <code class="docutils literal notranslate"><span class="pre">result[0][0]</span></code>
+both work.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.SearchResult.values">
+<span class="sig-name descname"><span class="pre">values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.SearchResult.values" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.SearchResult.names">
+<span class="sig-name descname"><span class="pre">names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Ellipsis</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#httk.data.query.SearchResult.names" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.SearchVariable">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">SearchVariable</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchVariable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchVariable" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Bind a query variable to a target type whose attributes yield fields.</p>
+<p><code class="docutils literal notranslate"><span class="pre">always_true</span></code>/<code class="docutils literal notranslate"><span class="pre">always_false</span></code> are reserved names: they are real methods
+of the variable, never stored fields resolved through <code class="docutils literal notranslate"><span class="pre">__getattr__</span></code>.
+They exist so a translation layer can express a constant truth value
+without inventing a probe field. A <code class="docutils literal notranslate"><span class="pre">field</span> <span class="pre">==</span> <span class="pre">field</span></code> probe is NULL-unsound,
+since it yields NULL (not true) for a NULL field.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchVariable.always_true">
+<span class="sig-name descname"><span class="pre">always_true</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchVariable.always_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchVariable.always_true" title="Link to this definition">¶</a></dt>
+<dd><p>An expression that matches every row.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.SearchVariable.always_false">
+<span class="sig-name descname"><span class="pre">always_false</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#SearchVariable.always_false"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.SearchVariable.always_false" title="Link to this definition">¶</a></dt>
+<dd><p>An expression that matches no row.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.Searcher">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">Searcher</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Build one query and iterate its results.</p>
+<p>Iteration yields one <a class="reference internal" href="#httk.data.query.SearchResult" title="httk.data.query.SearchResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">SearchResult</span></code></a> per match, so <code class="docutils literal notranslate"><span class="pre">item[0][0]</span></code> is
+the first declared output of the match (typically the matched row object).
+The expressions received by <code class="docutils literal notranslate"><span class="pre">add</span></code> are always ones produced by this same
+backend’s search variables, so implementations may type them as their own
+expression class; a backend that needs a second (post-filter) evaluation
+position decides that from the expression itself, not from the caller.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.offset">
+<span class="sig-name descname"><span class="pre">offset</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#httk.data.query.Searcher.offset" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.variable">
+<span class="sig-name descname"><span class="pre">variable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.variable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.variable" title="Link to this definition">¶</a></dt>
+<dd><p>Bind a query variable to <code class="docutils literal notranslate"><span class="pre">target</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.output">
+<span class="sig-name descname"><span class="pre">output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.output" title="Link to this definition">¶</a></dt>
+<dd><p>Declare <code class="docutils literal notranslate"><span class="pre">variable</span></code> as a named result output.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.add">
+<span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expression</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.add" title="Link to this definition">¶</a></dt>
+<dd><p>Add a filter expression to the query.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.count">
+<span class="sig-name descname"><span class="pre">count</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.count" title="Link to this definition">¶</a></dt>
+<dd><p>Return the exact count of the current query.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.set_limit">
+<span class="sig-name descname"><span class="pre">set_limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">limit</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.set_limit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.set_limit" title="Link to this definition">¶</a></dt>
+<dd><p>Set the query limit.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.add_offset">
+<span class="sig-name descname"><span class="pre">add_offset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.add_offset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.add_offset" title="Link to this definition">¶</a></dt>
+<dd><p>Add an offset to the query.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.add_sort">
+<span class="sig-name descname"><span class="pre">add_sort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">descending</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.add_sort"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.add_sort" title="Link to this definition">¶</a></dt>
+<dd><p>Add a field sort to the query.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Searcher.results">
+<span class="sig-name descname"><span class="pre">results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">outputs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Searcher.results"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Searcher.results" title="Link to this definition">¶</a></dt>
+<dd><p>Return a result set for the requested named outputs.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="httk.data.query.Store">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">Store</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Store"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Store" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Protocol</span></code></p>
+<p>Require a store that can create a query searcher.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="httk.data.query.Store.searcher">
+<span class="sig-name descname"><span class="pre">searcher</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#Store.searcher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.Store.searcher" title="Link to this definition">¶</a></dt>
+<dd><p>Create an empty searcher.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="httk.data.query.UnsupportedQueryError">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">httk.data.query.</span></span><span class="sig-name descname"><span class="pre">UnsupportedQueryError</span></span><a class="reference internal" href="../../../../../_modules/httk/data/query/protocols.html#UnsupportedQueryError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#httk.data.query.UnsupportedQueryError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueError</span></code></a></p>
+<p>Report that a valid query operation is outside a store’s supported profile.</p>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="optimade_filters/index.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">httk.data.query.optimade_filters</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../federated_store/index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">httk.data.federated_store</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">httk.data.query</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#exceptions">Exceptions</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#package-contents">Package Contents</a><ul>
+<li><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities"><code class="docutils literal notranslate"><span class="pre">PortableQueryCapabilities</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities.query_support"><code class="docutils literal notranslate"><span class="pre">PortableQueryCapabilities.query_support</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities.operations"><code class="docutils literal notranslate"><span class="pre">PortableQueryCapabilities.operations</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.PortableQueryCapabilities.supports"><code class="docutils literal notranslate"><span class="pre">PortableQueryCapabilities.supports()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.portable_query_capabilities"><code class="docutils literal notranslate"><span class="pre">portable_query_capabilities()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.portable_query_fields"><code class="docutils literal notranslate"><span class="pre">portable_query_fields()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ID_FIELD"><code class="docutils literal notranslate"><span class="pre">ID_FIELD</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ContinuationToken"><code class="docutils literal notranslate"><span class="pre">ContinuationToken</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.CountUnavailableError"><code class="docutils literal notranslate"><span class="pre">CountUnavailableError</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.MultipleResultsError"><code class="docutils literal notranslate"><span class="pre">MultipleResultsError</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.NoResultError"><code class="docutils literal notranslate"><span class="pre">NoResultError</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.PageOrder"><code class="docutils literal notranslate"><span class="pre">PageOrder</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.PageOrder.name"><code class="docutils literal notranslate"><span class="pre">PageOrder.name</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.PageOrder.descending"><code class="docutils literal notranslate"><span class="pre">PageOrder.descending</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.PageOrder.nulls"><code class="docutils literal notranslate"><span class="pre">PageOrder.nulls</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.PageableResultSetLike"><code class="docutils literal notranslate"><span class="pre">PageableResultSetLike</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.PageableResultSetLike.page"><code class="docutils literal notranslate"><span class="pre">PageableResultSetLike.page()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.PaginationCursorError"><code class="docutils literal notranslate"><span class="pre">PaginationCursorError</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultPage"><code class="docutils literal notranslate"><span class="pre">ResultPage</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.ResultPage.rows"><code class="docutils literal notranslate"><span class="pre">ResultPage.rows</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultPage.next"><code class="docutils literal notranslate"><span class="pre">ResultPage.next</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultPage.previous"><code class="docutils literal notranslate"><span class="pre">ResultPage.previous</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultPage.total"><code class="docutils literal notranslate"><span class="pre">ResultPage.total</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.ResultRow"><code class="docutils literal notranslate"><span class="pre">ResultRow</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.ResultRow.names"><code class="docutils literal notranslate"><span class="pre">ResultRow.names</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultRow.values"><code class="docutils literal notranslate"><span class="pre">ResultRow.values</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.ResultRowLike"><code class="docutils literal notranslate"><span class="pre">ResultRowLike</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.ResultRowLike.names"><code class="docutils literal notranslate"><span class="pre">ResultRowLike.names</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.ResultSetLike"><code class="docutils literal notranslate"><span class="pre">ResultSetLike</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.ResultSetLike.first"><code class="docutils literal notranslate"><span class="pre">ResultSetLike.first()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultSetLike.one"><code class="docutils literal notranslate"><span class="pre">ResultSetLike.one()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.ResultSetLike.scalars"><code class="docutils literal notranslate"><span class="pre">ResultSetLike.scalars()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.SearchExpression"><code class="docutils literal notranslate"><span class="pre">SearchExpression</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField"><code class="docutils literal notranslate"><span class="pre">SearchField</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.SearchField.has"><code class="docutils literal notranslate"><span class="pre">SearchField.has()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.has_any"><code class="docutils literal notranslate"><span class="pre">SearchField.has_any()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.has_only"><code class="docutils literal notranslate"><span class="pre">SearchField.has_only()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.is_in"><code class="docutils literal notranslate"><span class="pre">SearchField.is_in()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.contains"><code class="docutils literal notranslate"><span class="pre">SearchField.contains()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.startswith"><code class="docutils literal notranslate"><span class="pre">SearchField.startswith()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchField.endswith"><code class="docutils literal notranslate"><span class="pre">SearchField.endswith()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.SearchResult"><code class="docutils literal notranslate"><span class="pre">SearchResult</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.SearchResult.values"><code class="docutils literal notranslate"><span class="pre">SearchResult.values</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchResult.names"><code class="docutils literal notranslate"><span class="pre">SearchResult.names</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.SearchVariable"><code class="docutils literal notranslate"><span class="pre">SearchVariable</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.SearchVariable.always_true"><code class="docutils literal notranslate"><span class="pre">SearchVariable.always_true()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.SearchVariable.always_false"><code class="docutils literal notranslate"><span class="pre">SearchVariable.always_false()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.Searcher"><code class="docutils literal notranslate"><span class="pre">Searcher</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.Searcher.offset"><code class="docutils literal notranslate"><span class="pre">Searcher.offset</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.variable"><code class="docutils literal notranslate"><span class="pre">Searcher.variable()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.output"><code class="docutils literal notranslate"><span class="pre">Searcher.output()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.add"><code class="docutils literal notranslate"><span class="pre">Searcher.add()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.count"><code class="docutils literal notranslate"><span class="pre">Searcher.count()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.set_limit"><code class="docutils literal notranslate"><span class="pre">Searcher.set_limit()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.add_offset"><code class="docutils literal notranslate"><span class="pre">Searcher.add_offset()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.add_sort"><code class="docutils literal notranslate"><span class="pre">Searcher.add_sort()</span></code></a></li>
+<li><a class="reference internal" href="#httk.data.query.Searcher.results"><code class="docutils literal notranslate"><span class="pre">Searcher.results()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.Store"><code class="docutils literal notranslate"><span class="pre">Store</span></code></a><ul>
+<li><a class="reference internal" href="#httk.data.query.Store.searcher"><code class="docutils literal notranslate"><span class="pre">Store.searcher()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#httk.data.query.UnsupportedQueryError"><code class="docutils literal notranslate"><span class="pre">UnsupportedQueryError</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

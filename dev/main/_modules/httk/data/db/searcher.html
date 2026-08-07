@@ -1,0 +1,1430 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.data.db.searcher - httk-data dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/index.html">Reference</a><input aria-label="Toggle navigation of Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/autoapi/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/autoapi/httk/registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for httk.data.db.searcher</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;The query DSL: build and run searches over stored dataclasses through SQLAlchemy Core.</span>
+
+<span class="sd">:class:`SqlSearcher` (obtained from :meth:`~httk.data.db.store.SqlStore.searcher`)</span>
+<span class="sd">implements the backend-agnostic search protocols of :mod:`httk.data.query` —</span>
+<span class="sd">:class:`~httk.data.query.Searcher`, :class:`~httk.data.query.SearchVariable`,</span>
+<span class="sd">:class:`~httk.data.query.SearchField`, :class:`~httk.data.query.SearchExpression`</span>
+<span class="sd">— porting the query semantics of the v1 ``httk.db`` ``FilteredCollection``</span>
+<span class="sd">searchers onto SQLAlchemy Core:</span>
+
+<span class="sd">- :meth:`SqlSearcher.variable` binds a storable class to a **fresh alias** of</span>
+<span class="sd">  its table; two variables of the same class therefore make a self-join.</span>
+<span class="sd">- Attribute access on a :class:`SqlVariable` follows the class&#39;s resolved</span>
+<span class="sd">  :class:`~httk.data.db.schema.TableSchema`: scalar and encoded fields yield a</span>
+<span class="sd">  :class:`SqlColumn` over the field&#39;s query column; reference fields yield a</span>
+<span class="sd">  chainable :class:`SqlReference` that compares by foreign key</span>
+<span class="sd">  (``v.ref == other_variable`` / ``== stored_object`` / ``== None``) and, on</span>
+<span class="sd">  further attribute access, lazily LEFT OUTER JOINs a fresh alias of the target</span>
+<span class="sd">  table (``v.ref.doi`` chains arbitrarily deep; one join alias per reference</span>
+<span class="sd">  path per variable); variable-length (child-table) fields LEFT OUTER JOIN the</span>
+<span class="sd">  child table (a fresh alias per attribute access, so independent set</span>
+<span class="sd">  predicates on one field — e.g. ``v.symbols.has_any(&#39;O&#39;) &amp;</span>
+<span class="sd">  v.symbols.has_any(&#39;Ca&#39;)`` — constrain independent joined rows, as in httk</span>
+<span class="sd">  v1) and switch the searcher into grouped mode (GROUP BY the root rows).</span>
+<span class="sd">- Comparisons and set operations on columns produce :class:`SqlExpression`</span>
+<span class="sd">  objects carrying **two** renderings — a WHERE-position clause and a</span>
+<span class="sd">  HAVING-position clause — exactly as the v1 searcher rendered one expression</span>
+<span class="sd">  per position. Each expression also carries **its own placement**, so</span>
+<span class="sd">  :meth:`SqlSearcher.add` is the only way to apply one: the WHERE rendering</span>
+<span class="sd">  always applies, and the HAVING rendering additionally applies when the</span>
+<span class="sd">  expression is flagged :attr:`SqlExpression.post` (the for-all forms</span>
+<span class="sd">  ``has_only`` and child-field ``is_in``, and any ``~`` over a set-derived</span>
+<span class="sd">  subtree — see :class:`SqlExpression`&#39;s ``__invert__``, which lets ``~``</span>
+<span class="sd">  express &quot;no joined row matches&quot;).</span>
+<span class="sd">  Alongside the two renderings each expression carries the **non-aggregated</span>
+<span class="sd">  columns its HAVING rendering references** (:attr:`SqlExpression.group_columns`), unioned</span>
+<span class="sd">  by ``&amp;``/``|`` and preserved by ``~``. A grouped query GROUP BYs those</span>
+<span class="sd">  columns in addition to the root ``sid``\\ s (``SqlSearcher._grouping``, which</span>
+<span class="sd">  both ``count()`` and iteration go through): a plain comparison reaching HAVING</span>
+<span class="sd">  position mentions a root-table column directly, and strict dialects (DuckDB)</span>
+<span class="sd">  reject such a column unless it is grouped, while permissive ones (SQLite)</span>
+<span class="sd">  accept it via functional dependency on the grouped primary key. Grouping by</span>
+<span class="sd">  it is sound for exactly that reason — one distinct value per group — and the</span>
+<span class="sd">  same applies to the sort keys, which the same helper adds.</span>
+
+<span class="sd">The neutral protocol&#39;s string matching is ``contains``/``startswith``/</span>
+<span class="sd">``endswith`` over **literal** text; this backend renders them as SQL LIKE with</span>
+<span class="sd">backslash as the escape character, escaping ``%`` and ``_`` in the given text</span>
+<span class="sd">first. The LIKE rendering itself is private (``SqlColumn._like``) precisely</span>
+<span class="sd">because pattern syntax is a dialect detail that must not leak into the</span>
+<span class="sd">contract.</span>
+
+<span class="sd">Encoded (codec) fields compare against their query column: for rationals that</span>
+<span class="sd">is the float companion column, so SQL comparisons on them are documented</span>
+<span class="sd">float-approximate (stored values themselves round-trip exactly). Comparison</span>
+<span class="sd">values are encoded through the field&#39;s codec, e.g. comparing a</span>
+<span class="sd">:class:`fractions.Fraction` field against ``Fraction(1, 3)`` compares the</span>
+<span class="sd">float column against ``float(Fraction(1, 3))``.</span>
+
+<span class="sd">Set-operation semantics (ported from the v1 ``BinaryBooleanOp._sql``,</span>
+<span class="sd">translated to portable SQLAlchemy aggregates): in WHERE position ``has_any``</span>
+<span class="sd">renders as ``column IN values`` while ``has_only`` renders as constant true; in</span>
+<span class="sd">HAVING position the aggregate forms</span>
+<span class="sd">``SUM(CASE WHEN column [NOT] IN values THEN 1 ELSE 0 END)``</span>
+<span class="sd">compare per-group match counts. A NULL child value — the LEFT OUTER JOIN row</span>
+<span class="sd">of a parent with no children — never satisfies ``IN`` (nor ``NOT IN``), so a</span>
+<span class="sd">record with an empty child list matches ``has_only`` and fails ``has_any``,</span>
+<span class="sd">the exact set semantics of the reference in-memory store.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">array</span><span class="w"> </span><span class="kn">import</span> <span class="n">array</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NoReturn</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">sqlalchemy</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.codecs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValueCodec</span><span class="p">,</span> <span class="n">codec_named</span><span class="p">,</span> <span class="n">decode_fracvector_exact</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.mapping</span><span class="w"> </span><span class="kn">import</span> <span class="n">SID_COLUMN</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">FieldSpec</span><span class="p">,</span> <span class="n">SchemaError</span><span class="p">,</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">resolve_schema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">SearchResult</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">SqlStore</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;SqlColumn&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SqlExpression&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SqlReference&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SqlSearcher&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SqlVariable&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_bool_clause</span><span class="p">(</span><span class="n">clause</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Contain the SQLAlchemy operator-return typing at one place.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;sqlalchemy.ColumnElement[bool]&quot;</span><span class="p">,</span> <span class="n">clause</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_escape_like</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Escape LIKE wildcards in a literal string (backslash escape, as v1 used).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\\\</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">%&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">_&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SqlExpression">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlExpression</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A search condition carrying both its WHERE-position and HAVING-position renderings.</span>
+
+<span class="sd">    Plain comparisons render identically in both positions; the set operations</span>
+<span class="sd">    differ (constant true/false in WHERE, aggregate match counts in HAVING).</span>
+<span class="sd">    The combinators ``&amp;``, ``|`` and ``~`` combine the two renderings pairwise.</span>
+<span class="sd">    :attr:`group_columns` travels along so a grouped query can GROUP BY every</span>
+<span class="sd">    non-aggregated column its HAVING clauses mention.</span>
+
+<span class="sd">    :param where_clause: The SQL condition used in WHERE position.</span>
+<span class="sd">    :param having_clause: The SQL condition used in HAVING position.</span>
+<span class="sd">    :param post: Whether the HAVING condition is also applied.</span>
+<span class="sd">    :param set_derived: Whether the condition depends on a set of joined rows.</span>
+<span class="sd">    :param group_columns: The non-aggregated columns required by the HAVING condition.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;group_columns&quot;</span><span class="p">,</span> <span class="s2">&quot;having_clause&quot;</span><span class="p">,</span> <span class="s2">&quot;post&quot;</span><span class="p">,</span> <span class="s2">&quot;set_derived&quot;</span><span class="p">,</span> <span class="s2">&quot;where_clause&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">where_clause</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span>
+        <span class="n">having_clause</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">post</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">set_derived</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">group_columns</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="SqlExpression.where_clause">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.where_clause">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">where_clause</span> <span class="o">=</span> <span class="n">where_clause</span></div>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The rendering applied in WHERE position (always applied).&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="SqlExpression.having_clause">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.having_clause">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">having_clause</span> <span class="o">=</span> <span class="n">having_clause</span></div>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The rendering applied in HAVING position when :attr:`post` is set.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="SqlExpression.post">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.post">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">post</span> <span class="o">=</span> <span class="n">post</span></div>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether :meth:`SqlSearcher.add` must *also* apply :attr:`having_clause`.</span>
+
+<span class="sd">        Set when the WHERE rendering alone is incomplete, i.e. by the for-all</span>
+<span class="sd">        forms (``has_only``, ``is_in`` on a child field) and by ``~`` over a</span>
+<span class="sd">        set-derived subtree. Those all render WHERE as constant true, so the</span>
+<span class="sd">        pair &quot;WHERE plus HAVING&quot; is never a double restriction. ``has_any``</span>
+<span class="sd">        deliberately does **not** set it: its WHERE rendering is exact, and</span>
+<span class="sd">        forcing it into HAVING measurably slows DuckDB down.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="SqlExpression.set_derived">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.set_derived">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_derived</span> <span class="o">=</span> <span class="n">set_derived</span></div>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether this expression&#39;s truth is a property of a *set* of joined rows.</span>
+
+<span class="sd">        Negating such an expression cannot be done row-by-row in WHERE</span>
+<span class="sd">        position (no single joined row can witness &quot;no row matches&quot;), so</span>
+<span class="sd">        ``__invert__`` negates the aggregate instead — see there.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="SqlExpression.group_columns">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.group_columns">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">group_columns</span> <span class="o">=</span> <span class="n">group_columns</span></div>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Non-aggregated columns of :attr:`having_clause` that must be grouped by.</span>
+
+<span class="sd">        Empty for the set operations (their HAVING rendering is fully</span>
+<span class="sd">        aggregated) and for child-table comparisons (those columns *are* the</span>
+<span class="sd">        aggregated rows); a root-table comparison contributes its own column.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__and__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;SqlExpression&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlExpression&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">where_clause</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">where_clause</span><span class="p">),</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">having_clause</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">having_clause</span><span class="p">),</span>
+            <span class="n">post</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">post</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">post</span><span class="p">,</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">set_derived</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">set_derived</span><span class="p">,</span>
+            <span class="n">group_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">group_columns</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">group_columns</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;SqlExpression&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlExpression&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">where_clause</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">where_clause</span><span class="p">),</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">having_clause</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">having_clause</span><span class="p">),</span>
+            <span class="n">post</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">post</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">post</span><span class="p">,</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">set_derived</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">set_derived</span><span class="p">,</span>
+            <span class="n">group_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">group_columns</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">group_columns</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__invert__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlExpression&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Negate, aggregating first when the subtree&#39;s truth depends on a set of rows.</span>
+
+<span class="sd">        For a set-derived subtree the WHERE rendering is dropped to constant</span>
+<span class="sd">        true and only the (fully aggregated) HAVING rendering is negated: &quot;no</span>
+<span class="sd">        joined row matches&quot; is not expressible per row. This deliberately gives</span>
+<span class="sd">        up a potentially index-assisted WHERE prefilter; narrowing in WHERE</span>
+<span class="sd">        would drop exactly the rows the aggregate must count.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_derived</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+                <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">true</span><span class="p">(),</span>
+                <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">not_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">having_clause</span><span class="p">),</span>
+                <span class="n">post</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">set_derived</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">group_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">group_columns</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">not_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">where_clause</span><span class="p">),</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">not_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">having_clause</span><span class="p">),</span>
+            <span class="n">post</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">post</span><span class="p">,</span>
+            <span class="n">group_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">group_columns</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_same</span><span class="p">(</span><span class="n">clause</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">group_columns</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">())</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One clause serving as both renderings (every plain comparison).&quot;&quot;&quot;</span>
+    <span class="n">rendered</span> <span class="o">=</span> <span class="n">_bool_clause</span><span class="p">(</span><span class="n">clause</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span><span class="n">rendered</span><span class="p">,</span> <span class="n">rendered</span><span class="p">,</span> <span class="n">group_columns</span><span class="o">=</span><span class="n">group_columns</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SqlColumn">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlColumn</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A queryable column of a search variable.</span>
+
+<span class="sd">    Rich comparisons (``==``, ``!=``, ``&lt;``, ``&lt;=``, ``&gt;``, ``&gt;=``),</span>
+<span class="sd">    ``contains``/``startswith``/``endswith``/``is_in`` and the set operations</span>
+<span class="sd">    return :class:`SqlExpression`. Comparison values are encoded through the</span>
+<span class="sd">    field&#39;s value codec when the field is codec-encoded, so e.g. rational</span>
+<span class="sd">    comparisons run on the float companion column (documented approximate).</span>
+<span class="sd">    Comparing against another :class:`SqlColumn` compares the two columns.</span>
+
+<span class="sd">    :param searcher: The searcher that owns this column.</span>
+<span class="sd">    :param element: The SQL expression represented by the column.</span>
+<span class="sd">    :param variable: The variable containing the column, when applicable.</span>
+<span class="sd">    :param spec: The stored field specification, when applicable.</span>
+<span class="sd">    :param codec: The value codec, when the field is encoded.</span>
+<span class="sd">    :param query_index: The codec-column index used for query comparisons.</span>
+<span class="sd">    :param from_child: Whether the column comes from a child-table join.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">searcher</span><span class="p">:</span> <span class="s2">&quot;SqlSearcher&quot;</span><span class="p">,</span>
+        <span class="n">element</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">variable</span><span class="p">:</span> <span class="s2">&quot;SqlVariable | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">codec</span><span class="p">:</span> <span class="n">ValueCodec</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">query_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">from_child</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span> <span class="o">=</span> <span class="n">searcher</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">=</span> <span class="n">element</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_variable</span> <span class="o">=</span> <span class="n">variable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_spec</span> <span class="o">=</span> <span class="n">spec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_codec</span> <span class="o">=</span> <span class="n">codec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_query_index</span> <span class="o">=</span> <span class="n">query_index</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span> <span class="o">=</span> <span class="n">from_child</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">SqlColumn</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">_element</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_codec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_codec</span><span class="o">.</span><span class="n">python_type</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_codec</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">value</span><span class="p">)[</span><span class="bp">self</span><span class="o">.</span><span class="n">_query_index</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_plain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clause</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A comparison on this column, rendered for both clause positions.</span>
+
+<span class="sd">        On a **root-table** column the same clause serves both positions, and it</span>
+<span class="sd">        must appear in GROUP BY to reach HAVING position (DuckDB rejects an</span>
+<span class="sd">        unaggregated column there; SQLite tolerates it via functional dependency</span>
+<span class="sd">        on the grouped primary key).</span>
+
+<span class="sd">        On a **child-table** column the two positions genuinely differ, exactly</span>
+<span class="sd">        as they do for the set operations. Row-wise, ``child.value = x`` means</span>
+<span class="sd">        &quot;some joined row matches&quot; — the right reading, and what WHERE keeps. But</span>
+<span class="sd">        that reading cannot be negated row-wise (no single joined row witnesses</span>
+<span class="sd">        &quot;no row matches&quot;), and it cannot stand in HAVING position unaggregated.</span>
+<span class="sd">        So the HAVING rendering is the aggregate existential</span>
+<span class="sd">        ``SUM(CASE WHEN clause THEN 1 ELSE 0 END) &gt; 0`` and the expression is</span>
+<span class="sd">        marked :attr:`~SqlExpression.set_derived`, which makes ``~`` negate the</span>
+<span class="sd">        aggregate: ``~(v.symbols == &#39;O&#39;)`` then means &quot;no symbol is O&quot; rather</span>
+<span class="sd">        than &quot;some symbol is not O&quot;, agreeing with ``~v.symbols.has_any(&#39;O&#39;)``.</span>
+<span class="sd">        ``post`` stays unset, so an un-negated comparison still filters in WHERE</span>
+<span class="sd">        alone and does not force grouped mode.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="n">clause</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="p">,))</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="n">clause</span><span class="p">),</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_match_count</span><span class="p">(</span><span class="n">clause</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_match_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;``SUM(CASE WHEN condition THEN 1 ELSE 0 END)`` — NULL rows count as 0.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">case</span><span class="p">((</span><span class="n">_bool_clause</span><span class="p">(</span><span class="n">condition</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span> <span class="n">else_</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+    <span class="c1"># ------------------------------------------------------------------ comparisons</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="n">encoded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">encoded</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">None</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">==</span> <span class="n">encoded</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="n">encoded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">encoded</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_not</span><span class="p">(</span><span class="kc">None</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">!=</span> <span class="n">encoded</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">other</span><span class="p">))</span>
+
+    <span class="c1"># ------------------------------------------------------------------ string matching</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_like</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;SQL LIKE with backslash as the escape character (as the v1 searcher used).</span>
+
+<span class="sd">        Private: LIKE syntax is this backend&#39;s own business. The neutral</span>
+<span class="sd">        protocol only ever passes literal text, which the three public methods</span>
+<span class="sd">        below escape before assembling their pattern.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plain</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">like</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">escape</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">))</span>
+
+<div class="viewcode-block" id="SqlColumn.contains">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.contains">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">contains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values containing the literal ``text`` (LIKE wildcards escaped).</span>
+
+<span class="sd">        :param text: The literal text to find.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_like</span><span class="p">(</span><span class="s2">&quot;%&quot;</span> <span class="o">+</span> <span class="n">_escape_like</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;%&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlColumn.startswith">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.startswith">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">startswith</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values beginning with the literal ``prefix`` (LIKE wildcards escaped).</span>
+
+<span class="sd">        :param prefix: The literal prefix to find.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_like</span><span class="p">(</span><span class="n">_escape_like</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;%&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlColumn.endswith">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.endswith">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">endswith</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values ending with the literal ``suffix`` (LIKE wildcards escaped).</span>
+
+<span class="sd">        :param suffix: The literal suffix to find.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_like</span><span class="p">(</span><span class="s2">&quot;%&quot;</span> <span class="o">+</span> <span class="n">_escape_like</span><span class="p">(</span><span class="n">suffix</span><span class="p">))</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------ set operations</span>
+
+<div class="viewcode-block" id="SqlColumn.is_in">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.is_in">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Membership in ``values``.</span>
+
+<span class="sd">        On a root column this is plain ``column IN values``. On a *child* field</span>
+<span class="sd">        it is the for-all reading — every child value is in ``values`` — which,</span>
+<span class="sd">        exactly as :meth:`has_only`, is an aggregate over the group and so</span>
+<span class="sd">        renders as constant true in WHERE position and forces the HAVING</span>
+<span class="sd">        rendering (:attr:`SqlExpression.post`).</span>
+
+<span class="sd">        Only the child form is :attr:`~SqlExpression.set_derived`: on a root</span>
+<span class="sd">        column ``~column.is_in(...)`` is exactly ``column NOT IN values``</span>
+<span class="sd">        row-wise, so negating it aggregate-style would switch the query into</span>
+<span class="sd">        grouped mode for no gain.</span>
+
+<span class="sd">        :param \\*values: The values to test for membership.</span>
+<span class="sd">        :return: The membership condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">encoded</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+        <span class="n">non_null</span> <span class="o">=</span> <span class="p">[</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">encoded</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">includes_null</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">non_null</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span><span class="p">:</span>
+            <span class="c1"># The outer join&#39;s synthetic NULL represents no child row and must</span>
+            <span class="c1"># remain SQL-unknown: the universal HAVING form then correctly</span>
+            <span class="c1"># treats the empty child set as a subset of every value set.</span>
+            <span class="n">member</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="n">non_null</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">includes_null</span><span class="p">:</span>
+                <span class="n">member</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">member</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">non_null</span><span class="p">:</span>
+            <span class="n">member</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="n">non_null</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">includes_null</span><span class="p">:</span>
+                <span class="n">member</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">member</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">member</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_not</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">member</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">includes_null</span><span class="p">:</span>
+            <span class="n">member</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">member</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">false</span><span class="p">()</span>
+        <span class="n">where</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">true</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span> <span class="k">else</span> <span class="n">_bool_clause</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">where</span><span class="p">,</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_match_count</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">not_</span><span class="p">(</span><span class="n">member</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">post</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span><span class="p">,</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_from_child</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlColumn.has">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a child collection containing ``value``.</span>
+
+<span class="sd">        :param value: The child value to find.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_any</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlColumn.has_any">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has_any">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Some child value is in ``values``: WHERE ``IN``; HAVING a positive match count.</span>
+
+<span class="sd">        The WHERE rendering is exact, so this does not set</span>
+<span class="sd">        :attr:`SqlExpression.post` — pushing it into HAVING as well is a</span>
+<span class="sd">        measured DuckDB slowdown for no semantic gain. It is nonetheless</span>
+<span class="sd">        set-derived, so ``~`` negates the aggregate.</span>
+
+<span class="sd">        :param \\*values: The values of which at least one child must match.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">member</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">in_</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="n">member</span><span class="p">),</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_match_count</span><span class="p">(</span><span class="n">member</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlColumn.has_only">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has_only">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_only</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Every child value is in ``values``: constant true in WHERE, zero outsiders in HAVING.</span>
+
+<span class="sd">        A record with no child rows at all satisfies this (its single LEFT</span>
+<span class="sd">        OUTER JOIN row is NULL, which never matches ``NOT IN``) — the empty</span>
+<span class="sd">        set is a subset of any value set.</span>
+
+<span class="sd">        :param \\*values: The complete set of allowed child values.</span>
+<span class="sd">        :return: The condition requiring every child value to match.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">outside</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">notin_</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span>
+            <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">true</span><span class="p">(),</span>
+            <span class="n">_bool_clause</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_match_count</span><span class="p">(</span><span class="n">outside</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">post</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">set_derived</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Refuse to chain: this column holds a value, not a reference.</span>
+
+<span class="sd">        The :class:`~httk.data.query.SearchField` contract allows attribute</span>
+<span class="sd">        access because a field *may* refer to another record (see</span>
+<span class="sd">        :class:`SqlReference`); a plain value column cannot, and says so rather</span>
+<span class="sd">        than letting the default lookup failure suggest a typo in the method</span>
+<span class="sd">        name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> holds a value, not a reference to another record, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;so </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> cannot be looked up through it&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="SqlReference">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlReference</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A reference (foreign key) field of a search variable, chainable into the target.</span>
+
+<span class="sd">    Supports ``== other_variable`` (join condition), ``== stored_object``</span>
+<span class="sd">    (the object must be known to the store), and ``== None`` (no referent);</span>
+<span class="sd">    ``!=`` gives the negated forms. The set operations (``has_any``/``has_only``)</span>
+<span class="sd">    treat the reference as the (at most one-element) set of its referent,</span>
+<span class="sd">    rendering directly over the foreign-key column (WHERE-position ``IN``);</span>
+<span class="sd">    their values are stored instances or raw sids (:class:`int`, as returned</span>
+<span class="sd">    by :meth:`~httk.data.db.store.SqlStore.save`). Attribute access LEFT OUTER</span>
+<span class="sd">    JOINs the target class&#39;s table (once per reference path per variable) and</span>
+<span class="sd">    delegates to the joined sub-variable, so chains like ``v.ref.doi`` — or</span>
+<span class="sd">    deeper — work and repeated access hits the same join alias.</span>
+
+<span class="sd">    :param variable: The query variable containing the reference.</span>
+<span class="sd">    :param spec: The stored field specification for the reference.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variable</span><span class="p">:</span> <span class="s2">&quot;SqlVariable&quot;</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_variable</span> <span class="o">=</span> <span class="n">variable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_spec</span> <span class="o">=</span> <span class="n">spec</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fk</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_spec</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_target_sid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">sid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_searcher</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">sid_of</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">as_record</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_spec</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;the </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> instance compared against &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2"> has not been stored or fetched &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;through this store&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sid</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="c1"># The foreign key lives on the (root or reference-joined) parent row, so</span>
+        <span class="c1"># it is one value per group and safe — and, on DuckDB, necessary — to</span>
+        <span class="c1"># GROUP BY when this comparison reaches HAVING position.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">SqlVariable</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">],</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+        <span class="k">if</span> <span class="n">other</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+        <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_sid</span><span class="p">(</span><span class="n">other</span><span class="p">),</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">SqlVariable</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">],</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+        <span class="k">if</span> <span class="n">other</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="o">.</span><span class="n">is_not</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+        <span class="k">return</span> <span class="n">_same</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_sid</span><span class="p">(</span><span class="n">other</span><span class="p">),</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">,))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------ set operations</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fk_column</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlColumn</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fk</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sid_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_sid</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SqlReference.has">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a referent equal to ``value``.</span>
+
+<span class="sd">        :param value: The stored instance or store id to match.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fk_column</span><span class="p">()</span><span class="o">.</span><span class="n">has</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sid_value</span><span class="p">(</span><span class="n">value</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="SqlReference.has_any">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has_any">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a referent among ``values`` through the foreign key.</span>
+
+<span class="sd">        :param \\*values: The stored instances or store ids to match.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fk_column</span><span class="p">()</span><span class="o">.</span><span class="n">has_any</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_sid_value</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SqlReference.has_only">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has_only">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_only</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Require the referent, when set, to be among ``values``.</span>
+
+<span class="sd">        :param \\*values: The complete set of allowed stored instances or store ids.</span>
+<span class="sd">        :return: The matching SQL condition.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fk_column</span><span class="p">()</span><span class="o">.</span><span class="n">has_only</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_sid_value</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">])</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlColumn | SqlReference&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_reference_variable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_spec</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="SqlVariable">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlVariable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A query variable bound to a fresh alias of a storable class&#39;s table.</span>
+
+<span class="sd">    Attribute access resolves stored fields (including stored properties) into</span>
+<span class="sd">    :class:`SqlColumn` / :class:`SqlReference` objects per the class&#39;s</span>
+<span class="sd">    :class:`~httk.data.db.schema.TableSchema`; ``sid`` (a reserved field name)</span>
+<span class="sd">    yields the store-managed integer primary key column; accessing a</span>
+<span class="sd">    variable-length (child-table) field registers a LEFT OUTER JOIN and</span>
+<span class="sd">    switches the searcher into grouped mode. Unknown names raise</span>
+<span class="sd">    :class:`AttributeError`;</span>
+<span class="sd">    fixed-shape tensor fields raise :class:`~httk.data.db.schema.SchemaError`</span>
+<span class="sd">    (they are not queryable as a whole).</span>
+
+<span class="sd">    :meth:`always_true` and :meth:`always_false` are — like ``sid`` — reserved</span>
+<span class="sd">    names that never resolve to a stored field: they are real methods declared</span>
+<span class="sd">    before ``__getattr__``, so no query column is involved at all.</span>
+
+<span class="sd">    :param searcher: The searcher that owns this variable.</span>
+<span class="sd">    :param cls: The storable class represented by the variable.</span>
+<span class="sd">    :param schema: The resolved table schema for ``cls``.</span>
+<span class="sd">    :param alias: The fresh SQL table alias bound to the variable.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">searcher</span><span class="p">:</span> <span class="s2">&quot;SqlSearcher&quot;</span><span class="p">,</span> <span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span><span class="p">,</span> <span class="n">alias</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">FromClause</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span> <span class="o">=</span> <span class="n">searcher</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cls</span> <span class="o">=</span> <span class="bp">cls</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="o">=</span> <span class="n">schema</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span> <span class="o">=</span> <span class="n">alias</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_joins</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">FromClause</span><span class="p">,</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span> <span class="n">SqlVariable</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reference_variables</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SqlVariable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="SqlVariable.always_true">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable.always_true">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">always_true</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a condition matching every row.</span>
+
+<span class="sd">        :return: A condition that is true in both SQL positions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">true</span><span class="p">(),</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">true</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="SqlVariable.always_false">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable.always_false">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">always_false</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a condition matching no row.</span>
+
+<span class="sd">        :return: A condition that is false in both SQL positions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">SqlExpression</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">false</span><span class="p">(),</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">false</span><span class="p">())</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlColumn | SqlReference&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;sid&quot;</span><span class="p">:</span>
+            <span class="c1"># The store-managed integer primary key (&#39;sid&#39; is a reserved field</span>
+            <span class="c1"># name, so this never shadows a stored field).</span>
+            <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">fields</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;child&quot;</span> <span class="ow">and</span> <span class="n">spec</span><span class="o">.</span><span class="n">optional</span> <span class="ow">and</span> <span class="n">name</span> <span class="o">==</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">_present&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">SchemaError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> has no stored field </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> to query&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;scalar&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">],</span> <span class="n">variable</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="o">=</span><span class="n">spec</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;encoded&quot;</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">codec</span> <span class="o">=</span> <span class="n">codec_named</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span> <span class="o">+</span> <span class="n">codec</span><span class="o">.</span><span class="n">query_suffix</span><span class="p">],</span>
+                <span class="n">variable</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                <span class="n">spec</span><span class="o">=</span><span class="n">spec</span><span class="p">,</span>
+                <span class="n">codec</span><span class="o">=</span><span class="n">codec</span><span class="p">,</span>
+                <span class="n">query_index</span><span class="o">=</span><span class="n">_query_index</span><span class="p">(</span><span class="n">codec</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">SqlReference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;child&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_child_column</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">SchemaError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2"> is a fixed-shape tensor field and cannot be queried &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;as a whole (querying individual components is not implemented yet)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_child_column</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlColumn</span><span class="p">:</span>
+        <span class="c1"># A fresh alias per attribute access, as in httk v1: AND-composing</span>
+        <span class="c1"># independent set predicates on one child field (the translation</span>
+        <span class="c1"># layer&#39;s HAS ALL pattern) must constrain independent joined rows.</span>
+        <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">child</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">child</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">alias</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span>
+        <span class="n">onclause</span> <span class="o">=</span> <span class="n">_bool_clause</span><span class="p">(</span><span class="n">alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">table_name</span><span class="si">}</span><span class="s2">_sid&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_joins</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="o">.</span><span class="n">_grouped</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">codec</span><span class="p">:</span> <span class="n">ValueCodec</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">column_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">_sid&quot;</span>
+        <span class="k">elif</span> <span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">codec</span> <span class="o">=</span> <span class="n">codec_named</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">codec_name</span><span class="p">)</span>
+            <span class="n">column_name</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">field</span> <span class="o">+</span> <span class="n">codec</span><span class="o">.</span><span class="n">query_suffix</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">column_name</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">child</span><span class="o">.</span><span class="n">element_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">return</span> <span class="n">SqlColumn</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span>
+            <span class="n">alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">column_name</span><span class="p">],</span>
+            <span class="n">variable</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">spec</span><span class="o">=</span><span class="n">spec</span><span class="p">,</span>
+            <span class="n">codec</span><span class="o">=</span><span class="n">codec</span><span class="p">,</span>
+            <span class="n">query_index</span><span class="o">=</span><span class="n">_query_index</span><span class="p">(</span><span class="n">codec</span><span class="p">)</span> <span class="k">if</span> <span class="n">codec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="n">from_child</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reference_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SqlVariable&quot;</span><span class="p">:</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reference_variables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sub</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">target_schema</span> <span class="o">=</span> <span class="n">resolve_schema</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
+            <span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">target_schema</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span>
+            <span class="n">onclause</span> <span class="o">=</span> <span class="n">_bool_clause</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">==</span> <span class="n">alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span>
+            <span class="n">sub</span> <span class="o">=</span> <span class="n">SqlVariable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_searcher</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">target_schema</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_reference_variables</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">sub</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_joins</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span><span class="p">,</span> <span class="n">sub</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">sub</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_flat_joins</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">FromClause</span><span class="p">,</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="nb">bool</span><span class="p">]]]:</span>
+        <span class="k">for</span> <span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span><span class="p">,</span> <span class="n">sub</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_joins</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span>
+            <span class="k">if</span> <span class="n">sub</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">yield from</span> <span class="n">sub</span><span class="o">.</span><span class="n">_flat_joins</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Output</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One declared output and its exact reconstruction projection.&quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">element</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">type</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">from_child</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">variable</span><span class="p">:</span> <span class="n">SqlVariable</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">spec</span><span class="p">:</span> <span class="n">FieldSpec</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">exact_element</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">codec</span><span class="p">:</span> <span class="n">ValueCodec</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">decoder</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="SqlSearcher">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlSearcher</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One query under construction against a :class:`~httk.data.db.store.SqlStore`.</span>
+
+<span class="sd">    Build the query with :meth:`variable`, :meth:`add` (AND-joined conditions,</span>
+<span class="sd">    each placed by the expression itself), :meth:`output`, :meth:`add_sort`,</span>
+<span class="sd">    :meth:`set_limit` (``-1`` clears the limit) and :meth:`add_offset` (the</span>
+<span class="sd">    public :attr:`offset` attribute is readable and writable). Iterating</span>
+<span class="sd">    yields one :class:`~httk.data.query.SearchResult` per match, whose</span>
+<span class="sd">    ``values`` holds one entry per declared output — a lazy row for variable</span>
+<span class="sd">    outputs (bypassing the identity cache), the raw column value for column outputs. :meth:`count`</span>
+<span class="sd">    returns the number of matches, disregarding any limit and offset.</span>
+
+<span class="sd">    :param store: The SQL store whose tables and connection serve the query.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">store</span><span class="p">:</span> <span class="s2">&quot;SqlStore&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="o">=</span> <span class="n">store</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SqlVariable</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_where</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SqlExpression</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_having</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SqlExpression</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_Output</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sorts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">SqlColumn</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_grouped</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<div class="viewcode-block" id="SqlSearcher.offset">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.offset">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_vacuous</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Row offset applied when iterating; mutable (:meth:`add_offset` adds to it).&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SqlSearcher.variable">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.variable">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SqlVariable</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A new query variable over ``target``&#39;s table (a fresh alias; self-joins allowed).</span>
+
+<span class="sd">        A missing table makes this variable a vacuous search; reads never</span>
+<span class="sd">        create tables.</span>
+
+<span class="sd">        :param target: The storable class whose table the variable represents.</span>
+<span class="sd">        :return: A fresh query variable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_vacuous</span> <span class="o">|=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_missing_tables_for_read</span><span class="p">((</span><span class="n">target</span><span class="p">,))</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="n">resolve_schema</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_table</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span>
+        <span class="n">variable</span> <span class="o">=</span> <span class="n">SqlVariable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">variable</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">variable</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.output">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.output">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variable</span><span class="p">:</span> <span class="s2">&quot;SqlVariable | SqlColumn&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append an output for a reconstructed instance or raw column value.</span>
+
+<span class="sd">        :param variable: The query variable or column to project.</span>
+<span class="sd">        :param name: The name exposed for the projected value.</span>
+<span class="sd">        :return: None.</span>
+<span class="sd">        :raises TypeError: If ``variable`` is neither a query variable nor a query column.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">variable</span><span class="p">,</span> <span class="n">SqlVariable</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_Output</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">variable</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">],</span> <span class="n">variable</span><span class="o">.</span><span class="n">_cls</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">variable</span><span class="p">,</span> <span class="n">SqlColumn</span><span class="p">):</span>
+            <span class="n">exact_element</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">decoder</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">variable</span><span class="o">.</span><span class="n">_spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">spec</span> <span class="o">=</span> <span class="n">variable</span><span class="o">.</span><span class="n">_spec</span>
+                <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;fixed_array&quot;</span><span class="p">:</span>
+                    <span class="n">exact_element</span> <span class="o">=</span> <span class="n">variable</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">spec</span><span class="o">.</span><span class="n">field</span><span class="si">}</span><span class="s2">_exact&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">variable</span><span class="o">.</span><span class="n">_variable</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="n">decoder</span> <span class="o">=</span> <span class="n">decode_fracvector_exact</span>
+                <span class="k">elif</span> <span class="n">spec</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;encoded&quot;</span><span class="p">:</span>
+                    <span class="n">exact_element</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="nb">next</span><span class="p">(</span>
+                            <span class="p">(</span>
+                                <span class="n">variable</span><span class="o">.</span><span class="n">_variable</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">column</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+                                <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">columns</span>
+                                <span class="k">if</span> <span class="n">column</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;str&quot;</span>
+                            <span class="p">),</span>
+                            <span class="kc">None</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="k">if</span> <span class="n">variable</span><span class="o">.</span><span class="n">_variable</span>
+                        <span class="k">else</span> <span class="kc">None</span>
+                    <span class="p">)</span>
+                    <span class="n">decoder</span> <span class="o">=</span> <span class="n">variable</span><span class="o">.</span><span class="n">_codec</span><span class="o">.</span><span class="n">decode</span> <span class="k">if</span> <span class="n">variable</span><span class="o">.</span><span class="n">_codec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">_Output</span><span class="p">(</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">variable</span><span class="o">.</span><span class="n">_element</span><span class="p">,</span>
+                    <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">variable</span><span class="o">.</span><span class="n">_from_child</span><span class="p">,</span>
+                    <span class="n">variable</span><span class="o">.</span><span class="n">_variable</span><span class="p">,</span>
+                    <span class="n">variable</span><span class="o">.</span><span class="n">_spec</span><span class="p">,</span>
+                    <span class="n">exact_element</span><span class="p">,</span>
+                    <span class="n">variable</span><span class="o">.</span><span class="n">_codec</span><span class="p">,</span>
+                    <span class="n">decoder</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;output() takes a search variable or a search column, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">variable</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.add">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expression</span><span class="p">:</span> <span class="n">SqlExpression</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a condition; all added conditions must hold.</span>
+
+<span class="sd">        The expression decides its own placement: it always applies in WHERE</span>
+<span class="sd">        position, and an expression flagged :attr:`SqlExpression.post` — a</span>
+<span class="sd">        for-all form, or a negated set-derived subtree — additionally applies</span>
+<span class="sd">        in HAVING position, which switches the searcher into grouped mode.</span>
+
+<span class="sd">        :param expression: The condition to add to the query.</span>
+<span class="sd">        :return: None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_where</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">expression</span><span class="o">.</span><span class="n">post</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_having</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_grouped</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.add_sort">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add_sort">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_sort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">:</span> <span class="n">SqlColumn</span><span class="p">,</span> <span class="n">descending</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append a sort key; the first-declared key is the most significant.</span>
+
+<span class="sd">        :param field: The column used as the next sort key.</span>
+<span class="sd">        :param descending: Whether the key is ordered from highest to lowest.</span>
+<span class="sd">        :return: None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sorts</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">field</span><span class="p">,</span> <span class="n">descending</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.set_limit">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.set_limit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Limit the number of iterated matches; a negative value clears the limit.</span>
+
+<span class="sd">        :param limit: The maximum number of matches, or a negative value to clear it.</span>
+<span class="sd">        :return: None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_limit</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">limit</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">limit</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.add_offset">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add_offset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_offset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add to the row :attr:`offset` applied when iterating.</span>
+
+<span class="sd">        :param offset: The amount to add to the current row offset.</span>
+<span class="sd">        :return: None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">+=</span> <span class="n">offset</span></div>
+
+
+<div class="viewcode-block" id="SqlSearcher.results">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.results">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">outputs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Freeze this search into a lazy :class:`~httk.data.db.results.SqlResultSet`.</span>
+
+<span class="sd">        :param \\*\\*outputs: Optional output names mapped to query variables or columns.</span>
+<span class="sd">        :return: The frozen lazy result plan.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.results</span><span class="w"> </span><span class="kn">import</span> <span class="n">SqlResultSet</span>
+
+        <span class="k">return</span> <span class="n">SqlResultSet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputs</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------ execution</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_joined</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variable</span><span class="p">:</span> <span class="n">SqlVariable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">FromClause</span><span class="p">:</span>
+        <span class="n">clause</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">FromClause</span> <span class="o">=</span> <span class="n">variable</span><span class="o">.</span><span class="n">_alias</span>
+        <span class="k">for</span> <span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span> <span class="ow">in</span> <span class="n">variable</span><span class="o">.</span><span class="n">_flat_joins</span><span class="p">():</span>
+            <span class="n">clause</span> <span class="o">=</span> <span class="n">clause</span><span class="o">.</span><span class="n">outerjoin</span><span class="p">(</span><span class="n">alias</span><span class="p">,</span> <span class="n">onclause</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">clause</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_grouping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;``base`` plus every column a grouped query must additionally GROUP BY.</span>
+
+<span class="sd">        Those are (a) the :attr:`SqlExpression.group_columns` of the conditions</span>
+<span class="sd">        applied in HAVING position — a plain comparison reaching HAVING names a</span>
+<span class="sd">        root-table column, which strict dialects (DuckDB) reject unless it is</span>
+<span class="sd">        grouped — and (b) the non-child sort keys, which ORDER BY names for the</span>
+<span class="sd">        same reason. Both kinds hold one distinct value per group (they are</span>
+<span class="sd">        functionally dependent on the grouped root ``sid``), so grouping by them</span>
+<span class="sd">        cannot split a group.</span>
+
+<span class="sd">        Columns are de-duplicated by :func:`id`, never by ``==``/``in``:</span>
+<span class="sd">        :class:`sqlalchemy.ColumnElement` overloads ``==`` to build a SQL clause</span>
+<span class="sd">        whose ``__bool__`` raises, so a containment test would blow up here.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="n">seen</span> <span class="o">=</span> <span class="p">{</span><span class="nb">id</span><span class="p">(</span><span class="n">column</span><span class="p">)</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">append</span><span class="p">(</span><span class="n">column</span><span class="p">:</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">column</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+                <span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_having</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">expression</span><span class="o">.</span><span class="n">group_columns</span><span class="p">:</span>
+                <span class="n">append</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">sort_column</span><span class="p">,</span> <span class="n">_descending</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sorts</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">sort_column</span><span class="o">.</span><span class="n">_from_child</span><span class="p">:</span>
+                <span class="n">append</span><span class="p">(</span><span class="n">sort_column</span><span class="o">.</span><span class="n">_element</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">columns</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_base_select</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span>
+        <span class="n">group_columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">ColumnElement</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">Select</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;this searcher has no query variables; call variable() first&quot;</span><span class="p">)</span>
+        <span class="n">statement</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="o">*</span><span class="n">columns</span><span class="p">)</span><span class="o">.</span><span class="n">select_from</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_joined</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_where</span><span class="p">:</span>
+            <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">expression</span><span class="o">.</span><span class="n">where_clause</span> <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_where</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_grouped</span><span class="p">:</span>
+            <span class="c1"># _grouping() applies to count() and __iter__ alike, so the two can</span>
+            <span class="c1"># never disagree about which rows form a group.</span>
+            <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_grouping</span><span class="p">(</span><span class="n">group_columns</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_having</span><span class="p">:</span>
+                <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">having</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">expression</span><span class="o">.</span><span class="n">having_clause</span> <span class="k">for</span> <span class="n">expression</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_having</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">statement</span>
+
+<div class="viewcode-block" id="SqlSearcher.count">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the number of matches, disregarding any limit and offset.</span>
+
+<span class="sd">        :return: The number of matching rows, or groups for a grouped query.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_vacuous</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">sids</span> <span class="o">=</span> <span class="p">[</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;sqlalchemy.ColumnElement[Any]&quot;</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">]</span>
+        <span class="n">statement</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_select</span><span class="p">(</span><span class="n">sids</span><span class="p">,</span> <span class="n">sids</span><span class="p">)</span>
+        <span class="n">count_statement</span> <span class="o">=</span> <span class="n">sqlalchemy</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">sqlalchemy</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">count</span><span class="p">())</span><span class="o">.</span><span class="n">select_from</span><span class="p">(</span><span class="n">statement</span><span class="o">.</span><span class="n">subquery</span><span class="p">())</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_read_connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">count_statement</span><span class="p">)</span><span class="o">.</span><span class="n">scalar_one</span><span class="p">())</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">SearchResult</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run the query; yield a :class:`~httk.data.query.SearchResult` per match.</span>
+
+<span class="sd">        ``values`` holds one entry per declared output (reconstructed instance</span>
+<span class="sd">        or raw column value), ``names`` the names they were declared under.</span>
+
+<span class="sd">        :return: An iterator yielding one search result per match.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;this searcher has no outputs; call output() before iterating&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_vacuous</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">iter</span><span class="p">(())</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">output</span><span class="o">.</span><span class="n">element</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">]</span>
+        <span class="n">group_columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;sqlalchemy.ColumnElement[Any]&quot;</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">_alias</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">SID_COLUMN</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_variables</span><span class="p">]</span>
+        <span class="n">group_columns</span> <span class="o">+=</span> <span class="p">[</span><span class="n">output</span><span class="o">.</span><span class="n">element</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span> <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">output</span><span class="o">.</span><span class="n">from_child</span><span class="p">]</span>
+        <span class="n">statement</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_select</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">group_columns</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">column</span><span class="p">,</span> <span class="n">descending</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sorts</span><span class="p">:</span>
+            <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">desc</span><span class="p">()</span> <span class="k">if</span> <span class="n">descending</span> <span class="k">else</span> <span class="n">column</span><span class="o">.</span><span class="n">_element</span><span class="o">.</span><span class="n">asc</span><span class="p">())</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_limit</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">statement</span> <span class="o">=</span> <span class="n">statement</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_read_connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
+            <span class="c1"># Materialize the match rows before reconstructing any object output:</span>
+            <span class="c1"># reconstruction issues nested queries on this same connection, and a</span>
+            <span class="c1"># DuckDB connection carries only one active result set, so streaming</span>
+            <span class="c1"># the outer cursor across a nested fetch silently truncates it after</span>
+            <span class="c1"># the first row. (Under SQLite it merely worked by accident.)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">statement</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">httk.data.db.rows</span><span class="w"> </span><span class="kn">import</span> <span class="n">RowHydrator</span>
+
+        <span class="n">object_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">output</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">)</span> <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">object_indices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">object_index</span> <span class="o">=</span> <span class="n">object_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">match_index</span><span class="p">:</span> <span class="n">array</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="n">array</span><span class="p">(</span>
+                <span class="s2">&quot;q&quot;</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">object_index</span><span class="p">])</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">object_index</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">sid_inputs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">object_index</span><span class="p">:</span> <span class="n">match_index</span><span class="p">}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">match_index</span> <span class="o">=</span> <span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">object_indices</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+            <span class="n">sid_inputs</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">index</span><span class="p">:</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">match_index</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">object_indices</span><span class="p">)</span>
+            <span class="p">}</span>
+        <span class="n">hydrators</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">index</span><span class="p">:</span> <span class="n">RowHydrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">,</span> <span class="n">cast</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">target</span><span class="p">),</span> <span class="n">sid_inputs</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">object_indices</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="p">}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">results</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">SearchResult</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+                <span class="n">values</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)):</span>
+                    <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hydrators</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">row</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)))</span>
+                <span class="k">yield</span> <span class="n">SearchResult</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">values</span><span class="p">),</span> <span class="n">names</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">results</span><span class="p">()</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_query_index</span><span class="p">(</span><span class="n">codec</span><span class="p">:</span> <span class="n">ValueCodec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The index of the codec&#39;s query column among its columns.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">suffix</span><span class="p">,</span> <span class="n">_kind</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">codec</span><span class="o">.</span><span class="n">columns</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">suffix</span> <span class="o">==</span> <span class="n">codec</span><span class="o">.</span><span class="n">query_suffix</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">i</span>
+    <span class="k">return</span> <span class="mi">0</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

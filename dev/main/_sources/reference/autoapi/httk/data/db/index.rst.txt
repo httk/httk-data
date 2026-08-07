@@ -1,0 +1,263 @@
+httk.data.db
+============
+
+.. py:module:: httk.data.db
+
+.. autoapi-nested-parse::
+
+   The SQL storage layer of httk-data: store frozen dataclasses in relational databases.
+
+   This subpackage turns plain frozen dataclasses — declared storable with the
+   stdlib-only marker vocabulary in httk-core (``Indexed``, ``Unique``, ``Skip``,
+   ``Shape``, ``StorageInfo``, ``stored_property``) — into relational storage.
+   The pure-Python foundation lives here:
+
+   - :mod:`httk.data.db.schema` — :func:`resolve_schema` reads a storable class
+     into a :class:`~httk.data.db.schema.TableSchema`, the single source of truth for DDL, inserts,
+     selects, and reconstruction;
+   - :mod:`httk.data.db.codecs` — the :class:`ValueCodec` registry with exact,
+     round-trippable encodings for rationals, surds, and datetimes;
+   - :mod:`httk.core.storage` — ``canonical_form`` and ``content_id``,
+     the content identity used for deduplication.
+
+   These modules import cleanly without sqlalchemy. The SQL layer proper builds
+   on them and requires the ``httk-data[db]`` extra (sqlalchemy):
+
+   - :class:`~httk.data.db.engine.Database` — the engine wrapper naming where
+     data lives (``Database.sqlite(...)``, ``Database.duckdb(...)``);
+   - :class:`~httk.data.db.store.SqlStore` — save/fetch/dedup/transactions for
+     storable instances, on top of the schema-to-table mapping in
+     :mod:`httk.data.db.mapping`;
+   - :class:`~httk.data.db.searcher.SqlSearcher` (from
+     :meth:`~httk.data.db.store.SqlStore.searcher`) — the query DSL implementing
+     the :mod:`httk.data.query` search protocols, with
+     :class:`~httk.data.db.searcher.SqlVariable`,
+     :class:`~httk.data.db.searcher.SqlColumn` and
+     :class:`~httk.data.db.searcher.SqlExpression`;
+   - :class:`~httk.data.db.entry_provider.StoreEntryProvider` — the bridge that
+     serves stored classes through the neutral :class:`~httk.core.EntryProvider`
+     contract (e.g. as an OPTIMADE API via *httk-serve*);
+   - :func:`~httk.data.db.optimade.optimade_filter_searcher` — OPTIMADE-filter
+     querying over storable classes, tying the generic filter translation in
+     :mod:`httk.data.query.optimade_filters` to the SQL layer.
+
+   The sqlalchemy-backed names are imported lazily on first attribute access, so
+   ``import httk.data.db`` keeps working without sqlalchemy; touching them
+   without sqlalchemy installed raises :class:`ImportError` naming the extra.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /reference/autoapi/httk/data/db/codecs/index
+   /reference/autoapi/httk/data/db/engine/index
+   /reference/autoapi/httk/data/db/entry_provider/index
+   /reference/autoapi/httk/data/db/layout/index
+   /reference/autoapi/httk/data/db/mapping/index
+   /reference/autoapi/httk/data/db/optimade/index
+   /reference/autoapi/httk/data/db/paging/index
+   /reference/autoapi/httk/data/db/results/index
+   /reference/autoapi/httk/data/db/rows/index
+   /reference/autoapi/httk/data/db/schema/index
+   /reference/autoapi/httk/data/db/searcher/index
+   /reference/autoapi/httk/data/db/store/index
+   /reference/autoapi/httk/data/db/stored_federation/index
+   /reference/autoapi/httk/data/db/stored_properties/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.data.db.STORAGE_PROTOCOL_VERSION
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.data.db.MultipleResultsError
+   httk.data.db.NoResultError
+   httk.data.db.SchemaError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.data.db.ResultRow
+   httk.data.db.ValueCodec
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.register_value_codec
+   httk.data.db.register_schema_override
+   httk.data.db.resolve_schema
+
+
+Package Contents
+----------------
+
+.. py:exception:: MultipleResultsError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found multiple results.
+
+
+.. py:exception:: NoResultError
+
+   Bases: :py:obj:`LookupError`
+
+
+   Report that a result-set ``one()`` operation found no matching result.
+
+
+.. py:class:: ResultRow(values, names, resolver = None, guard = None)
+
+   Represent one named result row by position, name, or attribute.
+
+   :param values: The row values in declaration order.
+   :param names: The corresponding output names.
+   :param resolver: An optional lazy value resolver.
+   :param guard: An optional callback that rejects access to expired values.
+
+
+   .. py:property:: names
+      :type: tuple[str, Ellipsis]
+
+
+      Return the declared output names.
+
+
+   .. py:property:: values
+      :type: tuple[Any, Ellipsis]
+
+
+      Return the row values in declaration order.
+
+
+.. py:class:: ValueCodec
+
+   An exact encoding of one Python value type across one or more scalar columns.
+
+   The ``columns`` tuple gives ``(suffix, kind)`` pairs: the empty suffix names
+   the field's own column (by convention the query column), non-empty suffixes
+   are appended to the field name by the schema layer (e.g. ``"_exact"``).
+   ``encode`` and ``decode`` map a value to and from the column-value tuple, in
+   ``columns`` order, and must round-trip exactly.
+
+   :param name: The registry name of the codec.
+   :param python_type: The Python type stored by the codec.
+   :param columns: The column suffix and scalar-kind pairs encoded by the codec.
+   :param encode: The function that encodes a value into column values.
+   :param decode: The function that reconstructs a value from column values.
+   :param query_suffix: The suffix of the query and index column.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+      Registry name of the codec (e.g. ``"fraction"``).
+
+
+   .. py:attribute:: python_type
+      :type:  type
+
+      The Python type this codec stores; matched exactly first, then by subclass.
+
+
+   .. py:attribute:: columns
+      :type:  tuple[tuple[str, httk.data.db.codecs.ScalarKind], ...]
+
+      The ``(column name suffix, scalar kind)`` pairs the codec encodes into.
+
+
+   .. py:attribute:: encode
+      :type:  collections.abc.Callable[[Any], tuple[Any, Ellipsis]]
+
+      Encode a value into one scalar per entry of ``columns``, in order.
+
+
+   .. py:attribute:: decode
+      :type:  collections.abc.Callable[[tuple[Any, Ellipsis]], Any]
+
+      Recover the exact value from the tuple produced by ``encode``.
+
+
+   .. py:attribute:: query_suffix
+      :type:  str
+      :value: ''
+
+
+      Suffix of the column used for querying/indexing (normally the empty suffix).
+
+
+.. py:function:: register_value_codec(codec)
+
+   Register ``codec`` in the value-codec registry.
+
+   :param codec: The codec to register.
+   :return: None.
+   :raises ValueError: If the codec name or Python type is already registered.
+
+
+.. py:exception:: SchemaError
+
+   Bases: :py:obj:`Exception`
+
+
+   A class or field cannot be resolved into a storage schema; the message names both.
+
+
+.. py:function:: register_schema_override(cls, info)
+
+   Register an external :class:`~httk.core.storage.StorageInfo` for a class that cannot declare one.
+
+   The registered info is used by :func:`resolve_schema` whenever no explicit
+   ``override`` argument is passed, and takes precedence over a
+   ``__httk_storage__`` declaration on the class itself.
+
+   :param cls: The storable class whose schema should be overridden.
+   :param info: The external storage information to register.
+   :return: None.
+
+
+.. py:function:: resolve_schema(cls, *, override = None)
+
+   Resolve (and cache) the :class:`~httk.data.db.schema.TableSchema` of a storable dataclass.
+
+   The effective :class:`~httk.core.storage.StorageInfo` is, in order of precedence:
+   the explicit ``override`` argument, an info registered via
+   :func:`register_schema_override`, the class's own ``__httk_storage__``
+   attribute, or defaults. Results are cached per ``(class, effective
+   override)``, so repeated calls return the same :class:`~httk.data.db.schema.TableSchema` object.
+   Reference cycles (a class referencing itself, or mutually referencing
+   classes) are allowed and resolve without recursion loops.
+
+   :param cls: The storable class to resolve.
+   :param override: External storage information taking precedence over declarations.
+   :return: The cached resolved table schema.
+   :raises httk.data.db.schema.SchemaError: If the class is not a frozen dataclass or one of its
+       fields cannot be resolved; the diagnostic names the class and field.
+
+
+.. py:data:: STORAGE_PROTOCOL_VERSION
+   :type:  Final
+   :value: 'v2.0.3'
+
+
+   The current persisted ``SqlStore`` physical-layout protocol.
+

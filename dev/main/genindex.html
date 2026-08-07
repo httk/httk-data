@@ -1,0 +1,2076 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="#"><link rel="search" title="Search" href="search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 --><title>Index - httk-data dev:main documentation</title>
+<link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">httk-data dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">httk-data dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="reference/index.html">Reference</a><input aria-label="Toggle navigation of Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/examples.html">Examples</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="reference/autoapi/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="reference/autoapi/httk/data/index.html">httk.data</a><input aria-label="Toggle navigation of httk.data" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="reference/autoapi/httk/data/db/index.html">httk.data.db</a><input aria-label="Toggle navigation of httk.data.db" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/codecs/index.html">httk.data.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/engine/index.html">httk.data.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/entry_provider/index.html">httk.data.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/layout/index.html">httk.data.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/mapping/index.html">httk.data.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/optimade/index.html">httk.data.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/paging/index.html">httk.data.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/results/index.html">httk.data.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/rows/index.html">httk.data.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/schema/index.html">httk.data.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/searcher/index.html">httk.data.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/store/index.html">httk.data.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/stored_federation/index.html">httk.data.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/db/stored_properties/index.html">httk.data.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/entry_providers/index.html">httk.data.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/federated_store/index.html">httk.data.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="reference/autoapi/httk/data/query/index.html">httk.data.query</a><input aria-label="Toggle navigation of httk.data.query" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/optimade_filters/index.html">httk.data.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/portable/index.html">httk.data.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="reference/autoapi/httk/data/query/protocols/index.html">httk.data.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="reference/autoapi/httk/data/validation/index.html">httk.data.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="reference/autoapi/httk/registry/entries/data/index.html">httk.registry.entries.data</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          
+<section class="genindex-section">
+  <h1 id="index">Index</h1>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#N"><strong>N</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#Q"><strong>Q</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a></div>
+</section>
+<section id="A" class="genindex-section">
+  <h2>A</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.actual_schema_objects">actual_schema_objects() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.actual_table_names">actual_table_names() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add">add() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.add">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.add">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.add">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.add">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.add">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add_offset">add_offset() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.add_offset">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.add_offset">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.add_offset">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.add_offset">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.add_offset">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.add_sort">add_sort() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.add_sort">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.add_sort">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.add_sort">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.add_sort">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.add_sort">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable.always_false">always_false() (httk.data.db.searcher.SqlVariable method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedVariable.always_false">(httk.data.federated_store.FederatedVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchVariable.always_false">(httk.data.query.protocols.SearchVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchVariable.always_false">(httk.data.query.SearchVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchVariable.always_false">(httk.data.SearchVariable method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable.always_true">always_true() (httk.data.db.searcher.SqlVariable method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedVariable.always_true">(httk.data.federated_store.FederatedVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchVariable.always_true">(httk.data.query.protocols.SearchVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchVariable.always_true">(httk.data.query.SearchVariable method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchVariable.always_true">(httk.data.SearchVariable method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryFederation.audit_duplicate_ids">audit_duplicate_ids() (httk.data.db.stored_federation.StoredEntryFederation method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.auto_definition">auto_definition() (in module httk.data.db.entry_provider)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="B" class="genindex-section">
+  <h2>B</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryOrigin.backing">backing (httk.data.db.stored_federation.StoredEntryOrigin attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlCandidateStream.backing">(httk.data.db.stored_properties.StoredPropertySqlCandidateStream attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.backing_dispatch_column_name">backing_dispatch_column_name() (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlCandidateStream.backing_name">backing_name (httk.data.db.stored_properties.StoredPropertySqlCandidateStream attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.backings">backings (httk.data.db.stored_properties.StoredPropertySqlPlan property)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="C" class="genindex-section">
+  <h2>C</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.CalculationEntryProvider">CalculationEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.CalculationEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.candidate_searchers">candidate_searchers() (httk.data.db.stored_properties.StoredPropertySqlPlan method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FilterTranslationError.category">category (httk.data.FilterTranslationError attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.FilterTranslationError.category">(httk.data.query.optimade_filters.FilterTranslationError attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.child">child (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ChildTableSpec">ChildTableSpec (class in httk.data.db.schema)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.cls">cls (httk.data.db.schema.TableSchema attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.codec_for">codec_for() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.codec_name">codec_name (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.codec_named">codec_named() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.column">column() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.column">(httk.data.federated_store.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.column">(httk.data.FederatedResultSet method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.columns">columns (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.columns">(httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.columns">(httk.data.db.ValueCodec attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec">ColumnSpec (class in httk.data.db.schema)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.composite_indexes">composite_indexes (httk.data.db.schema.TableSchema attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.constant_comparison_handler">constant_comparison_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.constant_set_handler">constant_set_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.constant_stringmatching_handler">constant_stringmatching_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.constant_types">constant_types (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.contains">contains() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.contains">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.contains">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.contains">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.contains">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryOrigin.content_id">content_id (httk.data.db.stored_federation.StoredEntryOrigin attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.CONTENT_ID_COLUMN">CONTENT_ID_COLUMN (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ContinuationToken">ContinuationToken (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ContinuationToken">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ContinuationToken">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.count">count() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.count">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.count">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.count">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.count">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.count">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.CountUnavailableError">CountUnavailableError</a>, <a href="reference/autoapi/httk/data/query/index.html#httk.data.query.CountUnavailableError">[1]</a>, <a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.CountUnavailableError">[2]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.cursor">cursor() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.cursor">(httk.data.federated_store.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.cursor">(httk.data.FederatedResultSet method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="D" class="genindex-section">
+  <h2>D</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/engine/index.html#httk.data.db.engine.Database">Database (class in httk.data.db.engine)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.DataRecordEntryProvider">DataRecordEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.DataRecordEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayout.declaration">declaration (httk.data.db.layout.StorageLayout property)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.declaration_json">declaration_json() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.decode">decode (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.decode">(httk.data.db.ValueCodec attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.decode_field">decode_field() (in module httk.data.db.rows)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.decode_fraction_exact">decode_fraction_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.decode_fracvector_exact">decode_fracvector_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.decode_surdscalar_exact">decode_surdscalar_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.dedup">dedup (httk.data.db.schema.TableSchema attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.definition">definition (httk.data.db.stored_properties.StoredPropertySqlPlan attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.derived">derived (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageOrder.descending">descending (httk.data.PageOrder attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageOrder.descending">(httk.data.query.PageOrder attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageOrder.descending">(httk.data.query.protocols.PageOrder attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FilterTranslationError.detail">detail (httk.data.FilterTranslationError attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.FilterTranslationError.detail">(httk.data.query.optimade_filters.FilterTranslationError attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayoutUpgradeRequiredError.diff">diff (httk.data.db.layout.StorageLayoutUpgradeRequiredError attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.DISPATCH_CONTENT_ID_COLUMN">DISPATCH_CONTENT_ID_COLUMN (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.dispatch_table_for">dispatch_table_for() (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout.dispatch_table_name">dispatch_table_name (httk.data.db.layout.EntryFamilyLayout attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/engine/index.html#httk.data.db.engine.Database.dispose">dispose() (httk.data.db.engine.Database method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/engine/index.html#httk.data.db.engine.Database.duckdb">duckdb() (httk.data.db.engine.Database class method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.DuplicateEntryIdError">DuplicateEntryIdError</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="E" class="genindex-section">
+  <h2>E</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ChildTableSpec.element_columns">element_columns (httk.data.db.schema.ChildTableSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.encode">encode (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.encode">(httk.data.db.ValueCodec attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.encode_fraction_exact">encode_fraction_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.encode_fracvector_exact">encode_fracvector_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.encode_fracvector_floats">encode_fracvector_floats() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.encode_surdscalar_exact">encode_surdscalar_exact() (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.endswith">endswith() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.endswith">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.endswith">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.endswith">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.endswith">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/engine/index.html#httk.data.db.engine.Database.engine">engine (httk.data.db.engine.Database property)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.ensure_tables">ensure_tables() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.entry_dispatch_table_name">entry_dispatch_table_name() (in module httk.data.db.mapping)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntrySource.entry_family">entry_family (httk.data.db.stored_federation.StoredEntrySource attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.entry_layout">entry_layout (httk.data.db.store.SqlStore property)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayout.entry_records">entry_records (httk.data.db.layout.StorageLayout property)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.entry_records">(httk.data.db.store.SqlStore property)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.entry_type">entry_type (httk.data.db.stored_properties.StoredPropertySqlPlan attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.DataRecordEntryProvider.entry_types">entry_types() (httk.data.DataRecordEntryProvider method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.entry_types">(httk.data.db.entry_provider.StoreEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.DataRecordEntryProvider.entry_types">(httk.data.entry_providers.DataRecordEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.RunEntryProvider.entry_types">(httk.data.entry_providers.RunEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.StandardEntryProvider.entry_types">(httk.data.entry_providers.StandardEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.RunEntryProvider.entry_types">(httk.data.RunEntryProvider method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.EntryDispatchIntegrityError">EntryDispatchIntegrityError</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout">EntryFamilyLayout (class in httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.EntryMetadataConflictError">EntryMetadataConflictError</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.expected_metadata">expected_metadata() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ExpiredCursorRowError">ExpiredCursorRowError</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="F" class="genindex-section">
+  <h2>F</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.false_handler">false_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayout.families">families (httk.data.db.layout.StorageLayout attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout.family">family (httk.data.db.layout.EntryFamilyLayout attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.family">(httk.data.db.stored_properties.StoredPropertySqlPlan attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedExpression">FederatedExpression (class in httk.data.federated_store)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField">FederatedField (class in httk.data.federated_store)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultColumn">FederatedResultColumn (class in httk.data.federated_store)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet">FederatedResultSet (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet">(class in httk.data.federated_store)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher">FederatedSearcher (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher">(class in httk.data.federated_store)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSourceError">FederatedSourceError</a>, <a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSourceError">[1]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedStore">FederatedStore (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedStore">(class in httk.data.federated_store)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedStoreError">FederatedStoreError</a>, <a href="reference/autoapi/httk/data/index.html#httk.data.FederatedStoreError">[1]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedTarget">FederatedTarget (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedTarget">(class in httk.data.federated_store)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedVariable">FederatedVariable (class in httk.data.federated_store)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.fetch">fetch() (httk.data.db.store.SqlStore method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryFederation.fetch">(httk.data.db.stored_federation.StoredEntryFederation method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.fetch_by_content_id">fetch_by_content_id() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.fetch_entry">fetch_entry() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.field">field (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.field">field() (httk.data.db.schema.TableSchema method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.field_unknown_handler">field_unknown_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldRole">FieldRole (in module httk.data.db.schema)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.fields">fields (httk.data.db.schema.TableSchema attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec">FieldSpec (class in httk.data.db.schema)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FileEntryProvider">FileEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.FileEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.filter_searcher">filter_searcher() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.filter_searcher">(in module httk.data.query.optimade_filters)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.filter_searchers">filter_searchers() (httk.data.db.stored_properties.StoredPropertySqlPlan method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FilterTranslationCategory">FilterTranslationCategory (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.FilterTranslationCategory">(in module httk.data.query.optimade_filters)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.FilterTranslationError">FilterTranslationError</a>, <a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.FilterTranslationError">[1]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.first">first() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.first">(httk.data.federated_store.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.first">(httk.data.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultSetLike.first">(httk.data.query.protocols.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultSetLike.first">(httk.data.query.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultSetLike.first">(httk.data.ResultSetLike method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultColumn.floats">floats() (httk.data.db.results.ResultColumn method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.format_value">format_value() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.FRACTION_EXACT_FORMAT">FRACTION_EXACT_FORMAT (in module httk.data.db.codecs)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.FRACVECTOR_EXACT_FORMAT">FRACVECTOR_EXACT_FORMAT (in module httk.data.db.codecs)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="G" class="genindex-section">
+  <h2>G</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.group_columns">group_columns (httk.data.db.searcher.SqlExpression attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="H" class="genindex-section">
+  <h2>H</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.HandlerTable">HandlerTable (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has">has() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has">(httk.data.db.searcher.SqlReference method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.has">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.has">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.has">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.has">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has_any">has_any() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has_any">(httk.data.db.searcher.SqlReference method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.has_any">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.has_any">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.has_any">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.has_any">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.has_only">has_only() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference.has_only">(httk.data.db.searcher.SqlReference method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.has_only">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.has_only">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.has_only">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.has_only">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.having_clause">having_clause (httk.data.db.searcher.SqlExpression attribute)</a>
+</li>
+        <li>
+    httk.data
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#module-httk.data">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/index.html#module-httk.data.db">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.codecs
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/codecs/index.html#module-httk.data.db.codecs">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.engine
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/engine/index.html#module-httk.data.db.engine">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.entry_provider
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#module-httk.data.db.entry_provider">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.layout
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/layout/index.html#module-httk.data.db.layout">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.mapping
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/mapping/index.html#module-httk.data.db.mapping">module</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li>
+    httk.data.db.optimade
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/optimade/index.html#module-httk.data.db.optimade">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.paging
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/paging/index.html#module-httk.data.db.paging">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.results
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#module-httk.data.db.results">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.rows
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/rows/index.html#module-httk.data.db.rows">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.schema
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#module-httk.data.db.schema">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.searcher
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/searcher/index.html#module-httk.data.db.searcher">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.store
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/store/index.html#module-httk.data.db.store">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.stored_federation
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#module-httk.data.db.stored_federation">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.db.stored_properties
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#module-httk.data.db.stored_properties">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.entry_providers
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#module-httk.data.entry_providers">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.federated_store
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#module-httk.data.federated_store">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.query
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#module-httk.data.query">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.query.optimade_filters
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#module-httk.data.query.optimade_filters">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.query.portable
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#module-httk.data.query.portable">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.query.protocols
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#module-httk.data.query.protocols">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.data.validation
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#module-httk.data.validation">module</a>
+</li>
+        </ul></li>
+        <li>
+    httk.registry.entries.data
+
+        <ul>
+          <li><a href="reference/autoapi/httk/registry/entries/data/index.html#module-httk.registry.entries.data">module</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="I" class="genindex-section">
+  <h2>I</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ID_FIELD">ID_FIELD (in module httk.data.query)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ID_FIELD">(in module httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec.indexed">indexed (httk.data.db.schema.ColumnSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.invert_op">invert_op (in module httk.data.query.optimade_filters)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.is_in">is_in() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.is_in">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.is_in">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.is_in">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.is_in">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="K" class="genindex-section">
+  <h2>K</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec.kind">kind (httk.data.db.schema.ColumnSpec attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.known_unknown_handler">known_unknown_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.known_value_codecs">known_value_codecs() (in module httk.data.db.codecs)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="L" class="genindex-section">
+  <h2>L</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.layout">layout (httk.data.db.store.SqlStore property)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.layout">(httk.data.db.stored_properties.StoredPropertySqlPlan attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.links">links (httk.data.db.schema.TableSchema attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="M" class="genindex-section">
+  <h2>M</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.RowHydrator.materialize">materialize() (httk.data.db.rows.RowHydrator method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.RowHydrator.materialize_many">materialize_many() (httk.data.db.rows.RowHydrator method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PropertyValidationError.message">message (httk.data.PropertyValidationError attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#httk.data.validation.PropertyValidationError.message">(httk.data.validation.PropertyValidationError attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.metadata_table_for">metadata_table_for() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.METADATA_TABLE_NAME">METADATA_TABLE_NAME (in module httk.data.db.layout)</a>
+</li>
+        <li>
+    module
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#module-httk.data">httk.data</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/index.html#module-httk.data.db">httk.data.db</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/codecs/index.html#module-httk.data.db.codecs">httk.data.db.codecs</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/engine/index.html#module-httk.data.db.engine">httk.data.db.engine</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#module-httk.data.db.entry_provider">httk.data.db.entry_provider</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/layout/index.html#module-httk.data.db.layout">httk.data.db.layout</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/mapping/index.html#module-httk.data.db.mapping">httk.data.db.mapping</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/optimade/index.html#module-httk.data.db.optimade">httk.data.db.optimade</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/paging/index.html#module-httk.data.db.paging">httk.data.db.paging</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#module-httk.data.db.results">httk.data.db.results</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/rows/index.html#module-httk.data.db.rows">httk.data.db.rows</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#module-httk.data.db.schema">httk.data.db.schema</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/searcher/index.html#module-httk.data.db.searcher">httk.data.db.searcher</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/store/index.html#module-httk.data.db.store">httk.data.db.store</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#module-httk.data.db.stored_federation">httk.data.db.stored_federation</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#module-httk.data.db.stored_properties">httk.data.db.stored_properties</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#module-httk.data.entry_providers">httk.data.entry_providers</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#module-httk.data.federated_store">httk.data.federated_store</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#module-httk.data.query">httk.data.query</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#module-httk.data.query.optimade_filters">httk.data.query.optimade_filters</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#module-httk.data.query.portable">httk.data.query.portable</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#module-httk.data.query.protocols">httk.data.query.protocols</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#module-httk.data.validation">httk.data.validation</a>
+</li>
+          <li><a href="reference/autoapi/httk/registry/entries/data/index.html#module-httk.registry.entries.data">httk.registry.entries.data</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryPage.more_data_available">more_data_available (httk.data.db.stored_federation.StoredEntryPage attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.MultipleResultsError">MultipleResultsError</a>, <a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.MultipleResultsError">[1]</a>, <a href="reference/autoapi/httk/data/index.html#httk.data.MultipleResultsError">[2]</a>, <a href="reference/autoapi/httk/data/query/index.html#httk.data.query.MultipleResultsError">[3]</a>, <a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.MultipleResultsError">[4]</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="N" class="genindex-section">
+  <h2>N</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.name">name (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout.name">(httk.data.db.layout.EntryFamilyLayout attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultColumn.name">(httk.data.db.results.ResultColumn attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec.name">(httk.data.db.schema.ColumnSpec attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntrySource.name">(httk.data.db.stored_federation.StoredEntrySource attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.name">(httk.data.db.ValueCodec attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultColumn.name">(httk.data.federated_store.FederatedResultColumn attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedTarget.name">(httk.data.federated_store.FederatedTarget attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedTarget.name">(httk.data.FederatedTarget attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageOrder.name">(httk.data.PageOrder attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.PropertyValidationError.name">(httk.data.PropertyValidationError attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageOrder.name">(httk.data.query.PageOrder attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageOrder.name">(httk.data.query.protocols.PageOrder attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#httk.data.validation.PropertyValidationError.name">(httk.data.validation.PropertyValidationError attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ResultRow.names">names (httk.data.db.ResultRow property)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultRow.names">(httk.data.db.results.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.names">(httk.data.db.results.SqlResultSet property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.names">(httk.data.federated_store.FederatedResultSet property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.names">(httk.data.FederatedResultSet property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultRow.names">(httk.data.query.protocols.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultRowLike.names">(httk.data.query.protocols.ResultRowLike property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchResult.names">(httk.data.query.protocols.SearchResult attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultRow.names">(httk.data.query.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultRowLike.names">(httk.data.query.ResultRowLike property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchResult.names">(httk.data.query.SearchResult attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultRow.names">(httk.data.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultRowLike.names">(httk.data.ResultRowLike property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchResult.names">(httk.data.SearchResult attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultPage.next">next (httk.data.query.protocols.ResultPage attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultPage.next">(httk.data.query.ResultPage attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultPage.next">(httk.data.ResultPage attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.NoResultError">NoResultError</a>, <a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.NoResultError">[1]</a>, <a href="reference/autoapi/httk/data/index.html#httk.data.NoResultError">[2]</a>, <a href="reference/autoapi/httk/data/query/index.html#httk.data.query.NoResultError">[3]</a>, <a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.NoResultError">[4]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.normalize_entry_records">normalize_entry_records() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec.nullable">nullable (httk.data.db.schema.ColumnSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageOrder.nulls">nulls (httk.data.PageOrder attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageOrder.nulls">(httk.data.query.PageOrder attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageOrder.nulls">(httk.data.query.protocols.PageOrder attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.number_handler">number_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="O" class="genindex-section">
+  <h2>O</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.offset">offset (httk.data.db.searcher.SqlSearcher attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.offset">(httk.data.federated_store.FederatedSearcher attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.offset">(httk.data.FederatedSearcher attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.offset">(httk.data.query.protocols.Searcher attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.offset">(httk.data.query.Searcher attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.offset">(httk.data.Searcher attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.one">one() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.one">(httk.data.federated_store.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.one">(httk.data.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultSetLike.one">(httk.data.query.protocols.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultSetLike.one">(httk.data.query.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultSetLike.one">(httk.data.ResultSetLike method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSourceError.operation">operation (httk.data.federated_store.FederatedSourceError attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSourceError.operation">(httk.data.FederatedSourceError attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PortableQueryCapabilities.operations">operations (httk.data.PortableQueryCapabilities attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.PortableQueryCapabilities.operations">(httk.data.query.portable.PortableQueryCapabilities attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PortableQueryCapabilities.operations">(httk.data.query.PortableQueryCapabilities attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/optimade/index.html#httk.data.db.optimade.optimade_filter_searcher">optimade_filter_searcher() (in module httk.data.db.optimade)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.optional">optional (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.origin">origin (httk.data.federated_store.FederatedSearcher attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.origin">(httk.data.FederatedSearcher attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.DuplicateEntryIdError.origins">origins (httk.data.db.stored_federation.DuplicateEntryIdError attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.output">output() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.output">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.output">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.output">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.output">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.output">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="P" class="genindex-section">
+  <h2>P</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.page">page() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageableResultSetLike.page">(httk.data.PageableResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageableResultSetLike.page">(httk.data.query.PageableResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageableResultSetLike.page">(httk.data.query.protocols.PageableResultSetLike method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageableResultSetLike">PageableResultSetLike (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageableResultSetLike">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageableResultSetLike">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PageOrder">PageOrder (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PageOrder">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PageOrder">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PaginationCursorError">PaginationCursorError</a>, <a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PaginationCursorError">[1]</a>, <a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.PaginationCursorError">[2]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.portable_query_capabilities">portable_query_capabilities() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.portable_query_capabilities">(in module httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.portable_query_capabilities">(in module httk.data.query.portable)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.portable_query_fields">portable_query_fields() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.portable_query_fields">(in module httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.portable_query_fields">(in module httk.data.query.portable)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PortableQueryCapabilities">PortableQueryCapabilities (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PortableQueryCapabilities">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.PortableQueryCapabilities">(class in httk.data.query.portable)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.post">post (httk.data.db.searcher.SqlExpression attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultPage.previous">previous (httk.data.query.protocols.ResultPage attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultPage.previous">(httk.data.query.ResultPage attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultPage.previous">(httk.data.ResultPage attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.product_relationships">product_relationships() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.product_relationships">(in module httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.DataRecordEntryProvider.property_keys">property_keys() (httk.data.DataRecordEntryProvider method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.property_keys">(httk.data.db.entry_provider.StoreEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.DataRecordEntryProvider.property_keys">(httk.data.entry_providers.DataRecordEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.RunEntryProvider.property_keys">(httk.data.entry_providers.RunEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.StandardEntryProvider.property_keys">(httk.data.entry_providers.StandardEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.RunEntryProvider.property_keys">(httk.data.RunEntryProvider method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PropertyValidationError">PropertyValidationError</a>, <a href="reference/autoapi/httk/data/validation/index.html#httk.data.validation.PropertyValidationError">[1]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayout.protocol_version">protocol_version (httk.data.db.layout.StorageLayout attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.DuplicateEntryIdError.public_id">public_id (httk.data.db.stored_federation.DuplicateEntryIdError attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntrySource.public_id_prefix">public_id_prefix (httk.data.db.stored_federation.StoredEntrySource attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.python_type">python_type (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.python_type">(httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.python_type">(httk.data.db.ValueCodec attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="Q" class="genindex-section">
+  <h2>Q</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryFederation.query">query() (httk.data.db.stored_federation.StoredEntryFederation method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec.query_suffix">query_suffix (httk.data.db.codecs.ValueCodec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec.query_suffix">(httk.data.db.ValueCodec attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PortableQueryCapabilities.query_support">query_support (httk.data.PortableQueryCapabilities attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.PortableQueryCapabilities.query_support">(httk.data.query.portable.PortableQueryCapabilities attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PortableQueryCapabilities.query_support">(httk.data.query.PortableQueryCapabilities attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="R" class="genindex-section">
+  <h2>R</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.read_store_metadata">read_store_metadata() (in module httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout.record_names">record_names (httk.data.db.layout.EntryFamilyLayout attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.EntryFamilyLayout.records">records (httk.data.db.layout.EntryFamilyLayout attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.DataRecordEntryProvider.records">records() (httk.data.DataRecordEntryProvider method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.records">(httk.data.db.entry_provider.StoreEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.records">(httk.data.db.stored_properties.StoredPropertySqlPlan method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.DataRecordEntryProvider.records">(httk.data.entry_providers.DataRecordEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.RunEntryProvider.records">(httk.data.entry_providers.RunEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.StandardEntryProvider.records">(httk.data.entry_providers.StandardEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.RunEntryProvider.records">(httk.data.RunEntryProvider method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.referenced_classes">referenced_classes() (httk.data.db.schema.TableSchema method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ReferenceEntryProvider">ReferenceEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.ReferenceEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.referring">referring() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.register_schema_override">register_schema_override() (in module httk.data.db)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.register_schema_override">(in module httk.data.db.schema)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.register_value_codec">register_value_codec() (in module httk.data.db)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.register_value_codec">(in module httk.data.db.codecs)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.related">related (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.RelatedPropertyResolver">RelatedPropertyResolver (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.relationship_id_handler">relationship_id_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.DataRecordEntryProvider.relationships">relationships() (httk.data.DataRecordEntryProvider method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider.relationships">(httk.data.db.entry_provider.StoreEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.DataRecordEntryProvider.relationships">(httk.data.entry_providers.DataRecordEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.RunEntryProvider.relationships">(httk.data.entry_providers.RunEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.StandardEntryProvider.relationships">(httk.data.entry_providers.StandardEntryProvider method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.RunEntryProvider.relationships">(httk.data.RunEntryProvider method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.resolve_schema">resolve_schema() (in module httk.data.db)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.resolve_schema">(in module httk.data.db.schema)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.response_row">response_row() (httk.data.db.stored_properties.StoredPropertySqlPlan method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultColumn">ResultColumn (class in httk.data.db.results)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultPage">ResultPage (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultPage">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultPage">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultRow">ResultRow (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ResultRow">(class in httk.data.db)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultRow">(class in httk.data.db.results)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultRow">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultRow">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultRowLike">ResultRowLike (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultRowLike">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultRowLike">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.results">results() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.results">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.results">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.results">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.results">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.results">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultSetLike">ResultSetLike (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultSetLike">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultSetLike">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.role">role (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.RowHydrator.row">row() (httk.data.db.rows.RowHydrator method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.row_class">row_class() (in module httk.data.db.rows)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.RowHydrator">RowHydrator (class in httk.data.db.rows)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryPage.rows">rows (httk.data.db.stored_federation.StoredEntryPage attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultPage.rows">(httk.data.query.protocols.ResultPage attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultPage.rows">(httk.data.query.ResultPage attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultPage.rows">(httk.data.ResultPage attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.RunEntryProvider">RunEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.RunEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="S" class="genindex-section">
+  <h2>S</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.save">save() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ScalarKind">ScalarKind (in module httk.data.db.codecs)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ScalarKind">(in module httk.data.db.schema)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet.scalars">scalars() (httk.data.db.results.SqlResultSet method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedResultSet.scalars">(httk.data.federated_store.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedResultSet.scalars">(httk.data.FederatedResultSet method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultSetLike.scalars">(httk.data.query.protocols.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultSetLike.scalars">(httk.data.query.ResultSetLike method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultSetLike.scalars">(httk.data.ResultSetLike method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.SchemaError">SchemaError</a>, <a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.SchemaError">[1]</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher">Searcher (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlCandidateStream.searcher">searcher (httk.data.db.stored_properties.StoredPropertySqlCandidateStream attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.searcher">searcher() (httk.data.db.store.SqlStore method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedStore.searcher">(httk.data.federated_store.FederatedStore method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedStore.searcher">(httk.data.FederatedStore method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Store.searcher">(httk.data.query.protocols.Store method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Store.searcher">(httk.data.query.Store method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Store.searcher">(httk.data.Store method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchExpression">SearchExpression (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchExpression">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchExpression">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField">SearchField (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchResult">SearchResult (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchResult">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchResult">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchVariable">SearchVariable (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchVariable">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchVariable">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.served_specs">served_specs() (in module httk.data.db.entry_provider)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.set_derived">set_derived (httk.data.db.searcher.SqlExpression attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.set_handler">set_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.set_limit">set_limit() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.set_limit">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.set_limit">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.set_limit">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.set_limit">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.set_limit">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.shape">shape (httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.SID_COLUMN">SID_COLUMN (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.sid_of">sid_of() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.simple_property_handlers">simple_property_handlers() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlCandidateStream.sort_count">sort_count (httk.data.db.stored_properties.StoredPropertySqlCandidateStream attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryOrigin.source">source (httk.data.db.stored_federation.StoredEntryOrigin attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSourceError.source">(httk.data.federated_store.FederatedSourceError attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSourceError.source">(httk.data.FederatedSourceError attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryOrigin.source_index">source_index (httk.data.db.stored_federation.StoredEntryOrigin attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedStore.source_names">source_names (httk.data.federated_store.FederatedStore property)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedStore.source_names">(httk.data.FederatedStore property)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryFederation.sources">sources (httk.data.db.stored_federation.StoredEntryFederation property)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.sqlalchemy_metadata">sqlalchemy_metadata() (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn">SqlColumn (class in httk.data.db.searcher)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression">SqlExpression (class in httk.data.db.searcher)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/engine/index.html#httk.data.db.engine.Database.sqlite">sqlite() (httk.data.db.engine.Database class method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlReference">SqlReference (class in httk.data.db.searcher)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.SqlResultSet">SqlResultSet (class in httk.data.db.results)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher">SqlSearcher (class in httk.data.db.searcher)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore">SqlStore (class in httk.data.db.store)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlVariable">SqlVariable (class in httk.data.db.searcher)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/rows/index.html#httk.data.db.rows.StaleResultError">StaleResultError</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.StandardEntryProvider">StandardEntryProvider (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/entry_providers/index.html#httk.data.entry_providers.StandardEntryProvider">(class in httk.data.entry_providers)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlColumn.startswith">startswith() (httk.data.db.searcher.SqlColumn method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedField.startswith">(httk.data.federated_store.FederatedField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchField.startswith">(httk.data.query.protocols.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchField.startswith">(httk.data.query.SearchField method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchField.startswith">(httk.data.SearchField method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.STORAGE_PROTOCOL_VERSION">STORAGE_PROTOCOL_VERSION (in module httk.data.db)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.STORAGE_PROTOCOL_VERSION">(in module httk.data.db.layout)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayout">StorageLayout (class in httk.data.db.layout)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/layout/index.html#httk.data.db.layout.StorageLayoutUpgradeRequiredError">StorageLayoutUpgradeRequiredError</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.Store">Store (class in httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Store">(class in httk.data.query)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Store">(class in httk.data.query.protocols)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntrySource.store">store (httk.data.db.stored_federation.StoredEntrySource attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan.store">(httk.data.db.stored_properties.StoredPropertySqlPlan attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.stored_property_sql_plan">stored_property_sql_plan() (in module httk.data.db.stored_properties)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryFederation">StoredEntryFederation (class in httk.data.db.stored_federation)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryOrigin">StoredEntryOrigin (class in httk.data.db.stored_federation)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryPage">StoredEntryPage (class in httk.data.db.stored_federation)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntrySource">StoredEntrySource (class in httk.data.db.stored_federation)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlCandidateStream">StoredPropertySqlCandidateStream (class in httk.data.db.stored_properties)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlConfigurationError">StoredPropertySqlConfigurationError</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/stored_properties/index.html#httk.data.db.stored_properties.StoredPropertySqlPlan">StoredPropertySqlPlan (class in httk.data.db.stored_properties)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/entry_provider/index.html#httk.data.db.entry_provider.StoreEntryProvider">StoreEntryProvider (class in httk.data.db.entry_provider)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.string_handler">string_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.stringmatching_handler">stringmatching_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.PortableQueryCapabilities.supports">supports() (httk.data.PortableQueryCapabilities method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/portable/index.html#httk.data.query.portable.PortableQueryCapabilities.supports">(httk.data.query.portable.PortableQueryCapabilities method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.PortableQueryCapabilities.supports">(httk.data.query.PortableQueryCapabilities method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.SURD_EXACT_FORMAT">SURD_EXACT_FORMAT (in module httk.data.db.codecs)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="T" class="genindex-section">
+  <h2>T</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/mapping/index.html#httk.data.db.mapping.table_for">table_for() (in module httk.data.db.mapping)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ChildTableSpec.table_name">table_name (httk.data.db.schema.ChildTableSpec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema.table_name">(httk.data.db.schema.TableSchema attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.TableSchema">TableSchema (class in httk.data.db.schema)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ChildTableSpec.target">target (httk.data.db.schema.ChildTableSpec attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.FieldSpec.target">(httk.data.db.schema.FieldSpec attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedStore.target">target() (httk.data.federated_store.FederatedStore method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedStore.target">(httk.data.FederatedStore method)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedTarget.targets">targets (httk.data.federated_store.FederatedTarget attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedTarget.targets">(httk.data.FederatedTarget attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.timestamp_handler">timestamp_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultColumn.to_fracvector">to_fracvector() (httk.data.db.results.ResultColumn method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultPage.total">total (httk.data.query.protocols.ResultPage attribute)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultPage.total">(httk.data.query.ResultPage attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultPage.total">(httk.data.ResultPage attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/stored_federation/index.html#httk.data.db.stored_federation.StoredEntryPage.total_count">total_count (httk.data.db.stored_federation.StoredEntryPage attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/db/store/index.html#httk.data.db.store.SqlStore.transaction">transaction() (httk.data.db.store.SqlStore method)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.translate_filter_ast">translate_filter_ast() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.true_handler">true_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="U" class="genindex-section">
+  <h2>U</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/schema/index.html#httk.data.db.schema.ColumnSpec.unique">unique (httk.data.db.schema.ColumnSpec attribute)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.unknown_comparison_handler">unknown_comparison_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.unknown_has_handler">unknown_has_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.unknown_length_handler">unknown_length_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.unknown_stringmatching_handler">unknown_stringmatching_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/query/optimade_filters/index.html#httk.data.query.optimade_filters.unknown_unknown_handler">unknown_unknown_handler() (in module httk.data.query.optimade_filters)</a>
+</li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.UnsupportedQueryError">UnsupportedQueryError</a>, <a href="reference/autoapi/httk/data/query/index.html#httk.data.query.UnsupportedQueryError">[1]</a>, <a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.UnsupportedQueryError">[2]</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="V" class="genindex-section">
+  <h2>V</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.validate_property">validate_property() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#httk.data.validation.validate_property">(in module httk.data.validation)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/index.html#httk.data.validate_record">validate_record() (in module httk.data)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/validation/index.html#httk.data.validation.validate_record">(in module httk.data.validation)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ValueCodec">ValueCodec (class in httk.data.db)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/codecs/index.html#httk.data.db.codecs.ValueCodec">(class in httk.data.db.codecs)</a>
+</li>
+        </ul></li>
+        <li><a href="reference/autoapi/httk/data/db/index.html#httk.data.db.ResultRow.values">values (httk.data.db.ResultRow property)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/db/results/index.html#httk.data.db.results.ResultRow.values">(httk.data.db.results.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.ResultRow.values">(httk.data.query.protocols.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.SearchResult.values">(httk.data.query.protocols.SearchResult attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.ResultRow.values">(httk.data.query.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.SearchResult.values">(httk.data.query.SearchResult attribute)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.ResultRow.values">(httk.data.ResultRow property)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.SearchResult.values">(httk.data.SearchResult attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlSearcher.variable">variable() (httk.data.db.searcher.SqlSearcher method)</a>
+
+        <ul>
+          <li><a href="reference/autoapi/httk/data/federated_store/index.html#httk.data.federated_store.FederatedSearcher.variable">(httk.data.federated_store.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.FederatedSearcher.variable">(httk.data.FederatedSearcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/protocols/index.html#httk.data.query.protocols.Searcher.variable">(httk.data.query.protocols.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/query/index.html#httk.data.query.Searcher.variable">(httk.data.query.Searcher method)</a>
+</li>
+          <li><a href="reference/autoapi/httk/data/index.html#httk.data.Searcher.variable">(httk.data.Searcher method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="W" class="genindex-section">
+  <h2>W</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/autoapi/httk/data/db/searcher/index.html#httk.data.db.searcher.SqlExpression.where_clause">where_clause (httk.data.db.searcher.SqlExpression attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-data AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=fd10adb8"></script>
+    <script src="_static/selector.js?v=875006ce"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

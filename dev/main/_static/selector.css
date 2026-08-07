@@ -1,0 +1,25 @@
+.httk-version-selector {
+  border-top: 1px solid var(--color-sidebar-item-background--hover, currentColor);
+  margin: 0.75rem 1rem 0;
+  padding: 0.65rem 0 0.1rem 0.65rem;
+  color: var(--color-sidebar-item-text);
+}
+
+.httk-version-selector label {
+  display: block;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.httk-version-selector select {
+  background: var(--color-sidebar-background);
+  border: 1px solid var(--color-sidebar-item-text--hover, currentColor);
+  color: var(--color-sidebar-item-text);
+  max-width: 100%;
+  padding: 0.2rem;
+}
+
+.httk-version-selector--dev {
+  border-left: 3px solid var(--color-announcement-background, #d08a00);
+  padding-left: 0.5rem;
+}

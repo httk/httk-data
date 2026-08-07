@@ -1,0 +1,100 @@
+httk.data.db.optimade
+=====================
+
+.. py:module:: httk.data.db.optimade
+
+.. autoapi-nested-parse::
+
+   Serve OPTIMADE filters over stored dataclasses through the SQL query layer.
+
+   :func:`optimade_filter_searcher` builds a :class:`~httk.data.db.searcher.SqlSearcher`
+   over a storable class directly from an OPTIMADE filter string, deriving the
+   recognized property names and their types from the class's resolved
+   :class:`~httk.data.db.schema.TableSchema` — the same derivation
+   :class:`~httk.data.db.entry_provider.StoreEntryProvider` uses to serve the
+   class (via the shared :func:`~httk.data.db.entry_provider.served_specs` /
+   :func:`~httk.data.db.entry_provider.auto_definition` helpers), so a filter
+   that works against the served API works against the store.
+
+   Filter property names are the served names: ``{prefix}{field}`` (default
+   ``_httk_<field>``) for every servable stored field. Related storable classes
+   declared via ``related_classes`` can be filtered relationally —
+   ``references.id HAS "references-3"`` and depth-1 related-property filters like
+   ``references._httk_doi CONTAINS "10.1"`` — over the class's reference or
+   child-of-storable fields.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.data.db.optimade.optimade_filter_searcher
+
+
+Module Contents
+---------------
+
+.. py:function:: optimade_filter_searcher(store, cls, filter_string, *, prefix = '_httk_', definition = None, extra_handlers = None, related_classes = None)
+
+   Build a searcher over the stored rows of ``cls`` from an OPTIMADE filter.
+
+   ``filter_string`` is an OPTIMADE filter string or an already-parsed
+   :py:type:`~httk.core.optimade.FilterAst`. The returned searcher outputs the matching
+   stored instances (``item[0][0]`` per match).
+
+   Property names: every servable stored field of ``cls`` (per
+   :func:`~httk.data.db.entry_provider.served_specs`) is filterable as
+   ``{prefix}{field}``, with its schema-derived fulltype driving constant
+   conversion and handler dispatch (rational fields compare on their
+   documented-approximate float query column). Unknown names carrying
+   ``prefix`` raise :class:`~httk.data.query.optimade_filters.FilterTranslationError`
+   (``"unrecognized-property"``); other unknown names match nothing, per the
+   OPTIMADE specification. Unprefixed property names (beyond ``id``/``type``)
+   are recognized only when a ``definition`` describes them — and even then
+   they translate only if ``extra_handlers`` supplies their handlers, since
+   the store knows no column for them. The OPTIMADE core ``id`` and ``type``
+   properties are recognized but **not supported** without ``extra_handlers``
+   entries (a store row has no served id: ids are minted at serving time), so
+   filtering on them raises ``"not-implemented"``.
+
+   Relationships: ``related_classes`` maps relationship-type names to
+   storable classes; each must be the target of exactly one reference or
+   child-of-storable (``list[Target]``) field of ``cls`` (anything else
+   raises :class:`ValueError`). For each such ``(rtype, rcls)``:
+
+   - ``<rtype>.id HAS "<rtype>-<sid>"`` filters over the field's foreign-key
+     (or child-element) column against default-minted
+     ``"<entry type>-<sid>"`` ids, as
+     :class:`~httk.data.db.entry_provider.StoreEntryProvider` mints them;
+     ids of any other format match nothing. Custom ``id_of`` minting is out
+     of scope here — with a custom minting scheme, supply your own
+     ``'<rtype>.id'`` entry via ``extra_handlers``.
+   - Depth-1 related-property filters (``<rtype>._httk_doi CONTAINS "10.1"``,
+     ``<rtype>.id != "..."``, ``<rtype>._httk_year IS KNOWN``, ...) resolve by
+     a two-phase semi-join: a nested ``optimade_filter_searcher`` over
+     ``rcls`` (with the same ``prefix``; no further relationship nesting)
+     collects the matching related sids, which are then matched as
+     ``<rtype>.id HAS ANY ...``. Each dotted filter node resolves
+     independently — see :func:`~httk.data.query.optimade_filters.translate_filter_ast`.
+
+   ``extra_handlers`` entries are merged over the derived handler table last
+   (so they can also override derived handlers); extra property names that are
+   otherwise unknown are recognized with fulltype ``"unknown"`` (filter
+   constants pass through unconverted).
+
+   :param store: The SQL store containing the rows to query.
+   :param cls: The storable class whose rows are searched.
+   :param filter_string: The OPTIMADE filter string or parsed filter tree.
+   :param prefix: The registered prefix used for served property names.
+   :param definition: An optional entry definition supplying additional property types.
+   :param extra_handlers: Optional handlers for ids, types, or additional properties.
+   :param related_classes: Related entry types and their storable classes.
+   :return: A searcher yielding the matching stored instances.
+   :raises ~httk.data.query.optimade_filters.FilterTranslationError: When the filter cannot be translated.
+   :raises ~httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
+   :raises ValueError: When a ``related_classes`` entry does not match exactly one
+       reference or child-of-storable field of ``cls``.
+
+
