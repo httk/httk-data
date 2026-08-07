@@ -1,4 +1,4 @@
-"""Generic translation of OPTIMADE filter syntax trees into backend search expressions.
+"""Translate OPTIMADE filter syntax trees into backend search expressions.
 
 This module turns the OPTIMADE filter language — parsed by
 :func:`httk.core.optimade.parse_optimade_filter` into a :py:type:`httk.core.optimade.FilterAst`
@@ -122,7 +122,7 @@ matching the sub-filter, evaluated against the related type's own properties.
 
 
 class FilterTranslationError(Exception):
-    """A filter cannot be translated into a search expression.
+    """Report that a filter cannot be translated into a search expression.
 
     The exception message describes the failure; :attr:`category` classifies it
     neutrally (this module knows nothing about transports, so consumers map
@@ -137,6 +137,10 @@ class FilterTranslationError(Exception):
     - ``"internal"`` — an inconsistency in the translation itself.
 
     ``detail`` optionally carries extra machine-readable context.
+
+    :param message: The human-readable translation failure.
+    :param category: The neutral failure category.
+    :param detail: Optional machine-readable failure context.
     """
 
     def __init__(self, message: str, category: FilterTranslationCategory, detail: str | None = None) -> None:
@@ -146,8 +150,10 @@ class FilterTranslationError(Exception):
 
 
 constant_types = ('String', 'Number', 'Boolean')
+"""Parsed filter token kinds that represent literal constants."""
 
 invert_op = MappingProxyType({'!=': '!=', '>': '<', '<': '>', '=': '=', '<=': '>=', '>=': '<='})
+"""Comparison operators after swapping a constant from left to right."""
 _python_opmap = {
     '!=': '__ne__',
     '>': '__gt__',
@@ -197,10 +203,13 @@ class _FilterFloat(float):
 def format_value(fulltype: str, val: tuple[Any, ...], allow_null: bool = False) -> Any:
     """Convert a filter constant node to a Python value of the property's ``fulltype``.
 
-    Raises:
-        FilterTranslationError: With category ``"type-mismatch"`` when the
-            constant does not fit the declared type, or ``"not-implemented"``
-            for dictionary-typed properties.
+    :param fulltype: The OPTIMADE fulltype expected by the property.
+    :param val: The parsed filter constant node.
+    :param allow_null: Whether a parsed null constant is accepted.
+    :return: The converted Python filter value.
+    :raises FilterTranslationError: With category ``"type-mismatch"`` when the
+        constant does not fit the declared type, or ``"not-implemented"`` for
+        dictionary-typed properties.
     """
     if fulltype.startswith('list of '):
         if not isinstance(val[0], tuple):
@@ -248,16 +257,32 @@ def format_value(fulltype: str, val: tuple[Any, ...], allow_null: bool = False) 
 
 
 def true_handler(search_variable: SearchVariable) -> SearchExpression:
-    """A constant-true expression over ``search_variable``."""
+    """Build a constant-true expression over ``search_variable``.
+
+    :param search_variable: The backend search variable receiving the expression.
+    :return: An expression that matches every row.
+    """
     return search_variable.always_true()
 
 
 def false_handler(search_variable: SearchVariable) -> SearchExpression:
-    """A constant-false expression over ``search_variable``."""
+    """Build a constant-false expression over ``search_variable``.
+
+    :param search_variable: The backend search variable receiving the expression.
+    :return: An expression that matches no row.
+    """
     return search_variable.always_false()
 
 
 def unknown_unknown_handler(entry: str, search_variable: SearchVariable, unknown_type: str) -> SearchExpression:
+    """Translate unknown-value tests for an unrecognized property.
+
+    :param entry: The property name, retained for handler compatibility.
+    :param search_variable: The backend search variable receiving the expression.
+    :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+    :return: The corresponding constant expression.
+    :raises FilterTranslationError: If ``unknown_type`` is not supported.
+    """
     if unknown_type == 'IS_UNKNOWN':
         return true_handler(search_variable)
     elif unknown_type == 'IS_KNOWN':
@@ -266,6 +291,14 @@ def unknown_unknown_handler(entry: str, search_variable: SearchVariable, unknown
 
 
 def known_unknown_handler(entry: str, search_variable: SearchVariable, unknown_type: str) -> SearchExpression:
+    """Translate known-value tests for a property with known nullability.
+
+    :param entry: The property name, retained for handler compatibility.
+    :param search_variable: The backend search variable receiving the expression.
+    :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+    :return: The corresponding constant expression.
+    :raises FilterTranslationError: If ``unknown_type`` is not supported.
+    """
     if unknown_type == 'IS_UNKNOWN':
         return false_handler(search_variable)
     elif unknown_type == 'IS_KNOWN':
@@ -274,7 +307,14 @@ def known_unknown_handler(entry: str, search_variable: SearchVariable, unknown_t
 
 
 def field_unknown_handler(entry: str, search_variable: SearchVariable, unknown_type: str) -> SearchExpression:
-    """Test nullability against the mapped backend field rather than a schema constant."""
+    """Test nullability against the mapped backend field.
+
+    :param entry: The backend field name to inspect.
+    :param search_variable: The backend search variable receiving the expression.
+    :param unknown_type: The ``IS_KNOWN`` or ``IS_UNKNOWN`` operator.
+    :return: The nullability expression for the field.
+    :raises FilterTranslationError: If ``unknown_type`` is not supported.
+    """
 
     field = getattr(search_variable, entry)
     if unknown_type == 'IS_UNKNOWN':
@@ -285,26 +325,67 @@ def field_unknown_handler(entry: str, search_variable: SearchVariable, unknown_t
 
 
 def unknown_comparison_handler(entry: str, ops: Any, values: Any, search_variable: SearchVariable) -> SearchExpression:
+    """Build a false expression for comparison on an unknown property.
+
+    :param entry: The unknown property name.
+    :param ops: The parsed comparison operators.
+    :param values: The parsed comparison values.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: An expression that matches no row.
+    """
     return false_handler(search_variable)
 
 
 def unknown_stringmatching_handler(
     entry: str, values: Any, stringmatching_type: str, search_variable: SearchVariable
 ) -> SearchExpression:
+    """Build a false expression for string matching on an unknown property.
+
+    :param entry: The unknown property name.
+    :param values: The parsed match value.
+    :param stringmatching_type: The parsed string-matching operator.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: An expression that matches no row.
+    """
     return false_handler(search_variable)
 
 
 def unknown_has_handler(
     entry: str, op: Any, value: Any, search_variable: SearchVariable, has_type: str
 ) -> SearchExpression:
+    """Build a false expression for set filtering on an unknown property.
+
+    :param entry: The unknown property name.
+    :param op: The parsed set operators.
+    :param value: The parsed set values.
+    :param search_variable: The backend search variable receiving the expression.
+    :param has_type: The parsed HAS-family operator.
+    :return: An expression that matches no row.
+    """
     return false_handler(search_variable)
 
 
 def unknown_length_handler(entry: str, op: str, value: Any, search_variable: SearchVariable) -> SearchExpression:
+    """Build a false expression for length filtering on an unknown property.
+
+    :param entry: The unknown property name.
+    :param op: The parsed length comparison operator.
+    :param value: The parsed length value.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: An expression that matches no row.
+    """
     return false_handler(search_variable)
 
 
 def string_handler(entry: str, op: str, value: Any, search_variable: SearchVariable) -> SearchExpression:
+    """Translate a scalar comparison onto a backend field.
+
+    :param entry: The backend field name.
+    :param op: The comparison operator.
+    :param value: The converted filter value.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: The field comparison expression.
+    """
     httk_op = _python_opmap[op]
     return getattr(getattr(search_variable, entry), httk_op)(value)
 
@@ -318,6 +399,13 @@ def stringmatching_handler(
     ``contains``/``startswith``/``endswith`` take literal text, so ``%`` and
     ``_`` match themselves (as OPTIMADE requires). Any escaping a backend's
     pattern language needs is that backend's own business.
+
+    :param entry: The backend field name.
+    :param value: The literal filter text.
+    :param stringmatching_type: The ``CONTAINS``, ``STARTS``, or ``ENDS`` operator.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: The literal string-matching expression.
+    :raises FilterTranslationError: If ``stringmatching_type`` is not supported.
     """
     if stringmatching_type not in ('CONTAINS', 'STARTS', 'ENDS'):
         raise FilterTranslationError("Unexpected stringmatching operator type", "internal")
@@ -331,6 +419,12 @@ def constant_comparison_handler(val1: Any, op: str, val2: Any, search_variable: 
     the same left-to-right convention as :func:`constant_set_handler`;
     :func:`~httk.data.query.optimade_filters.translate_filter_ast` has already inverted ``op`` for
     constant-on-the-left filters, so this ordering is the filter's own.
+
+    :param val1: The value being compared.
+    :param op: The comparison operator.
+    :param val2: The filter constant.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: A constant expression representing the comparison result.
     """
     if getattr(operator, _python_opmap[op])(val1, val2):
         return true_handler(search_variable)
@@ -345,6 +439,13 @@ def constant_stringmatching_handler(
 
     ``val1`` is the *value being matched* and ``val2`` the *filter text*, the
     same left-to-right convention as :func:`constant_set_handler`.
+
+    :param val1: The value being matched.
+    :param val2: The filter text.
+    :param stringmatching_type: The ``CONTAINS``, ``STARTS``, or ``ENDS`` operator.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: A constant expression representing the match result.
+    :raises FilterTranslationError: If ``stringmatching_type`` is not supported.
     """
     match = _constant_stringmatch.get(stringmatching_type)
     if match is None:
@@ -356,11 +457,28 @@ def constant_stringmatching_handler(
 
 
 def number_handler(entry: str, op: str, value: Any, search_variable: SearchVariable) -> SearchExpression:
+    """Translate a numeric comparison onto a backend field.
+
+    :param entry: The backend field name.
+    :param op: The comparison operator.
+    :param value: The converted numeric filter value.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: The field comparison expression.
+    """
     httk_op = _python_opmap[op]
     return getattr(getattr(search_variable, entry), httk_op)(value)
 
 
 def timestamp_handler(entry: str, op: str, value: Any, search_variable: SearchVariable) -> SearchExpression:
+    """Normalize an RFC 3339 timestamp and translate its comparison.
+
+    :param entry: The backend field name.
+    :param op: The comparison operator.
+    :param value: The RFC 3339 timestamp filter value.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: The normalized timestamp comparison expression.
+    :raises FilterTranslationError: If ``value`` is not an offset-aware RFC 3339 timestamp.
+    """
     if not _is_rfc3339_datetime(value):
         raise FilterTranslationError("Timestamp filter value is not RFC 3339.", "type-mismatch")
     normalized_text = str(value).replace("t", "T", 1)
@@ -384,6 +502,14 @@ def set_handler(entry: str, ops: Any, values: Any, has_type: str, search_variabl
     ONLY`` map straight onto ``has_any``/``has_only``. Negation is *not* the
     handler's business: a surrounding ``NOT`` inverts the returned expression,
     and the backend's ``~`` knows how to negate a set predicate.
+
+    :param entry: The backend list-valued field name.
+    :param ops: The parsed set comparison operators.
+    :param values: The converted set values.
+    :param has_type: The HAS-family operator.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: The list-membership expression.
+    :raises FilterTranslationError: If ``has_type`` is not supported.
     """
     if has_type == 'HAS_ALL':
         search = getattr(search_variable, entry).has_any(values[0])
@@ -400,6 +526,16 @@ def set_handler(entry: str, ops: Any, values: Any, has_type: str, search_variabl
 def constant_set_handler(
     val1: Any, ops: Any, val2: Any, has_type: str, search_variable: SearchVariable
 ) -> SearchExpression:
+    """Fold a HAS-family operation over two constant sets.
+
+    :param val1: The list value being tested.
+    :param ops: The parsed set comparison operators.
+    :param val2: The filter values.
+    :param has_type: The HAS-family operator.
+    :param search_variable: The backend search variable receiving the expression.
+    :return: A constant expression representing the set result.
+    :raises FilterTranslationError: If ``has_type`` is not supported.
+    """
     if has_type == 'HAS_ALL':
         if set(val2) <= set(val1):
             return true_handler(search_variable)
@@ -464,9 +600,16 @@ def translate_filter_ast(
     HAS ...`` are not implemented; nested (deeper than depth-1) paths and
     dotted ``LENGTH`` filters are never supported.
 
-    Raises:
-        FilterTranslationError: See :class:`FilterTranslationError` for the
-            failure categories.
+    :param node: The parsed OPTIMADE filter AST node.
+    :param search_variable: The backend search variable receiving the expression.
+    :param property_fulltypes: Fulltypes keyed by recognized property name.
+    :param handlers: Property-specific translation handlers.
+    :param recognized_prefixes: Prefixes whose unknown properties are errors.
+    :param relationship_targets: Related entry types that support dotted filters.
+    :param related_property_resolver: Optional resolver for related-property filters.
+    :return: The translated backend search expression.
+    :raises FilterTranslationError: If the filter cannot be translated; see
+        :class:`FilterTranslationError` for the failure categories.
     """
 
     def recurse(sub_node: FilterAst) -> SearchExpression:
@@ -689,8 +832,10 @@ def simple_property_handlers(
 ) -> dict[str, Mapping[str, Callable[..., Any]]]:
     """Build a filter handler table for an entry type from a property-key map.
 
-    Always provides the standard ``id`` (matched against the :data:`~httk.data.query.protocols.ID_FIELD` field)
-    and ``type`` (a constant equal to ``entry_type``) handlers. For every
+    Provides default handlers for standard ``id`` (matched against the
+    :data:`~httk.data.query.protocols.ID_FIELD` field) and ``type`` (a constant
+    equal to ``entry_type``). Entries in ``property_keys`` replace those defaults
+    when their names overlap. For every
     property named in ``property_keys`` (which maps property names to backend
     field names), handlers are generated from the property's fulltype in
     ``property_fulltypes`` (default ``"string"``): string properties get
@@ -698,6 +843,11 @@ def simple_property_handlers(
     numeric comparison handler; ``list of ...`` properties get a HAS (set
     membership) handler. Every generated property also gets a ``known``
     unknown handler.
+
+    :param entry_type: The served entry type used by the constant ``type`` handler.
+    :param property_keys: Mapping from served property names to backend field names.
+    :param property_fulltypes: Fulltypes keyed by served property name.
+    :return: A handler table keyed by served property name.
     """
     handlers: dict[str, Mapping[str, Callable[..., Any]]] = {
         'id': {
@@ -745,6 +895,9 @@ def relationship_id_handler(rel_key: str) -> Mapping[str, Callable[..., Any]]:
     ids; the returned ``{'HAS': ...}`` mapping serves ``<type>.id HAS ...``
     filters (and the semi-join rewrites of other dotted filters) with the
     standard set-operation semantics of :func:`~httk.data.query.optimade_filters.set_handler`.
+
+    :param rel_key: The backend field name for related entry identifiers.
+    :return: A handler mapping containing the ``HAS`` operation.
     """
     return {
         'HAS': lambda entry, ops, values, sv, has_type: set_handler(rel_key, ops, values, has_type, sv),
@@ -781,9 +934,19 @@ def filter_searcher(
     remaining keyword arguments are passed through to
     :func:`~httk.data.query.optimade_filters.translate_filter_ast`.
 
-    Raises:
-        FilterTranslationError: When the filter cannot be translated.
-        httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
+    :param store: The backend store on which to build the searcher.
+    :param target: The backend query target to bind.
+    :param filter_string: An OPTIMADE filter string or parsed filter AST.
+    :param entry_type: The output name and served entry type.
+    :param property_fulltypes: Fulltypes keyed by recognized property name.
+    :param property_keys: Optional mapping from property names to backend field names.
+    :param handlers: Optional prebuilt property handler table.
+    :param recognized_prefixes: Prefixes whose unknown properties are errors.
+    :param relationship_targets: Related entry types that support dotted filters.
+    :param related_property_resolver: Optional resolver for related-property filters.
+    :return: A searcher with the translated filter already applied.
+    :raises FilterTranslationError: If the filter cannot be translated.
+    :raises httk.core.optimade.ParserSyntaxError: If a filter string does not parse.
     """
     filter_ast: FilterAst = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
     if handlers is None:

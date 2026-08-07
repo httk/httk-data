@@ -198,6 +198,19 @@ class SqlStore:
     unconfigured frozen-dataclass tables remain on-demand, but only after the
     layout marker has been initialized on a physically empty database. Schemas
     edited out-of-band fail at use time with the database's own errors.
+
+    The first open of a database requires ``entry_records``. The store stamps
+    the canonical JSON declaration and protocol version, then trusts that
+    declaration on reopen: a supplied declaration must be byte-identical, and
+    mismatches raise :class:`~httk.data.db.layout.StorageLayoutUpgradeRequiredError`.
+    Reopening does not diff or migrate record schemas. Read paths never issue
+    DDL; missing ordinary tables behave as empty results or missing rows, while
+    table creation happens only through writes or :meth:`ensure_tables`.
+
+    :param database: The database used for storage.
+    :param entry_records: The required entry-family declaration when first opening a database.
+    :raises TypeError: If the first open omits ``entry_records``.
+    :raises httk.data.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
     """
 
     def __init__(
@@ -226,18 +239,27 @@ class SqlStore:
 
     @property
     def layout(self) -> StorageLayout:
-        """The immutable persisted entry declaration and its resolved classes."""
+        """Return the immutable persisted entry declaration and resolved classes.
+
+        :return: The persisted storage layout.
+        """
         assert self._layout is not None
         return self._layout
 
     @property
     def entry_layout(self) -> tuple[EntryFamilyLayout, ...]:
-        """Configured entry-family layouts in deterministic stable-name order."""
+        """Return configured entry-family layouts in deterministic stable-name order.
+
+        :return: The configured entry-family layouts.
+        """
         return self.layout.families
 
     @property
     def entry_records(self) -> Mapping[type, tuple[type, ...]]:
-        """Configured entry-family classes mapped to ordered concrete records."""
+        """Return configured entry-family classes mapped to ordered concrete records.
+
+        :return: The entry-family to concrete-record mapping.
+        """
         return self.layout.entry_records
 
     def _initialize_layout(self, entry_records: Mapping[type, type | tuple[type, ...]] | None) -> None:
@@ -419,12 +441,19 @@ class SqlStore:
     # ------------------------------------------------------------------ tables and transactions
 
     def ensure_tables(self, *classes: type) -> None:
-        """Create the requested tables; this explicit API is a write operation."""
+        r"""Create the requested tables as an explicit write operation.
+
+        :param \*classes: The storable classes whose tables should exist.
+        :return: None.
+        """
         with self._write_connection() as connection:
             self._create_tables_for_write(connection, classes)
 
     def transaction(self) -> contextlib.AbstractContextManager[None]:
-        """Scope several store operations into one database transaction."""
+        """Return a context manager for one database transaction.
+
+        :return: A transaction context manager that commits on normal exit and rolls back on failure.
+        """
         return self._transaction_scope()
 
     @contextlib.contextmanager
@@ -601,6 +630,18 @@ class SqlStore:
         representation explicitly. Referenced records and record-valued child
         elements are saved recursively without constructing intermediate
         record instances.
+
+        A content-id deduplication hit compares metadata marked with
+        :class:`~httk.core.storage.markers.IdentitySkip` in schema order.
+        Nested plans are cached per record type, and a mismatch raises
+        :class:`~httk.data.db.store.EntryMetadataConflictError` without replacing the row.
+
+        :param obj: The object to store.
+        :param as_record: The alternate record representation to use, if any.
+        :return: The stored row's sid.
+        :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
+        :raises httk.data.db.store.EntryMetadataConflictError: If a deduplication hit has conflicting metadata.
+        :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
         """
         if getattr(obj, "__httk_cursor_proxy__", False):
             raise TypeError("cursor rows cannot be saved; materialize the record first")
@@ -846,16 +887,27 @@ class SqlStore:
         While a previously fetched (or saved) instance for this ``(class,
         sid)`` is alive, the very same object is returned. Raises
         :class:`KeyError` (carrying the class and sid) when no such row exists.
+        A missing table therefore has the same result as a missing row.
+
+        :param cls: The storable class to reconstruct.
+        :param sid: The stored row identifier.
+        :return: The reconstructed instance.
+        :raises KeyError: If no row exists for ``cls`` and ``sid``.
         """
         with self._read_connection() as connection:
             return cast(T, self._fetch(connection, cls, sid))
 
     def fetch_by_content_id[T](self, cls: type[T], key: str) -> T | None:
-        """The ``cls`` instance whose content identity is ``key``, or None if not stored.
+        """Return the ``cls`` instance whose content identity is ``key``, or None if not stored.
 
         Only classes with the ``"content_id"`` dedup policy carry a content
         identity column; :class:`~httk.data.db.schema.SchemaError` is raised
         for any other class.
+
+        :param cls: The storable class to search.
+        :param key: The content identity to find.
+        :return: The stored instance, or ``None`` when no row matches.
+        :raises httk.data.db.schema.SchemaError: If the class does not use content-id deduplication.
         """
         schema = resolve_schema(cls)
         if schema.dedup != "content_id":
@@ -879,7 +931,14 @@ class SqlStore:
 
         The result is the actual frozen record class, not the family protocol.
         A single-record family can query that record directly; only
-        multi-record families need their reserved one-of-many dispatch table.
+        multi-record families use their reserved one-of-many dispatch table,
+        whose constraint permits exactly one backing sid per content identity.
+
+        :param family_cls: The configured entry-family class.
+        :param content_id: The entry content identity to find.
+        :return: The concrete stored record, or ``None`` when no row matches.
+        :raises ValueError: If ``family_cls`` is not configured for this store.
+        :raises EntryDispatchIntegrityError: If a dispatch row is inconsistent with its backing row.
         """
         family = next((item for item in self.layout.families if item.family is family_cls), None)
         if family is None:
@@ -928,7 +987,12 @@ class SqlStore:
             return self._fetch(connection, backing, sid)
 
     def sid_of(self, obj: Any, *, as_record: type | None = None) -> int | None:
-        """Return this store's sid for ``obj``'s record identity, if present."""
+        """Return this store's sid for ``obj``'s record identity, if present.
+
+        :param obj: The object whose stored identity should be looked up.
+        :param as_record: The alternate record representation to use, if any.
+        :return: The stored sid, or ``None`` when no matching row is known.
+        """
         record_type = resolve_storage_record(obj, as_record=as_record)
         lazy_identity = lazy_row_identity(obj)
         if is_lazy_row(obj) and record_type is resolve_storage_record(obj):
@@ -961,22 +1025,31 @@ class SqlStore:
         return sid
 
     def searcher(self) -> SqlSearcher:
-        """A new :class:`~httk.data.db.searcher.SqlSearcher` querying this store.
+        """Return a new :class:`~httk.data.db.searcher.SqlSearcher` querying this store.
 
         The searcher runs on this store's read path — inside an open
         :meth:`transaction` block it sees uncommitted writes — and
         reconstructs matched objects through :meth:`fetch`, so the identity
         cache applies.
+
+        :return: A new SQL searcher bound to this store.
         """
         return SqlSearcher(self)
 
     def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
-        """All stored ``cls`` instances whose reference field ``field`` points at ``to``.
+        """Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
 
         ``field`` must be a reference field of ``cls`` targeting ``to``'s class
         (:class:`~httk.data.db.schema.SchemaError` otherwise), and ``to`` must
         be known to this store — saved or fetched through it — else
         :class:`ValueError` is raised. Results are ordered by sid.
+
+        :param cls: The storable class whose references should be searched.
+        :param field: The reference field to match.
+        :param to: The stored target instance.
+        :return: The referring stored instances ordered by sid.
+        :raises httk.data.db.schema.SchemaError: If ``field`` is not a compatible reference field.
+        :raises ValueError: If ``to`` is not known to this store.
         """
         schema = resolve_schema(cls)
         spec = schema.field(field)

@@ -1,4 +1,4 @@
-"""OPTIMADE-filter querying over stored dataclasses: sugar tying the SQL layer to the translator.
+"""Serve OPTIMADE filters over stored dataclasses through the SQL query layer.
 
 :func:`optimade_filter_searcher` builds a :class:`~httk.data.db.searcher.SqlSearcher`
 over a storable class directly from an OPTIMADE filter string, deriving the
@@ -119,7 +119,7 @@ def optimade_filter_searcher(
     :py:type:`~httk.core.optimade.FilterAst`. The returned searcher outputs the matching
     stored instances (``item[0][0]`` per match).
 
-    **Property names.** Every servable stored field of ``cls`` (per
+    Property names: every servable stored field of ``cls`` (per
     :func:`~httk.data.db.entry_provider.served_specs`) is filterable as
     ``{prefix}{field}``, with its schema-derived fulltype driving constant
     conversion and handler dispatch (rational fields compare on their
@@ -134,7 +134,7 @@ def optimade_filter_searcher(
     entries (a store row has no served id: ids are minted at serving time), so
     filtering on them raises ``"not-implemented"``.
 
-    **Relationships.** ``related_classes`` maps relationship-type names to
+    Relationships: ``related_classes`` maps relationship-type names to
     storable classes; each must be the target of exactly one reference or
     child-of-storable (``list[Target]``) field of ``cls`` (anything else
     raises :class:`ValueError`). For each such ``(rtype, rcls)``:
@@ -159,11 +159,18 @@ def optimade_filter_searcher(
     otherwise unknown are recognized with fulltype ``"unknown"`` (filter
     constants pass through unconverted).
 
-    Raises:
-        httk.data.query.optimade_filters.FilterTranslationError: When the filter cannot be translated.
-        httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
-        ValueError: When a ``related_classes`` entry does not match exactly one
-            reference or child-of-storable field of ``cls``.
+    :param store: The SQL store containing the rows to query.
+    :param cls: The storable class whose rows are searched.
+    :param filter_string: The OPTIMADE filter string or parsed filter tree.
+    :param prefix: The registered prefix used for served property names.
+    :param definition: An optional entry definition supplying additional property types.
+    :param extra_handlers: Optional handlers for ids, types, or additional properties.
+    :param related_classes: Related entry types and their storable classes.
+    :return: A searcher yielding the matching stored instances.
+    :raises ~httk.data.query.optimade_filters.FilterTranslationError: When the filter cannot be translated.
+    :raises ~httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
+    :raises ValueError: When a ``related_classes`` entry does not match exactly one
+        reference or child-of-storable field of ``cls``.
     """
     schema = resolve_schema(cls)
     served = served_specs(schema, prefix)

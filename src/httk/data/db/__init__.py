@@ -98,7 +98,13 @@ _SQL_EXPORTS = {
 
 
 def __getattr__(name: str) -> Any:
-    """Import the sqlalchemy-backed exports lazily (PEP 562), naming the extra when absent."""
+    """Import a SQLAlchemy-backed export lazily.
+
+    :param name: The module attribute to import.
+    :return: The requested SQL-layer export.
+    :raises AttributeError: If ``name`` is not an exported database attribute.
+    :raises ImportError: If SQLAlchemy is unavailable for the requested export.
+    """
     module_name = _SQL_EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

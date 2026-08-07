@@ -45,6 +45,7 @@ dev = [
   "ruff>=0.16,<0.17",
   "pyright",
   "mypy",
+  "pydoclint>=0.9,<1",
   "sqlalchemy>=2.0,<3"
 ]
 docs = [
@@ -96,6 +97,14 @@ ignore = ["TRY002", "TRY004", "BLE001"]
 [tool.ruff.format]
 # preserve replaces black's skip-string-normalization: existing quote styles are kept.
 quote-style = "preserve"
+
+[tool.pydoclint]
+style = "sphinx"
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-yield-types = false
+check-class-attributes = false
+skip-checking-raises = true
 
 [tool.pyright]
 pythonVersion = "3.12"

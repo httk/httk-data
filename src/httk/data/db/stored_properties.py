@@ -449,6 +449,11 @@ class StoredPropertySqlCandidateStream:
     SQL value per requested sort property.  Iterating it therefore never
     hydrates a record; a federation can select its final page before fetching
     any object graph.
+
+    :param backing: The concrete record class represented by the stream.
+    :param backing_name: The stable persisted name of the backing.
+    :param searcher: The SQL searcher yielding the candidate projections.
+    :param sort_count: The number of requested sort projections in each row.
     """
 
     backing: type
@@ -463,6 +468,13 @@ class StoredPropertySqlPlan:
     The plan has no federation semantics: :meth:`filter_searchers` returns one
     independent searcher per configured concrete backing.  That explicit shape
     preserves backing-local property semantics for a future protocol adapter.
+
+    :param store: The SQL store containing the configured family.
+    :param family: The logical entry-family class.
+    :param layout: The resolved persisted layout for the family.
+    :param entry_type: The served entry type name.
+    :param definition: The entry definition used for property validation.
+    :param backings: The validated concrete backing plans in persisted order.
     """
 
     def __init__(
@@ -483,11 +495,17 @@ class StoredPropertySqlPlan:
 
     @property
     def backings(self) -> tuple[type, ...]:
-        """The configured concrete record classes, in persisted backing order."""
+        """Return the configured concrete record classes in persisted order.
+
+        :return: The configured backing classes.
+        """
         return tuple(item.backing for item in self._backings)
 
     def records(self) -> Iterator[Mapping[str, Any]]:
-        """Yield protocol-boundary rows projected from concrete backing records."""
+        """Yield protocol-boundary rows projected from concrete backing records.
+
+        :yield: A projected protocol-boundary row.
+        """
         for backing in self._backings:
             yield from self._records_for(backing)
 
@@ -498,7 +516,13 @@ class StoredPropertySqlPlan:
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
     ) -> tuple[SqlSearcher, ...]:
-        """Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list."""
+        """Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list.
+
+        :param filter_string: The OPTIMADE filter or parsed filter tree.
+        :param sort: The property sort keys and directions.
+        :param public_id_prefix: The prefix used when filtering or sorting ids.
+        :return: One searcher for each configured backing.
+        """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         return tuple(self._filter_searcher(backing, ast, sort, public_id_prefix) for backing in self._backings)
 
@@ -515,6 +539,11 @@ class StoredPropertySqlPlan:
         adds an ``ORDER BY`` unless a sort was explicitly requested.  The
         supplied public-id prefix participates in both the intrinsic id
         filter handlers and id sort expression.
+
+        :param filter_string: The OPTIMADE filter, parsed filter tree, or no filter.
+        :param sort: The property sort keys and directions.
+        :param public_id_prefix: The prefix used when filtering or sorting ids.
+        :return: One candidate stream for each configured backing.
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[StoredPropertySqlCandidateStream] = []
@@ -534,7 +563,14 @@ class StoredPropertySqlPlan:
         *,
         public_id: str | None = None,
     ) -> Mapping[str, Any]:
-        """Render one hydrated backing record at the protocol boundary."""
+        """Render one hydrated backing record at the protocol boundary.
+
+        :param backing: The configured concrete class of ``record``.
+        :param record: The hydrated backing record to project.
+        :param public_id: The public id to use, or the record's canonical id when omitted.
+        :return: The protocol-boundary response row.
+        :raises StoredPropertySqlConfigurationError: If ``backing`` is not configured for the family.
+        """
         configured = next((item for item in self._backings if item.backing is backing), None)
         if configured is None:
             raise StoredPropertySqlConfigurationError(
@@ -664,6 +700,11 @@ def stored_property_sql_plan(store: SqlStore, family: type) -> StoredPropertySql
     entry source.  ``id`` and ``type`` are intrinsic: a concrete backing's
     canonical ``content_id`` and the family's fixed entry type respectively.
     Backings must not try to redeclare either property.
+
+    :param store: The SQL store containing the configured family.
+    :param family: The logical entry-family class to validate.
+    :return: The validated SQL property plan.
+    :raises StoredPropertySqlConfigurationError: If the family or any backing is inconsistent with its definition.
     """
     layout = next((item for item in store.entry_layout if item.family is family), None)
     if layout is None:

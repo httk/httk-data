@@ -1,4 +1,4 @@
-"""Offline JSON-Schema validation of values against OPTIMADE property definitions.
+"""Validate values offline against OPTIMADE property definitions with JSON Schema.
 
 httk-core models each OPTIMADE property as a self-describing definition whose
 :meth:`~httk.core.PropertyDefinition.as_optimade` document *is* a JSON Schema
@@ -55,12 +55,15 @@ def _is_rfc3339_datetime(value: Any) -> bool:
 
 
 class PropertyValidationError(ValueError):
-    """A value did not conform to its OPTIMADE property definition.
+    """Report that a value did not conform to its OPTIMADE property definition.
 
     Carries the offending property ``name`` and a human-readable ``message``. For
     single-value failures the message wraps the underlying ``jsonschema`` error
     message, and that ``jsonschema.exceptions.ValidationError`` is preserved
     as the chained ``__cause__``.
+
+    :param name: The name of the invalid property.
+    :param message: The validation failure message.
     """
 
     def __init__(self, name: str, message: str) -> None:
@@ -96,6 +99,11 @@ def validate_property(definition: PropertyDefinition, value: Any) -> None:
     ``None`` on success; raises :class:`PropertyValidationError` on failure,
     chaining the underlying ``jsonschema.exceptions.ValidationError`` as the
     cause. No network access or registry lookup ever happens.
+
+    :param definition: The self-contained OPTIMADE property definition.
+    :param value: The value to validate.
+    :return: None.
+    :raises PropertyValidationError: If ``value`` violates ``definition``.
     """
     validator = jsonschema.Draft202012Validator(_validator_schema(definition), format_checker=_FORMAT_CHECKER)
     try:
@@ -114,6 +122,12 @@ def validate_record(entry_type: EntryTypeDefinition, record: Mapping[str, Any]) 
     subset of the described properties is normal). The value of every property
     that *is* present is validated via :func:`validate_property`. Returns ``None``
     on success.
+
+    :param entry_type: The entry definition describing allowed properties.
+    :param record: The record mapping to validate.
+    :return: None.
+    :raises PropertyValidationError: If a property is unknown, ``id`` or ``type``
+        is missing, or a value violates its property definition.
     """
     properties = entry_type.properties
 

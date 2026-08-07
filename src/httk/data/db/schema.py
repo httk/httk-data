@@ -2,7 +2,8 @@
 
 A *storable* class is a plain **frozen dataclass** declared with the stdlib-only
 marker vocabulary from httk-core (:class:`~httk.core.storage.Indexed`,
-:class:`~httk.core.storage.Unique`, :class:`~httk.core.storage.Skip`, ``IdentitySkip``, :class:`~httk.core.storage.Shape`,
+:class:`~httk.core.storage.Unique`, :class:`~httk.core.storage.Skip`,
+:class:`~httk.core.storage.markers.IdentitySkip`, :class:`~httk.core.storage.Shape`,
 :class:`~httk.core.storage.StorageInfo`, :class:`~httk.core.storage.stored_property`).
 :func:`resolve_schema` reads the class once — dataclass fields, ``Annotated``
 markers, stored properties, and the optional class-level or externally
@@ -42,6 +43,10 @@ Resolution rules (field annotation, then the resulting relational shape):
 - a :class:`~httk.core.storage.stored_property` — resolved like a field from its return
   annotation, flagged derived: stored and queryable, recomputed (not passed to
   ``__init__``) on reconstruction.
+
+Optional child fields also receive a store-managed Boolean ``<field>_present``
+parent column, preserving the distinction between ``None`` and an empty child
+sequence.
 
 The store layer additionally manages a ``sid`` integer primary key and a
 ``content_id`` text column on every table (and ``<parent>_sid`` /
@@ -95,7 +100,14 @@ class SchemaError(Exception):
 
 @dataclasses.dataclass(frozen=True)
 class ColumnSpec:
-    """One scalar column of a table."""
+    """Describe one scalar column of a table.
+
+    :param name: The column name.
+    :param kind: The scalar storage kind.
+    :param nullable: Whether the column accepts NULL.
+    :param indexed: Whether a single-column index is requested.
+    :param unique: Whether a unique index is requested.
+    """
 
     name: str
     """The column name."""
@@ -115,10 +127,14 @@ class ColumnSpec:
 
 @dataclasses.dataclass(frozen=True)
 class ChildTableSpec:
-    """The out-of-line child table backing a variable-length field.
+    """Describe the out-of-line child table backing a variable-length field.
 
     Only the per-element value columns are listed; the store layer adds the
     ``<parent>_sid`` foreign key and ``<name>_index`` ordering columns.
+
+    :param table_name: The child table name.
+    :param element_columns: The value columns of one element row.
+    :param target: The storable element class for foreign-key rows, if any.
     """
 
     table_name: str
@@ -133,7 +149,20 @@ class ChildTableSpec:
 
 @dataclasses.dataclass(frozen=True)
 class FieldSpec:
-    """The resolved storage shape of one stored field (or stored property)."""
+    """Describe the resolved storage shape of one stored field or property.
+
+    :param field: The dataclass field or stored property name.
+    :param python_type: The field value type after marker and optionality resolution.
+    :param role: How the field maps onto the relational model.
+    :param columns: The field columns in the parent table.
+    :param codec_name: The codec name for the field or its child elements, if any.
+    :param shape: The tensor shape marker, if any.
+    :param child: The child table specification, if the field has a child role.
+    :param target: The referenced storable class, if any.
+    :param related: The relationship marker, if any.
+    :param derived: Whether the value is a stored property recomputed on reconstruction.
+    :param optional: Whether the annotation permits ``None``.
+    """
 
     field: str
     """The dataclass field (or stored property) name."""
@@ -172,12 +201,20 @@ class FieldSpec:
     recomputed rather than passed to ``__init__`` on reconstruction."""
 
     optional: bool = False
-    """True when the annotation was ``X | None``; all columns are then nullable."""
+    """True when the annotation permits ``None``; child fields also use a managed presence column."""
 
 
 @dataclasses.dataclass(frozen=True)
 class TableSchema:
-    """The resolved relational schema of one storable class."""
+    """Describe the resolved relational schema of one storable class.
+
+    :param cls: The storable dataclass resolved into this schema.
+    :param table_name: The table name used for the class.
+    :param fields: The stored fields and properties.
+    :param composite_indexes: The resolved composite index declarations.
+    :param dedup: The deduplication policy applied on save.
+    :param links: The validated relationship declarations.
+    """
 
     cls: type
     """The storable dataclass this schema was resolved from."""
@@ -207,14 +244,22 @@ class TableSchema:
     """
 
     def field(self, name: str) -> FieldSpec:
-        """Return the :class:`FieldSpec` named ``name``; raise :class:`SchemaError` if absent."""
+        """Return the field specification named ``name``.
+
+        :param name: The stored field or property name.
+        :return: The matching field specification.
+        :raises httk.data.db.schema.SchemaError: If no stored field has that name.
+        """
         for spec in self.fields:
             if spec.field == name:
                 return spec
         raise SchemaError(f"{self.cls.__name__} has no stored field named {name!r}")
 
     def referenced_classes(self) -> tuple[type, ...]:
-        """The distinct storable classes this schema references (field order, no duplicates)."""
+        """Return the distinct referenced storable classes in field order.
+
+        :return: The referenced classes without duplicates.
+        """
         seen: list[type] = []
         for spec in self.fields:
             if spec.target is not None and spec.target not in seen:
@@ -240,7 +285,11 @@ _in_progress: set[type] = set()
 
 
 def snake_case(name: str) -> str:
-    """The default table name for a class name: CamelCase to camel_case (acronym-aware)."""
+    """Convert a class name to its default acronym-aware table name.
+
+    :param name: The class name to convert.
+    :return: The lower-case snake-cased name.
+    """
     return _SNAKE_BOUNDARY_2.sub(r"\1_\2", _SNAKE_BOUNDARY_1.sub(r"\1_\2", name)).lower()
 
 
@@ -250,6 +299,10 @@ def register_schema_override(cls: type, info: StorageInfo) -> None:
     The registered info is used by :func:`resolve_schema` whenever no explicit
     ``override`` argument is passed, and takes precedence over a
     ``__httk_storage__`` declaration on the class itself.
+
+    :param cls: The storable class whose schema should be overridden.
+    :param info: The external storage information to register.
+    :return: None.
     """
     _schema_overrides[cls] = info
 
@@ -265,9 +318,11 @@ def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSc
     Reference cycles (a class referencing itself, or mutually referencing
     classes) are allowed and resolve without recursion loops.
 
-    Raises:
-        SchemaError: If the class is not a frozen dataclass or any field cannot
-            be resolved; the message names the class and field.
+    :param cls: The storable class to resolve.
+    :param override: External storage information taking precedence over declarations.
+    :return: The cached resolved table schema.
+    :raises httk.data.db.schema.SchemaError: If the class is not a frozen dataclass or one of its
+        fields cannot be resolved; the diagnostic names the class and field.
     """
     row_base = getattr(cls, "__httk_row_base__", None)
     if row_base is not None:

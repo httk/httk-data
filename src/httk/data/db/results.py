@@ -143,7 +143,11 @@ def _proxy_class(cls: type) -> type:
 
 
 class ResultColumn:
-    """A declared scalar projection, with exact and float presentations."""
+    """A declared scalar projection, with exact and float presentations.
+
+    :param result: The result set containing the projection.
+    :param index: The projection's position in the result set.
+    """
 
     def __init__(self, result: "SqlResultSet", index: int) -> None:
         self._result = result
@@ -159,11 +163,20 @@ class ResultColumn:
             yield self._result._value_at(position, self._index)
 
     def floats(self) -> Iterator[Any]:
+        """Yield the query-domain values for this projection.
+
+        :yield: A projection value in the query-domain representation.
+        """
         self._result._ensure()
         for position in self._result._positions:
             yield self._result._float_at(position, self._index)
 
     def to_fracvector(self) -> FracVector:
+        """Convert this rational projection to a fraction vector.
+
+        :return: The projection values as a fraction vector.
+        :raises TypeError: If the projection is not a supported rational column.
+        """
         output = self._result._plan._outputs[self._index]
         rational = output.codec is not None and output.codec.name in {"fraction", "fracscalar"}
         rational = rational or (
@@ -176,7 +189,11 @@ class ResultColumn:
 
 
 class SqlResultSet:
-    """A frozen, lazy result plan."""
+    """A frozen, lazy result plan.
+
+    :param searcher: The search whose query state is frozen.
+    :param outputs: Optional output names mapped to query variables or columns.
+    """
 
     def __init__(self, searcher: SqlSearcher, outputs: dict[str, Any] | None = None) -> None:
         self._plan = copy.copy(searcher)
@@ -212,6 +229,10 @@ class SqlResultSet:
 
     @property
     def names(self) -> tuple[str, ...]:
+        """Return the names of the declared projections in order.
+
+        :return: The declared projection names.
+        """
         return self._names
 
     def _state(self) -> "SqlResultSet":
@@ -368,6 +389,10 @@ class SqlResultSet:
             yield state._row_at(position)
 
     def first(self) -> ResultRow | None:
+        """Return the first result, or ``None`` when no result exists.
+
+        :return: The first result row, if present.
+        """
         if self._root is not self:
             return None if not self._positions else self._state()._row_at(self._positions[0])
         rows = self._execute(limit=1)
@@ -378,6 +403,12 @@ class SqlResultSet:
         return result._row_at(0)
 
     def one(self) -> ResultRow:
+        """Return the only result.
+
+        :return: The sole result row.
+        :raises ~httk.data.query.NoResultError: If no result exists.
+        :raises ~httk.data.query.MultipleResultsError: If more than one result exists.
+        """
         if self._root is not self:
             if not self._positions:
                 raise NoResultError("expected exactly one result, found none")
@@ -394,6 +425,13 @@ class SqlResultSet:
         return result._row_at(0)
 
     def scalars(self, name: str | None = None) -> Iterator[Any]:
+        """Yield one projection from each result row.
+
+        :param name: The projection name, required when several projections are declared.
+        :return: An iterator over the selected projection values.
+        :raises ValueError: If ``name`` is omitted while several projections are declared.
+        :raises KeyError: If ``name`` is not a declared projection.
+        """
         if name is None:
             if len(self.names) != 1:
                 raise ValueError(f"scalars() without a name requires exactly one output; declared: {self.names}")
@@ -404,6 +442,13 @@ class SqlResultSet:
         return (row[index] for row in self)
 
     def column(self, name: str) -> ResultColumn:
+        """Return a scalar projection by name.
+
+        :param name: The declared scalar projection name.
+        :return: The selected result column.
+        :raises KeyError: If ``name`` is not declared.
+        :raises TypeError: If ``name`` names an object projection.
+        """
         scalar_names = tuple(output.name for output in self._plan._outputs if output.target is None)
         if name not in self.names:
             raise KeyError(f"unknown column {name!r}; declared scalar projections: {scalar_names}")
@@ -429,6 +474,13 @@ class SqlResultSet:
         match query and never materializes this result set's ordinary match
         cache.  A total is deliberately opt-in because it requires the normal
         exact count query.
+
+        :param size: The maximum number of rows in the page.
+        :param order_by: The declared scalar projections used for keyset ordering.
+        :param cursor: The continuation token identifying the page position.
+        :param include_total: Whether to include the exact filtered total.
+        :return: The requested result page.
+        :raises ~httk.data.query.UnsupportedQueryError: If the query or ordering is not pageable.
         """
         self._validate_page_size(size)
         if not isinstance(include_total, bool):
@@ -741,6 +793,10 @@ class SqlResultSet:
         }
 
     def cursor(self) -> Iterator[ResultRow]:
+        """Yield cursor rows whose object proxies expire when iteration advances.
+
+        :return: An iterator over live cursor result rows.
+        """
         self._ensure()
         state = self._state()
         generation = _Generation()

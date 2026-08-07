@@ -1,4 +1,4 @@
-"""httk-data: the data-management capability layer for httk v2.
+"""Provide httk-data's data-management capability layer for httk v2.
 
 Built on the stdlib-only *contracts and models* in *httk-core*, httk-data
 supplies *capabilities*:

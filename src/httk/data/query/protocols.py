@@ -39,33 +39,37 @@ ID_FIELD: Final = "__id"
 
 
 class UnsupportedQueryError(ValueError):
-    """A valid query operation is outside a store's supported query profile."""
+    """Report that a valid query operation is outside a store's supported profile."""
 
 
 class CountUnavailableError(RuntimeError):
-    """A store cannot provide the exact count required by a query operation."""
+    """Report that a store cannot provide an exact query count."""
 
 
 class NoResultError(LookupError):
-    """A result-set :meth:`one` operation found no matching result."""
+    """Report that a result-set ``one()`` operation found no matching result."""
 
 
 class MultipleResultsError(LookupError):
-    """A result-set :meth:`one` operation found more than one matching result."""
+    """Report that a result-set ``one()`` operation found multiple results."""
 
 
 class PaginationCursorError(ValueError):
-    """A continuation cursor is malformed, expired, or belongs to another result plan."""
+    """Report that a continuation cursor is malformed, expired, or belongs to another result plan."""
 
 
 @dataclass(frozen=True, slots=True)
 class PageOrder:
-    """One named scalar result projection used to order a continuation page.
+    """Order a continuation page by one named scalar result projection.
 
     ``name`` identifies the name supplied to ``results()`` (or
     :meth:`Searcher.output`), never a backend column object.  The result-set
     implementation validates that it is a root scalar projection before it
     generates SQL.
+
+    :param name: The declared scalar output name used for ordering.
+    :param descending: Whether to order this field in descending order.
+    :param nulls: Whether null values sort first or last.
     """
 
     name: str
@@ -82,12 +86,14 @@ class PageOrder:
 
 
 class ContinuationToken(str):
-    """An opaque URL-safe continuation value.
+    """Carry an opaque URL-safe continuation value.
 
     It is a ``str`` subclass so normal JSON serializers preserve it as a
     scalar value.  Applications should pass a token returned by a page back
     unchanged; data backends validate its version, structure, and result-plan
     fingerprint before using any decoded value as a bound parameter.
+
+    :param value: The opaque continuation value.
     """
 
     def __new__(cls, value: str) -> Self:
@@ -98,11 +104,16 @@ class ContinuationToken(str):
 
 @dataclass(frozen=True, slots=True)
 class ResultPage:
-    """An immutable continuation-page result.
+    """Represent an immutable continuation-page result.
 
     ``rows`` is always a tuple.  Returned rows are ordinary persistent result
     rows, not the expiring proxies produced by ``SqlResultSet.cursor()``.
     ``total`` is populated only when the caller explicitly asks for it.
+
+    :param rows: The persistent rows returned by the page.
+    :param next: The token for the next page, if one exists.
+    :param previous: The token for the previous page, if one exists.
+    :param total: The exact result count when requested, otherwise ``None``.
     """
 
     rows: tuple["ResultRowLike", ...]
@@ -120,7 +131,7 @@ class ResultPage:
 
 
 class PageableResultSetLike(Protocol):
-    """Optional continuation-page capability of a frozen result set.
+    """Expose optional continuation-page capability on a frozen result set.
 
     This deliberately extends neither :class:`ResultSetLike` nor
     :class:`Searcher`: stores that do not support seek pagination remain fully
@@ -134,11 +145,19 @@ class PageableResultSetLike(Protocol):
         order_by: Iterable[PageOrder],
         cursor: ContinuationToken | None = None,
         include_total: bool = False,
-    ) -> ResultPage: ...
+    ) -> ResultPage:
+        """Return one ordered continuation page."""
+        ...
 
 
 class ResultRow:
-    """One named result row, usable by position, name, or attribute."""
+    """Represent one named result row by position, name, or attribute.
+
+    :param values: The row values in declaration order.
+    :param names: The corresponding output names.
+    :param resolver: An optional lazy value resolver.
+    :param guard: An optional callback that rejects access to expired values.
+    """
 
     __slots__ = ("_guard", "_names", "_resolver", "_values")
 
@@ -156,11 +175,13 @@ class ResultRow:
 
     @property
     def names(self) -> tuple[str, ...]:
+        """Return the declared output names."""
         self._check()
         return self._names
 
     @property
     def values(self) -> tuple[Any, ...]:
+        """Return the row values in declaration order."""
         self._check()
         return tuple(self[index] for index in range(len(self._values)))
 
@@ -227,36 +248,62 @@ class ResultRow:
 
 
 class ResultRowLike(Protocol):
-    @property
-    def names(self) -> tuple[str, ...]: ...
+    """Require named access to one result row."""
 
-    def __getitem__(self, key: int | str) -> Any: ...
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return the row's declared output names."""
+        ...
+
+    def __getitem__(self, key: int | str) -> Any:
+        """Return a row value by index or output name."""
+        ...
 
 
 class ResultSetLike(Protocol):
-    def __iter__(self) -> Iterator[ResultRowLike]: ...
+    """Require the common operations of a materialized result set."""
 
-    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator[ResultRowLike]:
+        """Iterate over result rows."""
+        ...
 
-    def first(self) -> ResultRowLike | None: ...
+    def __len__(self) -> int:
+        """Return the exact number of rows."""
+        ...
 
-    def one(self) -> ResultRowLike: ...
+    def first(self) -> ResultRowLike | None:
+        """Return the first row, or ``None`` when no row matches."""
+        ...
 
-    def scalars(self, name: str | None = None) -> Iterator[Any]: ...
+    def one(self) -> ResultRowLike:
+        """Return the only row, or raise when the count is not one."""
+        ...
+
+    def scalars(self, name: str | None = None) -> Iterator[Any]:
+        """Iterate over one named scalar output."""
+        ...
 
     # column() is an optional backend capability; SQL stores expose it.
 
 
 class SearchExpression(Protocol):
-    def __and__(self, other: "SearchExpression") -> "SearchExpression": ...
+    """Require composable backend search expressions."""
 
-    def __or__(self, other: "SearchExpression") -> "SearchExpression": ...
+    def __and__(self, other: "SearchExpression") -> "SearchExpression":
+        """Conjoin this expression with ``other``."""
+        ...
 
-    def __invert__(self) -> "SearchExpression": ...
+    def __or__(self, other: "SearchExpression") -> "SearchExpression":
+        """Disjoin this expression with ``other``."""
+        ...
+
+    def __invert__(self) -> "SearchExpression":
+        """Negate this expression."""
+        ...
 
 
 class SearchField(Protocol):
-    """A queryable field of a search variable.
+    """Expose a queryable field of a search variable.
 
     In addition to the methods below, fields support the rich comparison
     operators (``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``), returning
@@ -275,9 +322,13 @@ class SearchField(Protocol):
         """Match a list field containing ``value``."""
         ...
 
-    def has_any(self, *values: Any) -> SearchExpression: ...
+    def has_any(self, *values: Any) -> SearchExpression:
+        """Match a list field containing any of ``values``."""
+        ...
 
-    def has_only(self, *values: Any) -> SearchExpression: ...
+    def has_only(self, *values: Any) -> SearchExpression:
+        """Match a list field containing no values outside ``values``."""
+        ...
 
     def is_in(self, *values: Any) -> SearchExpression:
         """Match a root scalar field whose value is one of ``values``.
@@ -319,7 +370,7 @@ class SearchField(Protocol):
 
 
 class SearchVariable(Protocol):
-    """A query variable bound to a target type; attribute access yields fields.
+    """Bind a query variable to a target type whose attributes yield fields.
 
     ``always_true``/``always_false`` are reserved names: they are real methods
     of the variable, never stored fields resolved through ``__getattr__``.
@@ -336,11 +387,13 @@ class SearchVariable(Protocol):
         """An expression that matches no row."""
         ...
 
-    def __getattr__(self, name: str) -> SearchField: ...
+    def __getattr__(self, name: str) -> SearchField:
+        """Return the named queryable field."""
+        ...
 
 
 class SearchResult(NamedTuple):
-    """One match: the declared output values, and the names they were declared under.
+    """Represent one match with declared output values and names.
 
     ``values`` holds one entry per :meth:`Searcher.output` call in declaration
     order; it is a tuple, so ``values, names = result`` and ``result[0][0]``
@@ -352,7 +405,7 @@ class SearchResult(NamedTuple):
 
 
 class Searcher(Protocol):
-    """A single query under construction, and its results once iterated.
+    """Build one query and iterate its results.
 
     Iteration yields one :class:`SearchResult` per match, so ``item[0][0]`` is
     the first declared output of the match (typically the matched row object).
@@ -364,24 +417,46 @@ class Searcher(Protocol):
 
     offset: int
 
-    def variable(self, target: Any) -> Any: ...
+    def variable(self, target: Any) -> Any:
+        """Bind a query variable to ``target``."""
+        ...
 
-    def output(self, variable: Any, name: str) -> None: ...
+    def output(self, variable: Any, name: str) -> None:
+        """Declare ``variable`` as a named result output."""
+        ...
 
-    def add(self, expression: Any) -> None: ...
+    def add(self, expression: Any) -> None:
+        """Add a filter expression to the query."""
+        ...
 
-    def count(self) -> int: ...
+    def count(self) -> int:
+        """Return the exact count of the current query."""
+        ...
 
-    def set_limit(self, limit: int) -> None: ...
+    def set_limit(self, limit: int) -> None:
+        """Set the query limit."""
+        ...
 
-    def add_offset(self, offset: int) -> None: ...
+    def add_offset(self, offset: int) -> None:
+        """Add an offset to the query."""
+        ...
 
-    def add_sort(self, field: Any, descending: bool) -> None: ...
+    def add_sort(self, field: Any, descending: bool) -> None:
+        """Add a field sort to the query."""
+        ...
 
-    def __iter__(self) -> Iterator[SearchResult]: ...
+    def __iter__(self) -> Iterator[SearchResult]:
+        """Iterate over the query's matches."""
+        ...
 
-    def results(self, **outputs: Any) -> ResultSetLike: ...
+    def results(self, **outputs: Any) -> ResultSetLike:
+        """Return a result set for the requested named outputs."""
+        ...
 
 
 class Store(Protocol):
-    def searcher(self) -> Searcher: ...
+    """Require a store that can create a query searcher."""
+
+    def searcher(self) -> Searcher:
+        """Create an empty searcher."""
+        ...

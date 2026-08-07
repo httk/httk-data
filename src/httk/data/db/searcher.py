@@ -109,6 +109,12 @@ class SqlExpression:
     The combinators ``&``, ``|`` and ``~`` combine the two renderings pairwise.
     :attr:`group_columns` travels along so a grouped query can GROUP BY every
     non-aggregated column its HAVING clauses mention.
+
+    :param where_clause: The SQL condition used in WHERE position.
+    :param having_clause: The SQL condition used in HAVING position.
+    :param post: Whether the HAVING condition is also applied.
+    :param set_derived: Whether the condition depends on a set of joined rows.
+    :param group_columns: The non-aggregated columns required by the HAVING condition.
     """
 
     __slots__ = ("group_columns", "having_clause", "post", "set_derived", "where_clause")
@@ -209,6 +215,14 @@ class SqlColumn:
     field's value codec when the field is codec-encoded, so e.g. rational
     comparisons run on the float companion column (documented approximate).
     Comparing against another :class:`SqlColumn` compares the two columns.
+
+    :param searcher: The searcher that owns this column.
+    :param element: The SQL expression represented by the column.
+    :param variable: The variable containing the column, when applicable.
+    :param spec: The stored field specification, when applicable.
+    :param codec: The value codec, when the field is encoded.
+    :param query_index: The codec-column index used for query comparisons.
+    :param from_child: Whether the column comes from a child-table join.
     """
 
     def __init__(
@@ -313,15 +327,27 @@ class SqlColumn:
         return self._plain(self._element.like(pattern, escape="\\"))
 
     def contains(self, text: str) -> SqlExpression:
-        """Match values containing the literal ``text`` (LIKE wildcards escaped)."""
+        """Match values containing the literal ``text`` (LIKE wildcards escaped).
+
+        :param text: The literal text to find.
+        :return: The matching SQL condition.
+        """
         return self._like("%" + _escape_like(text) + "%")
 
     def startswith(self, prefix: str) -> SqlExpression:
-        """Match values beginning with the literal ``prefix`` (LIKE wildcards escaped)."""
+        """Match values beginning with the literal ``prefix`` (LIKE wildcards escaped).
+
+        :param prefix: The literal prefix to find.
+        :return: The matching SQL condition.
+        """
         return self._like(_escape_like(prefix) + "%")
 
     def endswith(self, suffix: str) -> SqlExpression:
-        """Match values ending with the literal ``suffix`` (LIKE wildcards escaped)."""
+        """Match values ending with the literal ``suffix`` (LIKE wildcards escaped).
+
+        :param suffix: The literal suffix to find.
+        :return: The matching SQL condition.
+        """
         return self._like("%" + _escape_like(suffix))
 
     # ------------------------------------------------------------------ set operations
@@ -339,6 +365,9 @@ class SqlColumn:
         column ``~column.is_in(...)`` is exactly ``column NOT IN values``
         row-wise, so negating it aggregate-style would switch the query into
         grouped mode for no gain.
+
+        :param \\*values: The values to test for membership.
+        :return: The membership condition.
         """
         encoded = [self._encode(value) for value in values]
         non_null = [value for value in encoded if value is not None]
@@ -369,7 +398,11 @@ class SqlColumn:
         )
 
     def has(self, value: Any) -> SqlExpression:
-        """Match a child collection containing ``value``."""
+        """Match a child collection containing ``value``.
+
+        :param value: The child value to find.
+        :return: The matching SQL condition.
+        """
         return self.has_any(value)
 
     def has_any(self, *values: Any) -> SqlExpression:
@@ -379,6 +412,9 @@ class SqlColumn:
         :attr:`SqlExpression.post` — pushing it into HAVING as well is a
         measured DuckDB slowdown for no semantic gain. It is nonetheless
         set-derived, so ``~`` negates the aggregate.
+
+        :param \\*values: The values of which at least one child must match.
+        :return: The matching SQL condition.
         """
         member = self._element.in_([self._encode(value) for value in values])
         return SqlExpression(
@@ -393,6 +429,9 @@ class SqlColumn:
         A record with no child rows at all satisfies this (its single LEFT
         OUTER JOIN row is NULL, which never matches ``NOT IN``) — the empty
         set is a subset of any value set.
+
+        :param \\*values: The complete set of allowed child values.
+        :return: The condition requiring every child value to match.
         """
         outside = self._element.notin_([self._encode(value) for value in values])
         return SqlExpression(
@@ -432,6 +471,9 @@ class SqlReference:
     JOINs the target class's table (once per reference path per variable) and
     delegates to the joined sub-variable, so chains like ``v.ref.doi`` — or
     deeper — work and repeated access hits the same join alias.
+
+    :param variable: The query variable containing the reference.
+    :param spec: The stored field specification for the reference.
     """
 
     def __init__(self, variable: "SqlVariable", spec: FieldSpec) -> None:
@@ -482,15 +524,27 @@ class SqlReference:
         return value if isinstance(value, int) else self._target_sid(value)
 
     def has(self, value: Any) -> SqlExpression:
-        """The referent equals ``value`` (stored instance or raw sid)."""
+        """Match a referent equal to ``value``.
+
+        :param value: The stored instance or store id to match.
+        :return: The matching SQL condition.
+        """
         return self._fk_column().has(self._sid_value(value))
 
     def has_any(self, *values: Any) -> SqlExpression:
-        """The referent is among ``values`` (stored instances or raw sids): FK ``IN``."""
+        """Match a referent among ``values`` through the foreign key.
+
+        :param \\*values: The stored instances or store ids to match.
+        :return: The matching SQL condition.
+        """
         return self._fk_column().has_any(*[self._sid_value(value) for value in values])
 
     def has_only(self, *values: Any) -> SqlExpression:
-        """The referent (when set) is among ``values`` (see :meth:`SqlColumn.has_only`)."""
+        """Require the referent, when set, to be among ``values``.
+
+        :param \\*values: The complete set of allowed stored instances or store ids.
+        :return: The matching SQL condition.
+        """
         return self._fk_column().has_only(*[self._sid_value(value) for value in values])
 
     def __getattr__(self, name: str) -> "SqlColumn | SqlReference":
@@ -515,6 +569,11 @@ class SqlVariable:
     :meth:`always_true` and :meth:`always_false` are — like ``sid`` — reserved
     names that never resolve to a stored field: they are real methods declared
     before ``__getattr__``, so no query column is involved at all.
+
+    :param searcher: The searcher that owns this variable.
+    :param cls: The storable class represented by the variable.
+    :param schema: The resolved table schema for ``cls``.
+    :param alias: The fresh SQL table alias bound to the variable.
     """
 
     def __init__(self, searcher: "SqlSearcher", cls: type, schema: TableSchema, alias: sqlalchemy.FromClause) -> None:
@@ -526,11 +585,17 @@ class SqlVariable:
         self._reference_variables: dict[str, SqlVariable] = {}
 
     def always_true(self) -> SqlExpression:
-        """A condition matching every row (SQL ``TRUE`` in both positions)."""
+        """Return a condition matching every row.
+
+        :return: A condition that is true in both SQL positions.
+        """
         return SqlExpression(sqlalchemy.true(), sqlalchemy.true())
 
     def always_false(self) -> SqlExpression:
-        """A condition matching no row (SQL ``FALSE`` in both positions)."""
+        """Return a condition matching no row.
+
+        :return: A condition that is false in both SQL positions.
+        """
         return SqlExpression(sqlalchemy.false(), sqlalchemy.false())
 
     def __getattr__(self, name: str) -> "SqlColumn | SqlReference":
@@ -642,6 +707,8 @@ class SqlSearcher:
     ``values`` holds one entry per declared output — a lazy row for variable
     outputs (bypassing the identity cache), the raw column value for column outputs. :meth:`count`
     returns the number of matches, disregarding any limit and offset.
+
+    :param store: The SQL store whose tables and connection serve the query.
     """
 
     def __init__(self, store: "SqlStore") -> None:
@@ -662,6 +729,9 @@ class SqlSearcher:
 
         A missing table makes this variable a vacuous search; reads never
         create tables.
+
+        :param target: The storable class whose table the variable represents.
+        :return: A fresh query variable.
         """
         self._vacuous |= self._store._missing_tables_for_read((target,))
         schema = resolve_schema(target)
@@ -671,7 +741,13 @@ class SqlSearcher:
         return variable
 
     def output(self, variable: "SqlVariable | SqlColumn", name: str) -> None:
-        """Append an output: a variable (yields the reconstructed instance) or a column (raw value)."""
+        """Append an output for a reconstructed instance or raw column value.
+
+        :param variable: The query variable or column to project.
+        :param name: The name exposed for the projected value.
+        :return: None.
+        :raises TypeError: If ``variable`` is neither a query variable nor a query column.
+        """
         if isinstance(variable, SqlVariable):
             self._outputs.append(_Output(name, variable._alias.c[SID_COLUMN], variable._cls, False))
         elif isinstance(variable, SqlColumn):
@@ -719,6 +795,9 @@ class SqlSearcher:
         position, and an expression flagged :attr:`SqlExpression.post` — a
         for-all form, or a negated set-derived subtree — additionally applies
         in HAVING position, which switches the searcher into grouped mode.
+
+        :param expression: The condition to add to the query.
+        :return: None.
         """
         self._where.append(expression)
         if expression.post:
@@ -726,19 +805,36 @@ class SqlSearcher:
             self._grouped = True
 
     def add_sort(self, field: SqlColumn, descending: bool = False) -> None:
-        """Append a sort key; the first-declared key is the most significant."""
+        """Append a sort key; the first-declared key is the most significant.
+
+        :param field: The column used as the next sort key.
+        :param descending: Whether the key is ordered from highest to lowest.
+        :return: None.
+        """
         self._sorts.append((field, descending))
 
     def set_limit(self, limit: int) -> None:
-        """Limit the number of iterated matches; a negative value (e.g. ``-1``) clears the limit."""
+        """Limit the number of iterated matches; a negative value clears the limit.
+
+        :param limit: The maximum number of matches, or a negative value to clear it.
+        :return: None.
+        """
         self._limit = None if limit < 0 else limit
 
     def add_offset(self, offset: int) -> None:
-        """Add to the row :attr:`offset` applied when iterating."""
+        """Add to the row :attr:`offset` applied when iterating.
+
+        :param offset: The amount to add to the current row offset.
+        :return: None.
+        """
         self.offset += offset
 
     def results(self, **outputs: Any) -> Any:
-        """Freeze this search into a lazy :class:`~httk.data.db.results.SqlResultSet`."""
+        """Freeze this search into a lazy :class:`~httk.data.db.results.SqlResultSet`.
+
+        :param \\*\\*outputs: Optional output names mapped to query variables or columns.
+        :return: The frozen lazy result plan.
+        """
         from httk.data.db.results import SqlResultSet
 
         return SqlResultSet(self, outputs or None)
@@ -801,7 +897,10 @@ class SqlSearcher:
         return statement
 
     def count(self) -> int:
-        """The number of matches, disregarding any limit and offset (grouped: one per group)."""
+        """Return the number of matches, disregarding any limit and offset.
+
+        :return: The number of matching rows, or groups for a grouped query.
+        """
         if self._vacuous:
             return 0
         sids = [cast("sqlalchemy.ColumnElement[Any]", v._alias.c[SID_COLUMN]) for v in self._variables]
@@ -815,6 +914,8 @@ class SqlSearcher:
 
         ``values`` holds one entry per declared output (reconstructed instance
         or raw column value), ``names`` the names they were declared under.
+
+        :return: An iterator yielding one search result per match.
         """
         if not self._outputs:
             raise ValueError("this searcher has no outputs; call output() before iterating")

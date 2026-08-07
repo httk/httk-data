@@ -85,6 +85,13 @@ class ValueCodec:
     are appended to the field name by the schema layer (e.g. ``"_exact"``).
     ``encode`` and ``decode`` map a value to and from the column-value tuple, in
     ``columns`` order, and must round-trip exactly.
+
+    :param name: The registry name of the codec.
+    :param python_type: The Python type stored by the codec.
+    :param columns: The column suffix and scalar-kind pairs encoded by the codec.
+    :param encode: The function that encodes a value into column values.
+    :param decode: The function that reconstructs a value from column values.
+    :param query_suffix: The suffix of the query and index column.
     """
 
     name: str
@@ -128,7 +135,12 @@ _CORE_CANONICAL_TYPES = frozenset(
 
 
 def register_value_codec(codec: ValueCodec) -> None:
-    """Register ``codec``; raise :class:`ValueError` on a duplicate name or Python type."""
+    """Register ``codec`` in the value-codec registry.
+
+    :param codec: The codec to register.
+    :return: None.
+    :raises ValueError: If the codec name or Python type is already registered.
+    """
     if codec.name in _codecs_by_name:
         raise ValueError(f"a value codec named {codec.name!r} is already registered")
     if codec.python_type in _codecs_by_type:
@@ -155,7 +167,10 @@ def _canonical_codec_value(codec: ValueCodec, value: Any) -> list[Any]:
 
 
 def known_value_codecs() -> list[str]:
-    """Return the registered value-codec names, in registration order."""
+    """Return the registered value-codec names in registration order.
+
+    :return: The registered codec names.
+    """
     return list(_codecs_by_name)
 
 
@@ -165,6 +180,9 @@ def codec_for(python_type: Any) -> ValueCodec | None:
     An exact type match wins. Subclasses reuse only codecs for core-native
     canonical types; custom codec registrations are exact-type only so SQL
     encoding and content identity cannot disagree.
+
+    :param python_type: The Python type to look up.
+    :return: The matching codec, or ``None`` when no codec covers the type.
     """
     if not isinstance(python_type, type):
         return None
@@ -178,7 +196,12 @@ def codec_for(python_type: Any) -> ValueCodec | None:
 
 
 def codec_named(name: str) -> ValueCodec:
-    """Return the codec registered as ``name``; raise :class:`ValueError` listing the known names."""
+    """Return the codec registered as ``name``.
+
+    :param name: The registered codec name.
+    :return: The matching value codec.
+    :raises ValueError: If no codec has that name.
+    """
     try:
         return _codecs_by_name[name]
     except KeyError:
@@ -189,12 +212,22 @@ def codec_named(name: str) -> ValueCodec:
 
 
 def encode_fraction_exact(value: fractions.Fraction) -> str:
-    """The canonical :data:`FRACTION_EXACT_FORMAT` text of ``value`` (e.g. ``"-7/3"``, ``"1/1"``)."""
+    """Encode a fraction in the canonical exact text format.
+
+    :param value: The fraction to encode.
+    :return: The canonical ``p/q`` text.
+    """
     return f"{value.numerator}/{value.denominator}"
 
 
 def decode_fraction_exact(text: str) -> fractions.Fraction:
-    """Parse :data:`FRACTION_EXACT_FORMAT` text back into an exact :class:`fractions.Fraction`."""
+    """Decode canonical exact fraction text.
+
+    :param text: The fraction text to parse.
+    :return: The exact fraction.
+    :raises ValueError: If the text is malformed.
+    :raises ZeroDivisionError: If the denominator is zero.
+    """
     numerator_text, _, denominator_text = text.partition("/")
     if not denominator_text:
         raise ValueError(f"invalid exact rational text {text!r}; expected {FRACTION_EXACT_FORMAT!r}")
@@ -207,6 +240,9 @@ def encode_surdscalar_exact(value: SurdScalar) -> str:
     The terms are the canonical radicand map of the surd — squarefree radicands
     in increasing order, each with its reduced rational coefficient — so the
     text is unique per value and round-trips exactly.
+
+    :param value: The surd scalar to encode.
+    :return: The canonical surd text.
     """
     radicands = value.radicands
     if not radicands:
@@ -216,7 +252,13 @@ def encode_surdscalar_exact(value: SurdScalar) -> str:
 
 
 def decode_surdscalar_exact(text: str) -> SurdScalar:
-    """Parse :data:`SURD_EXACT_FORMAT` text back into an exact :class:`~httk.core.SurdScalar`."""
+    """Decode canonical exact surd text.
+
+    :param text: The surd text to parse.
+    :return: The exact surd scalar.
+    :raises ValueError: If the text is malformed.
+    :raises ZeroDivisionError: If a coefficient denominator is zero.
+    """
     if text == "0":
         return SurdScalar({}, ())
     components: dict[int, FracVector] = {}
@@ -254,6 +296,9 @@ def encode_fracvector_exact(value: FracVector) -> str:
     the internal denominator the input happened to carry — and lossless at
     arbitrary precision. The shape itself is not encoded; fixed-shape schema
     fields carry it in their declaration.
+
+    :param value: The rational tensor to encode.
+    :return: The canonical exact tensor text.
     """
     flat = _flat_fractions(FracVector.use(value))
     denominator = math.lcm(*(element.denominator for element in flat)) if flat else 1
@@ -267,6 +312,12 @@ def decode_fracvector_exact(text: str, rows: int, cols: int) -> FracVector:
     The numerators are laid out row-major into a tensor of shape
     ``(rows, cols)``; their count must equal ``rows * cols``. Raises
     :class:`ValueError` on malformed text or a count/shape mismatch.
+
+    :param text: The exact tensor text to parse.
+    :param rows: The expected row count.
+    :param cols: The expected column count.
+    :return: The reconstructed rational tensor.
+    :raises ValueError: If the text or requested shape is invalid.
     """
     if rows < 1 or cols < 1:
         raise ValueError(f"decode_fracvector_exact requires rows >= 1 and cols >= 1, got {rows}x{cols}")
@@ -287,6 +338,9 @@ def encode_fracvector_floats(value: FracVector) -> tuple[float, ...]:
     This is the (documented approximate) companion of
     :func:`encode_fracvector_exact`, used to fill the per-element float
     query/index columns of fixed-shape fields.
+
+    :param value: The rational tensor to convert.
+    :return: The row-major floating-point values.
     """
     return tuple(float(element) for element in _flat_fractions(FracVector.use(value)))
 

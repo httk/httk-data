@@ -15,19 +15,26 @@ _EQUALITY_ONLY = "equality only"
 
 @dataclass(frozen=True, slots=True)
 class PortableQueryCapabilities:
-    """The query operations guaranteed by one property definition.
+    """Describe the query operations guaranteed by one property definition.
 
     ``query-support`` expresses a cross-provider guarantee, not a particular
     server's implementation detail.  ``all optional`` is deliberately
     fail-closed here: it gives a portable client no operation it can rely on.
     A server may offer more, but that is not represented by the definition.
+
+    :param query_support: The normalized declared query-support level.
+    :param operations: The portable operation families guaranteed by the definition.
     """
 
     query_support: str | None
     operations: frozenset[str]
 
     def supports(self, operation: str) -> bool:
-        """Whether ``operation`` is guaranteed by this definition."""
+        """Report whether ``operation`` is guaranteed by this definition.
+
+        :param operation: The operation family to test.
+        :return: ``True`` when the operation is portable.
+        """
         return operation in self.operations
 
 
@@ -77,6 +84,9 @@ def portable_query_capabilities(definition: PropertyDefinition) -> PortableQuery
     query-language operation families rather than storage implementation.
     ``IS [NOT] KNOWN`` is part of the equality family because it is the NULL
     spelling of equality/inequality in the OPTIMADE filter language.
+
+    :param definition: The OPTIMADE property definition to inspect.
+    :return: The guaranteed portable query capabilities.
     """
     support = _query_support(definition)
     if support == _EQUALITY_ONLY:
@@ -105,11 +115,18 @@ def portable_query_fields(
 
     By default, this selects scalar fields and flat lists with at least one
     operation guaranteed by their definition. ``include`` is an explicit
-    binding override for named existing properties; it is appended after the
-    derived fields in entry definition order, but does not manufacture query
-    capabilities absent from that definition. ``exclude`` always wins. Both
-    arguments reject unknown or duplicate names so binding mistakes cannot
-    silently broaden a profile.
+    binding override for named existing properties; it is appended as a second
+    ordered group after the derived fields, in entry-definition order among the
+    included names, but does not manufacture query capabilities absent from that
+    definition. ``exclude`` always wins. Both arguments reject unknown or
+    duplicate names so binding mistakes cannot silently broaden a profile.
+
+    :param entry_type: The entry definition whose properties are inspected.
+    :param include: Existing property names to append to the derived selection.
+    :param exclude: Existing property names to remove from the selection.
+    :return: Derived property names followed by explicitly included names.
+    :raises ValueError: If ``include`` or ``exclude`` contains an unknown or
+        duplicate property name.
     """
     properties = entry_type.properties
     property_names = tuple(properties)

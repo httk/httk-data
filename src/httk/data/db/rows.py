@@ -177,7 +177,13 @@ class _Chunk:
 
 
 class RowHydrator:
-    """Hydrate a sid sequence in 500-row batches, without touching field values yet."""
+    """Hydrate a sid sequence in 500-row batches without touching field values yet.
+
+    :param store: The store that owns the rows.
+    :param schema_or_cls: The resolved schema or storable class to hydrate.
+    :param sids: The row identifiers to hydrate.
+    :param context: The shared recursive hydration context, if one exists.
+    """
 
     def __init__(
         self,
@@ -211,6 +217,15 @@ class RowHydrator:
         return index, chunk
 
     def row(self, sid: int) -> Any:
+        """Return the lazy row for ``sid``.
+
+        :param sid: The row identifier.
+        :return: The lazy row proxy.
+        :raises KeyError: If ``sid`` is not in this hydrator's sequence.
+
+        Database presence is validated when the row's chunk is loaded or the
+        row is materialized.
+        """
         sid = int(sid)
         existing = self._context.rows.get((self._cls, sid))
         if existing is not None:
@@ -230,12 +245,24 @@ class RowHydrator:
             self._pinned_rows = tuple(self.row(sid) for sid in self._sids)
 
     def materialize_many(self) -> tuple[Any, ...]:
-        """Materialize this sid batch while retaining recursive chunk batching."""
+        """Materialize every row in this batch while retaining recursive chunk batching.
+
+        :return: The materialized rows in the input order.
+        :raises httk.data.db.rows.StaleResultError: If a requested row no longer exists.
+        """
 
         self._pin_rows()
         return tuple(self.materialize(sid) for sid in self._sids)
 
     def materialize(self, sid: int) -> Any:
+        """Materialize and return one row.
+
+        :param sid: The row identifier.
+        :return: The materialized storable instance.
+        :raises KeyError: If ``sid`` is not in this hydrator's sequence.
+        :raises httk.data.db.schema.SchemaError: If eager hydration encounters a reference cycle.
+        :raises httk.data.db.rows.StaleResultError: If the row no longer exists.
+        """
         sid = int(sid)
         key = (self._cls, sid)
         cached = self._store._instances.get(key)
@@ -262,7 +289,16 @@ class RowHydrator:
 
 
 def decode_field(store: "SqlStore", schema: TableSchema, spec: FieldSpec, sid: int, row: Any) -> Any:
-    """Decode one pinned parent row; child and reference fields use the row's chunk."""
+    """Decode one pinned parent-row value.
+
+    :param store: The store supplying recursive row hydration.
+    :param schema: The schema of the parent row.
+    :param spec: The field specification to decode.
+    :param sid: The parent row identifier.
+    :param row: The pinned parent row.
+    :return: The decoded field value.
+    :raises TypeError: If the field needs its row chunk for child or reference hydration.
+    """
     if spec.role == "scalar":
         return row[spec.columns[0].name]
     if spec.role == "encoded":
@@ -327,7 +363,12 @@ def _row_decode(self: Any, spec: FieldSpec, *, eager: bool = False) -> Any:
 
 @functools.cache
 def row_class(cls: type) -> type:
-    """Return the cached lazy subclass for a frozen storable dataclass."""
+    """Return the cached lazy subclass for a frozen storable dataclass.
+
+    :param cls: The frozen storable dataclass to proxy.
+    :return: The cached lazy row subclass.
+    :raises httk.data.db.schema.SchemaError: If the class uses unsupported slots or custom equality or hashing.
+    """
     if "__slots__" in cls.__dict__:
         raise SchemaError(f"{cls.__name__}: lazy storage rows do not support slots dataclasses")
     resolve_schema(cls)
@@ -403,11 +444,20 @@ def _reject_copy(operation: str) -> Any:
 
 
 def lazy_row_identity(obj: Any) -> tuple[Any, int] | None:
-    """Return a lazy row's owning store and sid, for the store reverse lookup."""
+    """Return a lazy row's owning store and sid, for reverse lookup.
+
+    :param obj: The object to inspect.
+    :return: The owning store and sid, or ``None`` for an ordinary object.
+    """
     if _ROW_STORE not in getattr(obj, "__dict__", {}):
         return None
     return obj.__dict__[_ROW_STORE], int(obj.__dict__[_ROW_SID])
 
 
 def is_lazy_row(obj: Any) -> bool:
+    """Report whether an object is a lazy storage row.
+
+    :param obj: The object to inspect.
+    :return: Whether ``obj`` carries lazy-row storage identity.
+    """
     return lazy_row_identity(obj) is not None

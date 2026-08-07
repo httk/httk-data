@@ -1,4 +1,4 @@
-"""Backend-agnostic query protocols and portable query capabilities.
+"""Define backend-agnostic query protocols and portable query capabilities.
 
 The :mod:`httk.data.query.optimade_filters` module contains OPTIMADE filter-translation
 machinery for serving layers and is intentionally not lifted here.

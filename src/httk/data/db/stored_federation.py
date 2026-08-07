@@ -46,6 +46,11 @@ class StoredEntrySource:
     content id.  It is intentionally not required to be unique: callers may
     retain a legacy unprefixed source, in which case collisions are detected
     when their visible ids are fetched or explicitly audited.
+
+    :param store: The durable SQL store containing the entry family.
+    :param entry_family: The logical entry-family class to serve.
+    :param name: The unique name used to identify this source.
+    :param public_id_prefix: The prefix prepended to canonical content ids.
     """
 
     store: SqlStore
@@ -66,7 +71,13 @@ class StoredEntrySource:
 
 @dataclass(frozen=True)
 class StoredEntryOrigin:
-    """The durable source of one public entry id."""
+    """The durable source of one public entry id.
+
+    :param source: The configured source name.
+    :param source_index: The source's position in the federation.
+    :param backing: The concrete backing name.
+    :param content_id: The canonical content id claimed by the backing.
+    """
 
     source: str
     source_index: int
@@ -80,6 +91,9 @@ class DuplicateEntryIdError(RuntimeError):
     Call :meth:`StoredEntryFederation.audit_duplicate_ids` to perform the
     intentionally explicit complete audit; ordinary pages inspect only the
     candidates they would otherwise return.
+
+    :param public_id: The public id claimed by multiple origins.
+    :param origins: The durable origins claiming the id.
     """
 
     def __init__(self, public_id: str, origins: Sequence[StoredEntryOrigin]) -> None:
@@ -99,6 +113,10 @@ class StoredEntryPage:
     ``total_count`` is the exact filtered count before global offset/limit.
     The sentinel establishing :attr:`more_data_available` is ID-only and is
     never present in :attr:`rows`.
+
+    :param rows: The rows visible in this page.
+    :param total_count: The exact filtered count before paging bounds.
+    :param more_data_available: Whether another row exists after this page.
     """
 
     rows: tuple[Mapping[str, Any], ...]
@@ -174,6 +192,12 @@ class StoredEntryFederation:
     ``ORDER BY``.  With a sort, each backing stream orders in SQL and this
     object performs a bounded heap merge with a deterministic public-id/source
     /backing tie-breaker.
+
+    Pages probe all sibling backings in prefixes shared by multiple sources.
+    Within-source corruption is otherwise audit-only; use
+    :meth:`audit_duplicate_ids` to detect it.
+
+    :param sources: The configured sources to merge in caller order.
     """
 
     def __init__(self, sources: Sequence[StoredEntrySource]) -> None:
@@ -226,7 +250,10 @@ class StoredEntryFederation:
 
     @property
     def sources(self) -> tuple[StoredEntrySource, ...]:
-        """The immutable declared source order."""
+        """Return the immutable declared source order.
+
+        :return: The declared sources in caller order.
+        """
         return tuple(item.source for item in self._sources)
 
     @property
@@ -254,6 +281,13 @@ class StoredEntryFederation:
         ``limit=0`` intentionally runs only count plus an ID-only sentinel:
         it is suitable for metadata initialization and never duplicate-probes
         or hydrates a candidate.
+
+        :param filter_string: The OPTIMADE filter, parsed filter tree, or no filter.
+        :param sort: The property sort keys and directions.
+        :param offset: The number of matching rows to skip globally.
+        :param limit: The maximum number of rows to return, or no maximum.
+        :return: The globally merged page.
+        :raises DuplicateEntryIdError: If a visible id has multiple cross-source origins.
         """
         _validate_page_bounds(offset, limit)
         ordered = _normalized_sort(sort)
@@ -277,7 +311,12 @@ class StoredEntryFederation:
         return StoredEntryPage(rows, total_count, more)
 
     def fetch(self, public_id: str) -> Mapping[str, Any] | None:
-        """Fetch one public id and detect a collision among its possible origins."""
+        """Fetch one public id and detect a collision among its possible origins.
+
+        :param public_id: The public id to fetch.
+        :return: The fetched response row, or ``None`` when it is absent.
+        :raises DuplicateEntryIdError: If the id has multiple origins.
+        """
         if not isinstance(public_id, str):
             raise TypeError("StoredEntryFederation.fetch public_id must be a string")
         matches = self._probe_public_id(public_id)
@@ -286,7 +325,15 @@ class StoredEntryFederation:
         return self._row(matches[0])
 
     def audit_duplicate_ids(self, *, batch_size: int = _AUDIT_BATCH_SIZE) -> None:
-        """Lazily scan sorted ID-only batches and raise on the first collision."""
+        """Lazily scan sorted ID-only batches and raise on the first collision.
+
+        The audit includes duplicate ids across backings within one source as
+        well as duplicates across sources.
+
+        :param batch_size: The maximum number of candidate ids read per batch.
+        :return: None.
+        :raises DuplicateEntryIdError: If any public id has multiple origins.
+        """
         if isinstance(batch_size, bool) or not isinstance(batch_size, int):
             raise TypeError("audit_duplicate_ids batch_size must be an integer")
         if batch_size < 1:

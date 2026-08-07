@@ -40,12 +40,7 @@ instead — when their target class is itself served, each record declares its
 related entries as a flat tuple of :class:`~httk.core.RelatedEntry` values,
 carrying the ``role``/``description`` metadata of an optional
 :class:`~httk.core.storage.Related` field marker (``Related(serve=False)`` suppresses
-the field as a relationship). Class-level
-:class:`~httk.core.storage.RelationshipLink` declarations contribute further
-relationships: each stored row of the declaring class — a served class, or an
-unserved join class passed via ``link_classes`` — expresses one FROM→TO
-relationship between the entries its link endpoints resolve to, carrying the
-link's metadata.
+the field as a relationship).
 """
 
 import dataclasses
@@ -147,6 +142,10 @@ def served_specs(schema: TableSchema, prefix: str) -> list[tuple[str, FieldSpec,
     One triple per servable stored field of ``schema`` (see the module
     docstring for which fields are servable and how their types map), each
     named ``{prefix}custom_{field}`` in the ``custom_`` sub-namespace.
+
+    :param schema: The resolved schema whose fields are inspected.
+    :param prefix: The registered prefix used for served property names.
+    :return: The servable property, field-specification, and fulltype triples.
     """
     served: list[tuple[str, FieldSpec, str]] = []
     for spec in schema.fields:
@@ -166,6 +165,11 @@ def auto_definition(entry_type: str, schema: TableSchema, prefix: str) -> EntryT
     definitions, merged in via
     :meth:`~httk.core.EntryTypeDefinition.extended` (so ``prefix`` must be a
     registered definition prefix).
+
+    :param entry_type: The entry type name to define.
+    :param schema: The resolved schema of the stored class.
+    :param prefix: The registered prefix used for generated property names.
+    :return: The generated entry-type definition.
     """
     cls = schema.cls
     base = EntryTypeDefinition(
@@ -206,16 +210,19 @@ class StoreEntryProvider(EntryProvider):
     ``prefix`` (which must be registered, see
     :func:`~httk.core.register_definition_prefix`). ``id_of`` maps
     ``(entry_type, sid, instance)`` to the served entry id; the default is
-    ``"<entry_type>-<sid>"``. ``link_classes`` names storable *join-object*
-    classes that are not served as entries themselves but whose
-    :class:`~httk.core.storage.RelationshipLink` declarations contribute relationships
-    between served entries; every link endpoint (on a served class or a link
-    class) must resolve to a served entry type, and a link class without link
-    declarations is rejected.
+    ``"<entry_type>-<sid>"``. ``link_classes`` supplies additional storable
+    classes for link metadata validation.
 
     See the module docstring for which stored fields are served as properties
     (and how their types map), which are skipped, and which surface through
     :meth:`relationships` instead.
+
+    :param store: The SQL store containing the served records.
+    :param classes: The served entry-type names and their storable classes.
+    :param definitions: Optional definitions to use instead of auto-generation.
+    :param prefix: The registered prefix for generated property names.
+    :param id_of: The function that maps a served record to its public id.
+    :param link_classes: Additional storable classes supplied for link metadata validation.
     """
 
     def __init__(
@@ -342,6 +349,10 @@ class StoreEntryProvider(EntryProvider):
     # ------------------------------------------------------------------ the provider contract
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        """Return the definitions of all served entry types.
+
+        :return: The served entry-type definitions keyed by entry type.
+        """
         return {
             entry_type: (
                 self._definitions[entry_type] if entry_type in self._definitions else self._auto_definition(entry_type)
@@ -353,12 +364,24 @@ class StoreEntryProvider(EntryProvider):
         return auto_definition(entry_type, self._schemas[entry_type], self._prefix)
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        """Return the served property-to-storage-key mapping for an entry type.
+
+        :param entry_type: The served entry type to inspect.
+        :return: The public property names and their storage keys.
+        :raises KeyError: If ``entry_type`` is not served.
+        """
         self._require_entry_type(entry_type)
         property_keys = {"id": ID_FIELD, "type": "type"}
         property_keys.update({name: name for name, _spec, _fulltype in self._served_specs(entry_type)})
         return property_keys
 
     def records(self, entry_type: str) -> Iterator[Mapping[str, Any]]:
+        """Yield JSON-able records for a served entry type.
+
+        :param entry_type: The served entry type whose records are read.
+        :yield: A served record.
+        :raises KeyError: If ``entry_type`` is not served.
+        """
         cls = self._require_entry_type(entry_type)
         served = self._served_specs(entry_type)
         schema = self._schemas[entry_type]
@@ -378,6 +401,16 @@ class StoreEntryProvider(EntryProvider):
             yield row
 
     def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        """Return relationships grouped by source entry id.
+
+        Relationships come from stored reference fields and child fields
+        targeting served storable classes; loose-edge projections are not part
+        of this provider contract.
+
+        :param entry_type: The served entry type whose relationships are read.
+        :return: Related entries keyed by source entry id.
+        :raises KeyError: If ``entry_type`` is not served.
+        """
         cls = self._require_entry_type(entry_type)
         relation_specs = self._relationship_specs(entry_type)
         link_scans = self._links_by_from.get(entry_type, [])

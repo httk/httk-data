@@ -35,21 +35,25 @@ class Database:
     SQLAlchemy-supported backends, by passing a preconfigured engine directly).
     The instance is a context manager; leaving the ``with`` block disposes the
     engine's connection pool.
+
+    :param engine: The configured SQLAlchemy engine to wrap.
     """
 
     def __init__(self, engine: sqlalchemy.Engine) -> None:
-        """Wrap an already-configured SQLAlchemy :class:`~sqlalchemy.Engine`."""
         self._engine = engine
         _install_exact_fraction_functions(engine)
 
     @classmethod
     def sqlite(cls, path: str | os.PathLike[str] | None = None) -> Self:
-        """An SQLite database stored in the file at ``path``, or in memory when ``path`` is None.
+        """Create an SQLite database stored in ``path``, or in memory when ``path`` is None.
 
         The in-memory variant is configured (via a static connection pool with a
         shared, thread-unrestricted connection) so that every connection drawn
         from the engine sees the one and same database; file-backed databases
         use SQLAlchemy's default pooling.
+
+        :param path: The database file path, or ``None`` for an in-memory database.
+        :return: The configured database wrapper.
         """
         if path is None:
             engine = sqlalchemy.create_engine(
@@ -63,11 +67,12 @@ class Database:
 
     @classmethod
     def duckdb(cls, path: str | os.PathLike[str] | None = None) -> Self:
-        """A DuckDB database stored in the file at ``path``, or in memory when ``path`` is None.
+        """Create a DuckDB database stored in ``path``, or in memory when ``path`` is None.
 
-        Raises:
-            ImportError: If the ``duckdb_engine`` SQLAlchemy dialect is not
-                installed; install the ``httk-data[duckdb]`` extra to get it.
+        :param path: The database file path, or ``None`` for an in-memory database.
+        :return: The configured database wrapper.
+        :raises ImportError: If the ``duckdb_engine`` SQLAlchemy dialect is not installed;
+            install the ``httk-data[duckdb]`` extra to use it.
         """
         try:
             importlib.import_module("duckdb_engine")
@@ -88,14 +93,24 @@ class Database:
 
     @property
     def engine(self) -> sqlalchemy.Engine:
-        """The underlying SQLAlchemy engine (for use by the storage layer itself)."""
+        """Return the underlying SQLAlchemy engine for the storage layer.
+
+        :return: The wrapped SQLAlchemy engine.
+        """
         return self._engine
 
     def dispose(self) -> None:
-        """Close the engine's connection pool; the database can no longer be used after this."""
+        """Dispose the current connection pool; later use creates a new pool.
+
+        :return: None.
+        """
         self._engine.dispose()
 
     def __enter__(self) -> Self:
+        """Enter a context that owns this database's connection pool.
+
+        :return: This database wrapper.
+        """
         return self
 
     def __exit__(
@@ -104,6 +119,13 @@ class Database:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Dispose the database when leaving its context.
+
+        :param exc_type: The exception class raised in the context, if any.
+        :param exc_value: The exception instance raised in the context, if any.
+        :param traceback: The traceback for the context exception, if any.
+        :return: None.
+        """
         self.dispose()
 
     def __repr__(self) -> str:

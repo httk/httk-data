@@ -1,4 +1,4 @@
-"""In-memory :class:`~httk.core.EntryProvider` implementations for the standard entry types.
+"""Serve standard entry types through in-memory :class:`~httk.core.EntryProvider` implementations.
 
 These providers map ``{id: record}`` mappings of the stdlib-only record models
 defined in *httk-core* (:class:`~httk.core.Reference`, :class:`~httk.core.File`,
@@ -94,7 +94,13 @@ def _provider_records(entry_type: str, record_type: type[Any], entries: Mapping[
 
 
 class StandardEntryProvider(EntryProvider):
-    """Shared implementation base for the standard entry providers."""
+    """Serve one standard entry type through the neutral provider contract.
+
+    :param entries: The records keyed by their served identifiers.
+    :param record_type: The core record class used to construct each entry.
+    :param entry_type: The OPTIMADE entry type served by this provider.
+    :param relationships: Optional related entries keyed by served identifier.
+    """
 
     def __init__(
         self,
@@ -114,17 +120,39 @@ class StandardEntryProvider(EntryProvider):
             raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        """Return the one standard entry-type definition served by this provider.
+
+        :return: The served entry-type definition.
+        """
         return {self._entry_type: standard_entry_type(self._entry_type)}
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        """Return served property names mapped to record attribute names.
+
+        :param entry_type: The entry type to inspect.
+        :return: The served-property to record-key mapping.
+        :raises KeyError: If ``entry_type`` is not this provider's entry type.
+        """
         self._check_entry_type(entry_type)
         return _provider_property_keys(self._record_type)
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        """Return JSON-compatible records for the requested entry type.
+
+        :param entry_type: The entry type to enumerate.
+        :return: The provider's records in mapping iteration order.
+        :raises KeyError: If ``entry_type`` is not this provider's entry type.
+        """
         self._check_entry_type(entry_type)
         return _provider_records(self._entry_type, self._record_type, self._entries)
 
     def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        """Return related entries keyed by served identifier.
+
+        :param entry_type: The entry type to inspect.
+        :return: The normalized relationship mapping.
+        :raises KeyError: If ``entry_type`` is not this provider's entry type.
+        """
         self._check_entry_type(entry_type)
         return self._relationships
 
@@ -134,6 +162,9 @@ class ReferenceEntryProvider(StandardEntryProvider):
 
     ``relationships`` optionally maps a reference id to its related entries
     (:class:`~httk.core.RelatedEntry` values, served flat per id).
+
+    :param entries: The references keyed by their served identifiers.
+    :param relationships: Optional related entries keyed by reference identifier.
     """
 
     def __init__(
@@ -151,6 +182,9 @@ class FileEntryProvider(StandardEntryProvider):
     ``relationships`` optionally maps a file id to its related entries
     (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. the
     calculations a file is ``input``/``output`` of.
+
+    :param entries: The files keyed by their served identifiers.
+    :param relationships: Optional related entries keyed by file identifier.
     """
 
     def __init__(
@@ -168,6 +202,9 @@ class CalculationEntryProvider(StandardEntryProvider):
     ``relationships`` optionally maps a calculation id to its related entries
     (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. its
     ``input``/``output`` files, expressed via the ``role`` metadata.
+
+    :param entries: The calculations keyed by their served identifiers.
+    :param relationships: Optional related entries keyed by calculation identifier.
     """
 
     def __init__(
@@ -206,7 +243,10 @@ def _runs_definition() -> EntryTypeDefinition:
 
 
 class RunEntryProvider(EntryProvider):
-    """Serve core :class:`~httk.core.Run` records and their provenance edges."""
+    """Serve core :class:`~httk.core.Run` records and their provenance edges.
+
+    :param entries: The runs keyed by their served identifiers.
+    """
 
     _entry_type = "_httk_runs"
 
@@ -218,9 +258,19 @@ class RunEntryProvider(EntryProvider):
             raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        """Return the vendored ``_httk_runs`` entry definition.
+
+        :return: The served run entry-type definition.
+        """
         return {self._entry_type: _runs_definition()}
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        """Return the served run-property to record-key mapping.
+
+        :param entry_type: The entry type to inspect.
+        :return: The served-property to record-key mapping.
+        :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+        """
         self._check_entry_type(entry_type)
         return {
             "id": ID_FIELD,
@@ -231,6 +281,12 @@ class RunEntryProvider(EntryProvider):
         }
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        """Return JSON-compatible run records.
+
+        :param entry_type: The entry type to enumerate.
+        :yield: Run records in input mapping order.
+        :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+        """
         self._check_entry_type(entry_type)
         for entry_id, run in self._entries.items():
             yield {
@@ -242,6 +298,12 @@ class RunEntryProvider(EntryProvider):
             }
 
     def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        """Return run provenance edges with role and edge-label metadata.
+
+        :param entry_type: The entry type to inspect.
+        :return: Relationships grouped by run identifier.
+        :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+        """
         self._check_entry_type(entry_type)
         return {
             entry_id: tuple(
@@ -254,7 +316,17 @@ class RunEntryProvider(EntryProvider):
 
 
 class DataRecordEntryProvider(EntryProvider):
-    """Serve core :class:`~httk.core.DataRecord` values as provider properties."""
+    """Serve core :class:`~httk.core.DataRecord` values as provider properties.
+
+    Definitions are resolved eagerly at construction. Every served property name
+    must start with ``_``; absent record properties are emitted as JSON null.
+
+    :param entries: The data records keyed by their served identifiers.
+    :param definitions: Optional property definitions keyed by served property name.
+    :param relationships: Optional related entries keyed by record identifier.
+    :raises ValueError: If a property name, definition, or non-nullable property
+        is inconsistent with the supplied records.
+    """
 
     _entry_type = "_httk_records"
 
@@ -307,9 +379,19 @@ class DataRecordEntryProvider(EntryProvider):
             raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
 
     def entry_types(self) -> Mapping[str, EntryTypeDefinition]:
+        """Return the resolved ``_httk_records`` entry definition.
+
+        :return: The served data-record entry-type definition.
+        """
         return {self._entry_type: self._definition}
 
     def property_keys(self, entry_type: str) -> Mapping[str, str]:
+        """Return served property names mapped to data-record keys.
+
+        :param entry_type: The entry type to inspect.
+        :return: The served-property to record-key mapping.
+        :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+        """
         self._check_entry_type(entry_type)
         return {
             "id": ID_FIELD,
@@ -320,6 +402,12 @@ class DataRecordEntryProvider(EntryProvider):
         }
 
     def records(self, entry_type: str) -> Iterable[Mapping[str, Any]]:
+        """Return records with union-null values for unserved properties.
+
+        :param entry_type: The entry type to enumerate.
+        :yield: JSON-compatible records in input mapping order.
+        :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+        """
         self._check_entry_type(entry_type)
         for entry_id, record in self._entries.items():
             yield {
@@ -331,6 +419,12 @@ class DataRecordEntryProvider(EntryProvider):
             }
 
     def relationships(self, entry_type: str) -> Mapping[str, tuple[RelatedEntry, ...]]:
+        """Return normalized data-record relationships by identifier.
+
+        :param entry_type: The entry type to inspect.
+        :return: The relationship mapping supplied at construction.
+        :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+        """
         self._check_entry_type(entry_type)
         return self._relationships
 
@@ -341,6 +435,10 @@ def product_relationships(links: Iterable[ProductLink]) -> dict[str, dict[str, t
     Feed the inner mapping into the source-side provider's ``relationships=`` argument;
     per-edge ``workflow_declaration_uri`` is deliberately not served yet (relation-object
     serving is future work).
+
+    :param links: The product links to group by source type and identifier.
+    :return: Source-type mappings of source identifiers to related product entries.
+    :raises ValueError: If one source has duplicate product labels.
     """
     result: dict[str, dict[str, list[RelatedEntry]]] = {}
     for link in links:
