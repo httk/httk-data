@@ -45,7 +45,7 @@ the field as a relationship).
 
 import dataclasses
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from typing import Any, Final
+from typing import Any
 
 import sqlalchemy
 from httk.core import (
@@ -64,30 +64,16 @@ from httk.data.db.schema import FieldSpec, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlColumn, _query_index
 from httk.data.db.store import SqlStore, _as_fixed_tensor
 from httk.data.query import ID_FIELD
+from httk.data.served_specs import _fulltype_of as _served_fulltype_of
+from httk.data.served_specs import served_specs
+
+_fulltype_of = _served_fulltype_of
 
 __all__ = [
     "StoreEntryProvider",
     "auto_definition",
     "served_specs",
 ]
-
-
-#: How a scalar column kind maps onto an OPTIMADE fulltype (bytes has none).
-_SCALAR_FULLTYPES: Final[dict[str, str]] = {
-    "str": "string",
-    "int": "integer",
-    "bool": "boolean",
-    "float": "float",
-}
-
-#: How a built-in value codec maps onto an OPTIMADE fulltype (custom codecs have none).
-_CODEC_FULLTYPES: Final[dict[str, str]] = {
-    "float": "float",
-    "fraction": "float",
-    "fracscalar": "float",
-    "surdscalar": "float",
-    "datetime": "timestamp",
-}
 
 
 def _default_id(entry_type: str, sid: int, obj: Any) -> str:
@@ -112,47 +98,6 @@ class _LinkScan:
     from_cls: type
     to_cls: type
     to_type: str
-
-
-def _fulltype_of(spec: FieldSpec) -> str | None:
-    """The OPTIMADE fulltype a field is served as, or None when it is not servable."""
-    if spec.role == "scalar":
-        return _SCALAR_FULLTYPES.get(spec.columns[0].kind)
-    if spec.role == "encoded":
-        assert spec.codec_name is not None
-        return _CODEC_FULLTYPES.get(spec.codec_name)
-    if spec.role == "fixed_array":
-        return "list of list of float"
-    if spec.role == "child":
-        if spec.shape is not None:
-            return "list of list of float"
-        if spec.target is not None:
-            return None  # storable elements surface through relationships()
-        if spec.codec_name is not None:
-            element = _CODEC_FULLTYPES.get(spec.codec_name)
-        else:
-            element = _SCALAR_FULLTYPES.get(spec.child.element_columns[0].kind) if spec.child is not None else None
-        return None if element is None else f"list of {element}"
-    return None  # reference: surfaces through relationships()
-
-
-def served_specs(schema: TableSchema, prefix: str) -> list[tuple[str, FieldSpec, str]]:
-    """The served ``(property name, field spec, fulltype)`` triples of a storable class.
-
-    One triple per servable stored field of ``schema`` (see the module
-    docstring for which fields are servable and how their types map), each
-    named ``{prefix}custom_{field}`` in the ``custom_`` sub-namespace.
-
-    :param schema: The resolved schema whose fields are inspected.
-    :param prefix: The registered prefix used for served property names.
-    :return: The servable property, field-specification, and fulltype triples.
-    """
-    served: list[tuple[str, FieldSpec, str]] = []
-    for spec in schema.fields:
-        fulltype = _fulltype_of(spec)
-        if fulltype is not None:
-            served.append((f"{prefix}custom_{spec.field}", spec, fulltype))
-    return served
 
 
 def auto_definition(entry_type: str, schema: TableSchema, prefix: str) -> EntryTypeDefinition:
