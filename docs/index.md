@@ -17,6 +17,7 @@ dataclasses over SQLite or DuckDB (via the `httk-data[db]` /
 
 - **Data management guide**: {doc}`data`
 - **Database storage guide**: {doc}`db`
+- **MongoDB storage guide**: {doc}`mongo`
 - **Federated stores guide**: {doc}`federation`
 - **Migrating from httk v1**: {doc}`migrating_from_v1`
 - **API reference**: {doc}`reference/index`
@@ -56,6 +57,7 @@ validate_record(
 
 data
 db
+mongo
 federation
 migrating_from_v1
 reference/index

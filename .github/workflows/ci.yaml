@@ -38,3 +38,71 @@ jobs:
 
       - name: Run CI
         run: make ci
+
+  test-mongodb:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python-version || '3.12' }}
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Start MongoDB 8 single-node replica set
+        run: |
+          docker run --detach --name httk-mongodb --network host mongo:8 \
+            mongod --replSet rs0 --bind_ip 127.0.0.1 --port 27127 \
+            --setParameter enableTestCommands=1
+
+      - name: Wait for MongoDB to accept connections
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if docker exec httk-mongodb mongosh --quiet --host 127.0.0.1:27127 \
+              --eval 'db.adminCommand({ping: 1}).ok' | grep -q '^1$'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs httk-mongodb
+          exit 1
+
+      - name: Initiate the replica set
+        run: |
+          docker exec httk-mongodb mongosh --quiet --host 127.0.0.1:27127 \
+            --eval 'db.adminCommand({replSetInitiate: {_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27127"}]}})'
+
+      - name: Wait for MongoDB PRIMARY
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if docker exec httk-mongodb mongosh --quiet --host 127.0.0.1:27127 \
+              --eval 'try { quit(db.adminCommand("hello").isWritablePrimary ? 0 : 1); } catch (error) { quit(1); }'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs httk-mongodb
+          exit 1
+
+      - name: Export MongoDB test URI
+        run: echo 'HTTK_TEST_MONGODB_URI=mongodb://127.0.0.1:27127/?replicaSet=rs0' >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mongodb]"
+
+      - name: Run the default test profile
+        run: python -m pytest tests/ -q
+
+      - name: Run the extended test profile
+        env:
+          HTTK_TEST_PROFILE: extended
+        run: python -m pytest tests/ -q -m ""
+
+      - name: Stop MongoDB
+        if: always()
+        run: docker rm --force httk-mongodb
