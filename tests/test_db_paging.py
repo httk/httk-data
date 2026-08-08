@@ -72,21 +72,6 @@ def labels(page) -> list[str]:
     return [row.label for row in page.rows]
 
 
-def test_paging_a_fresh_store_returns_an_empty_page():
-    with Database.sqlite() as database:
-        store = SqlStore(database, entry_records={})
-        searcher = store.searcher()
-        record = searcher.variable(PageRecord)
-        result = searcher.results(record=record)
-
-        page = result.page(size=2, order_by=(), include_total=True)
-
-        assert page.rows == ()
-        assert page.next is None
-        assert page.previous is None
-        assert page.total == 0
-
-
 def all_pages(result, order: tuple[PageOrder, ...], size: int = 2) -> list[str]:
     page = result.page(size=size, order_by=order)
     found = labels(page)
@@ -124,97 +109,6 @@ def backwards_to_start(result, page, order: tuple[PageOrder, ...], size: int) ->
         page = result.page(size=size, order_by=order, cursor=page.previous)
         chunks.append(labels(page))
     return [label for chunk in reversed(chunks) for label in chunk]
-
-
-def test_pages_are_duplicate_free_stable_and_reversible(store):
-    result = results(store)
-    order = (PageOrder("bucket", nulls="first"), PageOrder("score", descending=True, nulls="last"))
-    first = result.page(size=2, order_by=order)
-    second = result.page(size=2, order_by=order, cursor=first.next)
-    assert first.previous is None
-    assert second.previous is not None
-    assert labels(result.page(size=2, order_by=order, cursor=second.previous)) == labels(first)
-
-    paged = all_pages(result, order)
-    assert paged == ["null-1", "null-null", "a-2", "a-2-second", "a-null", "b-3", "b-1", "b-2"]
-    assert len(paged) == len(set(paged)) == len(ROWS)
-
-
-@pytest.mark.parametrize(
-    ("order", "expected"),
-    [
-        (
-            (PageOrder("bucket", nulls="last"),),
-            ["a-2", "a-null", "a-2-second", "b-1", "b-2", "b-3", "null-1", "null-null"],
-        ),
-        (
-            (PageOrder("bucket", descending=True, nulls="first"),),
-            ["null-1", "null-null", "b-1", "b-2", "b-3", "a-2", "a-null", "a-2-second"],
-        ),
-    ],
-)
-def test_null_rank_and_duplicate_primary_values(store, order, expected):
-    assert all_pages(results(store), order) == expected
-
-
-@pytest.mark.parametrize("descending", [False, True])
-@pytest.mark.parametrize("nulls", ["first", "last"])
-@pytest.mark.parametrize("size", [1, 2, 3])
-def test_exhaustive_composite_order_traverses_forward_and_backward(store, descending, nulls, size):
-    order = (
-        PageOrder("bucket", descending=descending, nulls=nulls),
-        PageOrder("score", descending=not descending, nulls="last" if nulls == "first" else "first"),
-    )
-    result = results(store)
-    page = result.page(size=size, order_by=order)
-    forward = labels(page)
-    while page.next is not None:
-        page = result.page(size=size, order_by=order, cursor=page.next)
-        forward.extend(labels(page))
-    assert forward == expected_labels(order)
-    assert backwards_to_start(result, page, order, size) == expected_labels(order)
-
-
-def test_empty_order_uses_root_sid_and_max_order_keys_are_rejected(store):
-    result = results(store)
-    page = result.page(size=3, order_by=())
-    forward = labels(page)
-    while page.next is not None:
-        page = result.page(size=3, order_by=(), cursor=page.next)
-        forward.extend(labels(page))
-    assert forward == [row.label for row in ROWS]
-    assert backwards_to_start(result, page, (), 3) == forward
-    with pytest.raises(UnsupportedQueryError, match="at most 32"):
-        result.page(size=2, order_by=tuple(PageOrder("bucket") for _ in range(33)))
-
-
-def test_grouped_child_filter_pages_one_root_per_match(store):
-    result = results(store, common_only=True)
-    assert all_pages(result, (PageOrder("bucket", nulls="last"),)) == [
-        "a-2",
-        "a-null",
-        "a-2-second",
-        "b-1",
-        "b-3",
-        "null-1",
-    ]
-
-
-def test_token_rejects_changed_filter_order_and_corruption(store):
-    order = (PageOrder("bucket"),)
-    result = results(store)
-    token = result.page(size=2, order_by=order).next
-    assert token is not None
-
-    filtered = results(store, common_only=True)
-    with pytest.raises(PaginationCursorError, match="different query"):
-        filtered.page(size=2, order_by=order, cursor=token)
-    with pytest.raises(PaginationCursorError, match="different query"):
-        result.page(size=2, order_by=(PageOrder("score"),), cursor=token)
-    with pytest.raises(PaginationCursorError):
-        result.page(size=2, order_by=order, cursor=ContinuationToken(f"{token}x"))
-    with pytest.raises(PaginationCursorError, match="ContinuationToken"):
-        result.page(size=2, order_by=order, cursor=str(token))
 
 
 def test_token_rejects_changed_schema_and_dialect():
@@ -318,22 +212,6 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
     assert calls == 0
     assert result.page(size=2, order_by=order, include_total=True).total == len(ROWS)
     assert calls == 1
-
-
-def test_deep_page_stays_seek_based_and_returns_only_requested_rows():
-    with Database.sqlite() as database:
-        store = SqlStore(database, entry_records={})
-        with store.transaction():
-            for index in range(2_000):
-                store.save(PageRecord(index, index, f"r-{index}", ["common"]))
-        result = results(store)
-        order = (PageOrder("bucket"),)
-        page = result.page(size=7, order_by=order)
-        for _ in range(100):
-            assert page.next is not None
-            page = result.page(size=7, order_by=order, cursor=page.next)
-            assert len(page.rows) == 7
-        assert labels(page) == [f"r-{index}" for index in range(700, 707)]
 
 
 @pytest.mark.extended

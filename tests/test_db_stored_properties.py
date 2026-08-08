@@ -266,7 +266,6 @@ def test_plan_projects_concrete_backings_and_nullable_missing_properties(plan):
         ('id CONTAINS ""', {"first", "second"}),
         ('type = "calculations"', {"first", "second"}),
         ('immutable_id = "one-third"', {"first"}),
-        ('immutable_id = "composition"', {"first"}),
         ('immutable_id = "null-comment"', {"first"}),
         ('immutable_id = "nested"', {"first"}),
         ('immutable_id = "when-known"', {"second"}),

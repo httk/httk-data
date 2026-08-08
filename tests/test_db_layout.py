@@ -1,5 +1,8 @@
 """Focused SqlStore protocol/layout and entry-family dispatch coverage."""
 
+import os
+import subprocess
+import sys
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -21,9 +24,11 @@ from httk.data.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
     actual_table_names,
+    declaration_json,
     expected_metadata,
     normalize_entry_records,
 )
+from httk.data.db.mapping import entry_dispatch_table_name
 
 
 class LayoutFamily:
@@ -115,9 +120,33 @@ def test_family_store_rejects_record_without_registered_family() -> None:
 def _multi_layout() -> tuple[StorageLayout, sqlalchemy.MetaData, sqlalchemy.Table]:
     layout = normalize_entry_records({MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
     metadata = expected_metadata(layout)
-    dispatch_name = layout.families[0].dispatch_table_name
-    assert dispatch_name is not None
+    dispatch_name = entry_dispatch_table_name(layout.families[0].name)
     return layout, metadata, metadata.tables[dispatch_name]
+
+
+def test_declaration_json_stamp_is_byte_stable() -> None:
+    # This exact string guards cross-backend stamp stability.
+    layout = normalize_entry_records({LayoutFamily: LayoutSingle, MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
+    assert declaration_json(layout) == (
+        '{"families":[{"family":"test-layout-multi-family","records":["test-layout-first-backing",'
+        '"test-layout-second-backing"]},{"family":"test-layout-single-family",'
+        '"records":["test-layout-single-backing"]}],"format":1}'
+    )
+
+
+def test_storage_layout_import_does_not_import_sqlalchemy() -> None:
+    code = "import httk.data.storage_layout\nimport sys\nassert 'sqlalchemy' not in sys.modules"
+    subprocess.run([sys.executable, "-c", code], check=True, env=dict(os.environ))
+
+
+def test_common_save_and_paging_imports_do_not_import_sqlalchemy() -> None:
+    code = (
+        "import httk.data.store_common\n"
+        "import httk.data.query.paging_tokens\n"
+        "import sys\n"
+        "assert 'sqlalchemy' not in sys.modules"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=dict(os.environ))
 
 
 def test_empty_database_requires_declaration_and_stamps_metadata_only(database: Database) -> None:
@@ -153,8 +182,7 @@ def test_multi_record_store_reopens_with_its_dispatch_table(database: Database) 
 
     assert reopened.fetch(LayoutFirst, sid) == LayoutFirst("first")
 
-    dispatch_name = store.entry_layout[0].dispatch_table_name
-    assert dispatch_name is not None
+    dispatch_name = entry_dispatch_table_name(store.entry_layout[0].name)
     with database.engine.begin() as connection:
         connection.execute(sqlalchemy.text(f'DROP TABLE "{dispatch_name}"'))
         connection.execute(sqlalchemy.text(f'CREATE VIEW "{dispatch_name}" AS SELECT "first" AS content_id'))
@@ -277,7 +305,7 @@ def test_registry_normalization_and_single_record_dispatch_free_storage(database
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     family = store.entry_layout[0]
     assert family.record_names == ("test-layout-single-backing",)
-    assert family.dispatch_table_name is None
+    assert not hasattr(family, "dispatch_table_name")
     record = LayoutSingle("single")
     assert store.fetch_entry(LayoutFamily, content_id(record)) is None
     sid = store.save(record)

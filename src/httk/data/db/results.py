@@ -11,12 +11,6 @@ import sqlalchemy
 from httk.core import FracScalar, FracVector
 
 from httk.data.db.mapping import SID_COLUMN
-from httk.data.db.paging import (
-    _decode_continuation,
-    _DecodedContinuation,
-    _encode_continuation,
-    _plan_fingerprint,
-)
 from httk.data.db.rows import RowHydrator
 from httk.data.db.schema import FieldSpec, resolve_schema
 from httk.data.db.searcher import SqlSearcher, _Output
@@ -28,6 +22,12 @@ from httk.data.query import (
     ResultPage,
     ResultRow,
     UnsupportedQueryError,
+)
+from httk.data.query.paging_tokens import (
+    _decode_continuation,
+    _DecodedContinuation,
+    _encode_continuation,
+    _plan_fingerprint,
 )
 
 __all__ = [

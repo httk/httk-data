@@ -171,8 +171,6 @@ def test_cursor_proxy_is_a_reused_unhashable_expiring_view(store):
         copy.copy(proxy)
     with pytest.raises(TypeError):
         pickle.dumps(proxy)
-    with pytest.raises(TypeError):
-        store.save(proxy)
     second = next(cursor)
     with pytest.raises(ExpiredCursorRowError):
         _ = proxy.name

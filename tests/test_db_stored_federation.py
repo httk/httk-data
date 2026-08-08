@@ -22,6 +22,7 @@ from httk.data.db import (
     StoredEntrySource,
 )
 from httk.data.query.optimade_filters import FilterTranslationError
+from httk.data.store_common import EntryStore
 
 CALCULATIONS_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 _RESPONSES: list[str] = []
@@ -129,6 +130,31 @@ register_entry_record(
 def _record(label: str, modified: datetime.datetime | None = None, *, second: bool = False):
     cls = FederationSecond if second else FederationFirst
     return cls(label, modified)
+
+
+def test_stored_entry_source_accepts_structural_entry_store() -> None:
+    class MinimalEntryStore:
+        entry_layout = ()
+
+        def searcher(self):
+            raise AssertionError("the acceptance test must not query the fake store")
+
+        def fetch(self, cls: type, sid: int) -> object:
+            raise AssertionError("the acceptance test must not fetch from the fake store")
+
+    class MissingEntryStore:
+        entry_layout = ()
+
+        def searcher(self):
+            raise AssertionError("the acceptance test must not query the fake store")
+
+    store = MinimalEntryStore()
+    source = StoredEntrySource(store, FederatedCalculation, "fake")
+
+    assert isinstance(store, EntryStore)
+    assert source.store is store
+    with pytest.raises(TypeError, match="EntryStore"):
+        StoredEntrySource(MissingEntryStore(), FederatedCalculation, "missing")
 
 
 @pytest.fixture(params=("sqlite", "duckdb"))

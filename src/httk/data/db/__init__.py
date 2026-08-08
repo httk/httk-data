@@ -53,6 +53,7 @@ __all__ = [
     "STORAGE_PROTOCOL_VERSION",
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "MultipleResultsError",
@@ -79,6 +80,7 @@ __all__ = [
 
 _SQL_EXPORTS = {
     "Database": ".engine",
+    "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",

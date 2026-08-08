@@ -21,8 +21,64 @@ entries are already absolute.
 
 import os
 
+import pytest
+from httk.data.db import Database, SqlStore
+
 _PYTHONPATH = os.environ.get("PYTHONPATH")
 if _PYTHONPATH:
     os.environ["PYTHONPATH"] = os.pathsep.join(
         os.path.abspath(entry) if entry else entry for entry in _PYTHONPATH.split(os.pathsep)
     )
+
+
+@pytest.fixture(params=["sqlite", "duckdb"])
+def store_backend(request):
+    """Select each backend supported by the neutral store behavior suite."""
+    if request.param == "duckdb":
+        pytest.importorskip("duckdb_engine")
+    yield request.param
+
+
+class _StoreFactory:
+    """Callable factory returning real stores plus a same-database reopen path."""
+
+    def __init__(self, backend, databases):
+        self._backend = backend
+        self._databases = databases
+        self._stores = {}
+
+    def __call__(self, *, entry_records=None):
+        if self._backend == "sqlite":
+            database = Database.sqlite()
+        else:
+            # A later MongoDB backend can join by adding one param + one branch.
+            database = Database.duckdb()
+        self._databases.append(database)
+        declaration = entry_records if entry_records is not None else {}
+        store = SqlStore(database, entry_records=declaration)
+        self._stores[id(store)] = (store, database, declaration)
+        return store
+
+    def reopen(self, store):
+        """Return a fresh real store over the database used by ``store``."""
+        try:
+            original, database, declaration = self._stores[id(store)]
+        except KeyError as error:
+            raise ValueError("store was not created by this store_factory") from error
+        if original is not store:
+            raise ValueError("store was not created by this store_factory")
+        # A future MongoDB branch returns a new MongoStore over the same server database.
+        return SqlStore(database, entry_records=declaration)
+
+
+@pytest.fixture
+def store_factory(store_backend):
+    """Build fresh stores on fresh in-memory databases and dispose them at teardown."""
+    databases = []
+    factory = _StoreFactory(store_backend, databases)
+
+    try:
+        yield factory
+    finally:
+        for database in databases:
+            database.dispose()

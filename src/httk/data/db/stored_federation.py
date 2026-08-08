@@ -1,8 +1,7 @@
 """Bounded, durable federation of stored entry-family property plans.
 
 Unlike :mod:`httk.data.federated_store`, which is the general portable query
-protocol, this module joins only configured
-:class:`~httk.data.db.store.SqlStore` entry families.
+protocol, this module joins only configured durable entry families.
 It can therefore retain a stable backing inventory, push candidate filtering
 and bounds into SQL, and delay record hydration until a global page is known.
 """
@@ -13,16 +12,19 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from httk.core.optimade import FilterAst
 
-from httk.data.db.store import SqlStore
 from httk.data.db.stored_properties import (
     StoredPropertySqlCandidateStream,
     StoredPropertySqlPlan,
     stored_property_sql_plan,
 )
+from httk.data.store_common import EntryStore
+
+if TYPE_CHECKING:
+    from httk.data.db.store import SqlStore
 
 __all__ = [
     "DuplicateEntryIdError",
@@ -40,27 +42,27 @@ _CONTENT_ID_CHARACTERS: Final = frozenset("0123456789abcdef")
 
 @dataclass(frozen=True)
 class StoredEntrySource:
-    """One named configured family in one durable SQL store.
+    """One named configured family in one durable entry store.
 
     ``public_id_prefix`` is concatenated with every backing's canonical
     content id.  It is intentionally not required to be unique: callers may
     retain a legacy unprefixed source, in which case collisions are detected
     when their visible ids are fetched or explicitly audited.
 
-    :param store: The durable SQL store containing the entry family.
+    :param store: The durable entry store containing the entry family.
     :param entry_family: The logical entry-family class to serve.
     :param name: The unique name used to identify this source.
     :param public_id_prefix: The prefix prepended to canonical content ids.
     """
 
-    store: SqlStore
+    store: EntryStore
     entry_family: type
     name: str
     public_id_prefix: str = ""
 
     def __post_init__(self) -> None:
-        if not isinstance(self.store, SqlStore):
-            raise TypeError("StoredEntrySource.store must be a SqlStore")
+        if not isinstance(self.store, EntryStore):
+            raise TypeError("StoredEntrySource.store must be an EntryStore")
         if not isinstance(self.entry_family, type):
             raise TypeError("StoredEntrySource.entry_family must be an entry-family class")
         if not isinstance(self.name, str) or not self.name or self.name != self.name.strip():
@@ -222,7 +224,12 @@ class StoredEntryFederation:
                 stacklevel=2,
             )
         resolved_sources = tuple(
-            _ResolvedSource(source, index, stored_property_sql_plan(source.store, source.entry_family))
+            _ResolvedSource(
+                source,
+                index,
+                # Plan acquisition remains backend-specific until the neutral plan hook lands.
+                stored_property_sql_plan(cast("SqlStore", source.store), source.entry_family),
+            )
             for index, source in enumerate(values)
         )
         entry_type = resolved_sources[0].plan.entry_type

@@ -1,8 +1,7 @@
-"""Tests for the SQL layer (httk.data.db.engine/mapping/store): DDL, round-trips, dedup, transactions."""
+"""SQL-physical store mechanics: DDL, SQL layout, transactions, and identity behavior."""
 
 import datetime
 import gc
-import math
 import os
 import pathlib
 import subprocess
@@ -14,9 +13,9 @@ from typing import Annotated, ClassVar
 import pytest
 import sqlalchemy
 from httk.core import FracScalar, FracVector
-from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, content_id, stored_property
+from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 
-from httk.data.db import Database, SchemaError, SqlStore, resolve_schema
+from httk.data.db import Database, SqlStore, resolve_schema
 from httk.data.db.mapping import sqlalchemy_metadata, table_for
 
 
@@ -242,58 +241,11 @@ def test_table_for_is_idempotent_per_metadata():
 # --------------------------------------------------------------------- round trips
 
 
-def test_round_trip_equality(database):
+def test_reopened_sql_store_does_not_reuse_live_identity(database):
     sample = make_sample()
     sid = SqlStore(database, entry_records={}).save(sample)
     fetched = SqlStore(database).fetch(Sample, sid)  # a reopened store: no identity cache involved
     assert fetched is not sample
-    assert fetched == sample
-    assert isinstance(fetched.symbols, list)
-    assert isinstance(fetched.tags, tuple)
-    assert fetched.scratch == "unstored"
-    assert fetched.natoms == 3
-
-
-def test_round_trip_exact_rationals(database):
-    sample = make_sample()
-    store = SqlStore(database, entry_records={})
-    sid = store.save(sample)
-    fetched = SqlStore(database).fetch(Sample, sid)
-    assert fetched.ratio == Fraction(1, 3)
-    assert fetched.scale.to_fraction() == Fraction(2, 7)
-    assert fetched.cell == sample.cell
-    assert fetched.coords == sample.coords
-    assert fetched.ratios == [Fraction(1, 3), Fraction(-7, 5)]
-
-
-def test_round_trip_optionals_present(database):
-    sample = make_sample(note="a note", weight=1.25)
-    store = SqlStore(database, entry_records={})
-    sid = store.save(sample)
-    fetched = SqlStore(database).fetch(Sample, sid)
-    assert fetched.note == "a note"
-    assert fetched.weight == 1.25
-
-
-def test_float_round_trip_and_content_lookup_preserve_signed_zero(database):
-    record = FloatRecord(-0.0, (-0.0, 0.0, 1.25))
-    key = content_id(record)
-    sid = SqlStore(database, entry_records={}).save(record)
-    reopened = SqlStore(database)
-    fetched = reopened.fetch(FloatRecord, sid)
-    assert content_id(fetched) == key
-    assert reopened.fetch_by_content_id(FloatRecord, key) == fetched
-    assert math.copysign(1.0, fetched.scalar) == -1.0
-    assert [math.copysign(1.0, value) for value in fetched.values[:2]] == [-1.0, 1.0]
-
-
-def test_round_trip_optional_reference_none(database):
-    sample = make_sample(reference=None)
-    store = SqlStore(database, entry_records={})
-    sid = store.save(sample)
-    fetched = SqlStore(database).fetch(Sample, sid)
-    assert fetched.reference is None
-    assert fetched == sample
 
 
 def test_derived_property_is_stored_in_parent_table(database):
@@ -303,34 +255,20 @@ def test_derived_property_is_stored_in_parent_table(database):
     assert stored == 3
 
 
-def test_fixed_array_accepts_single_row_for_shape_1_n(database):
-    store = SqlStore(database, entry_records={})
-    sid = store.save(RowVector(FracVector.create([Fraction(1, 3), 1, 0])))
-    fetched = SqlStore(database).fetch(RowVector, sid)
-    assert fetched.vec == FracVector.create([[Fraction(1, 3), 1, 0]])
-
-
-def test_fixed_array_wrong_shape_raises_naming_field(database):
-    with pytest.raises(ValueError, match="cell"):
-        SqlStore(database, entry_records={}).save(make_sample(cell=FracVector.create([[1, 0], [0, 1]])))
-
-
 # --------------------------------------------------------------------- dedup
 
 
 def test_dedup_content_id_reuses_row(database):
     store = SqlStore(database, entry_records={})
-    sid1 = store.save(Author("Ada", 1852))
-    sid2 = store.save(Author("Ada", 1852))
-    assert sid1 == sid2
+    store.save(Author("Ada", 1852))
+    store.save(Author("Ada", 1852))
     assert _count(database, "author") == 1
 
 
 def test_dedup_content_id_does_not_duplicate_children(database):
     store = SqlStore(database, entry_records={})
-    sid1 = store.save(make_sample())
-    sid2 = store.save(make_sample())
-    assert sid1 == sid2
+    store.save(make_sample())
+    store.save(make_sample())
     assert _count(database, "sample") == 1
     assert _count(database, "sample_symbols") == 3
     assert _count(database, "sample_authors") == 1
@@ -339,20 +277,17 @@ def test_dedup_content_id_does_not_duplicate_children(database):
 
 def test_dedup_by_value_matches_parent_columns(database):
     store = SqlStore(database, entry_records={})
-    sid1 = store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
-    sid2 = store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
-    assert sid1 == sid2
+    store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
+    store.save(AuthorTag(Author("Ada", 1852), "role", "pioneer"))
     assert _count(database, "author_tag") == 1
-    sid3 = store.save(AuthorTag(Author("Ada", 1852), "role", "mathematician"))
-    assert sid3 != sid1
+    store.save(AuthorTag(Author("Ada", 1852), "role", "mathematician"))
     assert _count(database, "author_tag") == 2
 
 
 def test_dedup_none_always_inserts(database):
     store = SqlStore(database, entry_records={})
-    sid1 = store.save(LogEvent("started"))
-    sid2 = store.save(LogEvent("started"))
-    assert sid1 != sid2
+    store.save(LogEvent("started"))
+    store.save(LogEvent("started"))
     assert _count(database, "log_event") == 2
 
 
@@ -379,11 +314,6 @@ def test_transaction_shares_connection_and_commits(database):
     assert _count(database, "author") == 2
 
 
-def test_save_outside_transaction_autocommits(database):
-    sid = SqlStore(database, entry_records={}).save(Author("C", 3))
-    assert SqlStore(database).fetch(Author, sid) == Author("C", 3)
-
-
 # --------------------------------------------------------------------- identity cache
 
 
@@ -399,10 +329,6 @@ def test_save_then_fetch_returns_saved_object(database):
     sid = store.save(author)
     assert store.fetch(Author, sid) is author
     assert store.sid_of(author) == sid
-
-
-def test_sid_of_unknown_object_is_none(database):
-    assert SqlStore(database, entry_records={}).sid_of(Author("New", 1900)) is None
 
 
 def test_sid_of_tracks_unhashable_instances(database):
@@ -431,7 +357,7 @@ def test_sid_of_tracks_unhashable_instances(database):
     assert len(store._sids_by_identity) < tracked_with_throwaway
 
 
-def test_implicit_rollback_clears_recursively_saved_child_caches(database):
+def test_sql_unique_violation_rolls_back_recursive_save(database):
     store = SqlStore(database, entry_records={})
     store.save(RollbackParent(RollbackChild("kept"), "unique"))
     rolled_back = RollbackChild("rolled back")
@@ -439,16 +365,14 @@ def test_implicit_rollback_clears_recursively_saved_child_caches(database):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
         store.save(RollbackParent(rolled_back, "unique"))
 
-    assert store.sid_of(rolled_back) is None
     with pytest.raises(KeyError):
         store.fetch(RollbackChild, 2)
 
 
-def test_optional_child_none_and_empty_round_trip_and_presence_query(database):
+def test_sql_optional_child_presence_query(database):
     store = SqlStore(database, entry_records={})
     sids = [store.save(OptionalChildRoundTrip("value", notes)) for notes in (None, [], ["note"])]
     fresh = SqlStore(database)
-    assert [fresh.fetch(OptionalChildRoundTrip, sid).notes for sid in sids] == [None, [], ["note"]]
 
     searcher = fresh.searcher()
     variable = searcher.variable(OptionalChildRoundTrip)
@@ -457,62 +381,10 @@ def test_optional_child_none_and_empty_round_trip_and_presence_query(database):
     assert [result[0][0] for result in searcher] == [fresh.fetch(OptionalChildRoundTrip, sid) for sid in sids[1:]]
 
 
-def test_fetch_missing_sid_raises_keyerror(database):
-    store = SqlStore(database, entry_records={})
-    store.ensure_tables(Author)
-    with pytest.raises(KeyError):
-        store.fetch(Author, 424242)
-
-
 # --------------------------------------------------------------------- referring
 
 
-def test_referring_returns_matching_join_objects(database):
-    store = SqlStore(database, entry_records={})
-    ada = Author("Ada", 1852)
-    boole = Author("Boole", 1854)
-    store.save(ada)
-    store.save(boole)
-    tag1 = AuthorTag(ada, "role", "pioneer")
-    tag2 = AuthorTag(ada, "field", "computing")
-    tag3 = AuthorTag(boole, "field", "logic")
-    for tag in (tag1, tag2, tag3):
-        store.save(tag)
-    assert store.referring(AuthorTag, field="author", to=ada) == [tag1, tag2]
-    assert store.referring(AuthorTag, field="author", to=boole) == [tag3]
-
-
-def test_referring_rejects_unknown_object(database):
-    store = SqlStore(database, entry_records={})
-    store.ensure_tables(AuthorTag)
-    with pytest.raises(ValueError, match="has not been stored"):
-        store.referring(AuthorTag, field="author", to=Author("New", 1900))
-
-
-def test_referring_rejects_non_reference_field_and_wrong_target(database):
-    store = SqlStore(database, entry_records={})
-    ada = Author("Ada", 1852)
-    store.save(ada)
-    with pytest.raises(SchemaError):
-        store.referring(AuthorTag, field="tag", to=ada)
-    with pytest.raises(SchemaError):
-        store.referring(AuthorTag, field="author", to=LogEvent("x"))
-
-
 # --------------------------------------------------------------------- fetch_by_content_id
-
-
-def test_fetch_by_content_id_found_and_missing(database):
-    store = SqlStore(database, entry_records={})
-    ada = Author("Ada", 1852)
-    store.save(ada)
-    assert store.fetch_by_content_id(Author, content_id(ada)) is ada
-    assert store.fetch_by_content_id(Author, "0" * 64) is None
-
-
-def test_fetch_by_content_id_rejects_other_policies(database):
-    with pytest.raises(SchemaError, match="content_id"):
-        SqlStore(database, entry_records={}).fetch_by_content_id(LogEvent, "0" * 64)
 
 
 # --------------------------------------------------------------------- database lifecycle

@@ -33,25 +33,18 @@ lookups fall back to the database.
 
 import contextlib
 import datetime
-import functools
 import threading
-import types
 import typing
-import weakref
 from collections.abc import Iterable, Iterator, Mapping
-from dataclasses import dataclass
-from typing import Annotated, Any, cast
+from typing import Any, cast
 
 import sqlalchemy
 from httk.core import (
     FracVector,
 )
 from httk.core.storage import (
-    IdentitySkip,
     Shape,
     StorageProjectionCycleError,
-    content_id,
-    project_storage_record,
     resolve_storage_record,
 )
 from sqlalchemy.exc import SQLAlchemyError
@@ -83,108 +76,30 @@ from httk.data.db.mapping import (
     SID_COLUMN,
     backing_dispatch_column_name,
     dispatch_table_for,
+    entry_dispatch_table_name,
     table_for,
 )
 from httk.data.db.rows import RowHydrator, StaleResultError, decode_field, is_lazy_row, lazy_row_identity
 from httk.data.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.data.db.searcher import SqlSearcher
+from httk.data.store_common import (
+    _MISSING_METADATA,
+    EntryDispatchIntegrityError,
+    EntryMetadataConflictError,
+    IdentityCaches,
+    SaveProjection,
+    _metadata_plan,
+    _MetadataPlan,
+    reject_cursor_proxy,
+)
+
+_Projection = SaveProjection
 
 __all__ = [
     "EntryDispatchIntegrityError",
     "EntryMetadataConflictError",
     "SqlStore",
 ]
-
-
-class EntryMetadataConflictError(ValueError):
-    """Stored identity-excluded metadata differs from a repeated save."""
-
-
-class EntryDispatchIntegrityError(RuntimeError):
-    """A persisted entry dispatch row does not name exactly its expected backing."""
-
-
-class _Projection:
-    """One-save projection cache shared by core identity and SQL encoding."""
-
-    def __init__(self) -> None:
-        self.values_by_source: dict[tuple[type, int], Mapping[str, object]] = {}
-        self.validated: set[tuple[type, int]] = set()
-        self.metadata_rows: dict[tuple[type, int], Mapping[str, Any]] = {}
-        self.metadata_children: dict[tuple[type, int, str], Any] = {}
-        self.metadata_content_ids: dict[tuple[type, int], str] = {}
-        self.active: set[tuple[type, int]] = set()
-        self.inserted: list[tuple[type, int]] = []
-
-    def projector(self, record_type: type, source: Any) -> Mapping[str, object]:
-        key = (record_type, id(source))
-        values = self.values_by_source.get(key)
-        if values is None:
-            values = project_storage_record(record_type, source)
-            self.values_by_source[key] = values
-        return values
-
-    def content_id(self, record_type: type, source: Any) -> str:
-        return content_id(source, as_record=record_type, projector=self.projector)
-
-
-@dataclass(frozen=True)
-class _MetadataPlan:
-    skipped_specs: tuple[FieldSpec, ...]
-    skipped_nested: tuple[FieldSpec, ...]
-    descend_specs: tuple[FieldSpec, ...]
-
-
-_MISSING_METADATA = object()
-
-
-@functools.cache
-def _metadata_reachable_types(record_type: type) -> frozenset[type]:
-    reachable: set[type] = set()
-    pending = [record_type]
-    while pending:
-        current = pending.pop()
-        if current in reachable:
-            continue
-        reachable.add(current)
-        pending.extend(
-            spec.target for spec in resolve_schema(current).fields if not spec.derived and spec.target is not None
-        )
-    return frozenset(reachable)
-
-
-def _metadata_has_plan(record_type: type) -> bool:
-    for reachable_type in _metadata_reachable_types(record_type):
-        hints = typing.get_type_hints(reachable_type, include_extras=True)
-        if any(
-            not spec.derived and _has_identity_skip(hints.get(spec.field))
-            for spec in resolve_schema(reachable_type).fields
-        ):
-            return True
-    return False
-
-
-@functools.cache
-def _metadata_plan(record_type: type) -> _MetadataPlan | None:
-    schema = resolve_schema(record_type)
-    hints = typing.get_type_hints(record_type, include_extras=True)
-    skipped_specs: list[FieldSpec] = []
-    skipped_nested: list[FieldSpec] = []
-    descend_specs: list[FieldSpec] = []
-    for spec in schema.fields:
-        if spec.derived:
-            continue
-        identity_skipped = _has_identity_skip(hints.get(spec.field))
-        if identity_skipped:
-            if spec.role in {"scalar", "encoded", "fixed_array"}:
-                skipped_specs.append(spec)
-            else:
-                skipped_nested.append(spec)
-        elif spec.target is not None and _metadata_has_plan(spec.target):
-            descend_specs.append(spec)
-    if not skipped_specs and not skipped_nested and not descend_specs:
-        return None
-    return _MetadataPlan(tuple(skipped_specs), tuple(skipped_nested), tuple(descend_specs))
 
 
 def _schema_object_type(kinds: frozenset[str]) -> object:
@@ -226,14 +141,7 @@ class SqlStore:
         self._tables_present: set[str] = set()
         self._initialized = False
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
-        self._instances: weakref.WeakValueDictionary[tuple[type, int], Any] = weakref.WeakValueDictionary()
-        self._sids: weakref.WeakKeyDictionary[Any, dict[type, int]] = weakref.WeakKeyDictionary()
-        self._sids_by_identity: dict[tuple[type, int], int] = {}
-        """Reverse cache for instances that cannot be hashed (e.g. they hold a list).
-
-        Keyed on ``id()``, with a finalizer dropping each entry when its
-        instance dies, so a recycled id can never resolve to a stale sid.
-        """
+        self._identity = IdentityCaches()
         self._local = threading.local()
         self._initialize_layout(entry_records)
 
@@ -245,6 +153,16 @@ class SqlStore:
         """
         assert self._layout is not None
         return self._layout
+
+    @property
+    def _instances(self) -> Any:
+        """Compatibility view of the shared instance cache for the SQL hydrator."""
+        return self._identity._instances
+
+    @property
+    def _sids_by_identity(self) -> Any:
+        """Compatibility view of the unhashable-instance reverse cache."""
+        return self._identity._sids_by_identity
 
     @property
     def entry_layout(self) -> tuple[EntryFamilyLayout, ...]:
@@ -374,7 +292,7 @@ class SqlStore:
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         declaration_owned = {
             METADATA_TABLE_NAME,
-            *(family.dispatch_table_name for family in persisted.families if family.dispatch_table_name is not None),
+            *(entry_dispatch_table_name(family.name) for family in persisted.families if len(family.records) > 1),
         }
         object_problems: dict[str, object] = {}
         for name, kinds in objects_before.items():
@@ -643,10 +561,9 @@ class SqlStore:
         :raises httk.data.db.store.EntryMetadataConflictError: If a deduplication hit has conflicting metadata.
         :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
         """
-        if getattr(obj, "__httk_cursor_proxy__", False):
-            raise TypeError("cursor rows cannot be saved; materialize the record first")
+        reject_cursor_proxy(obj)
         record_type = resolve_storage_record(obj, as_record=as_record)
-        projection = _Projection()
+        projection = SaveProjection()
         with self._write_connection() as connection:
             self._create_tables_for_write(connection, (record_type,))
             sid = self._save(connection, record_type, obj, projection, "")
@@ -954,8 +871,7 @@ class SqlStore:
                     sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == content_id)
                 ).scalar_one_or_none()
                 return None if sid is None else self._fetch(connection, backing, int(sid))
-            assert family.dispatch_table_name is not None
-            table = self._table(family.dispatch_table_name)
+            table = self._table(entry_dispatch_table_name(family.name))
             row = (
                 connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == content_id))
                 .mappings()
@@ -998,11 +914,11 @@ class SqlStore:
         if is_lazy_row(obj) and record_type is resolve_storage_record(obj):
             return lazy_identity[1] if lazy_identity is not None and lazy_identity[0] is self else None
         try:
-            cached = self._sids.get(obj, {}).get(record_type)
+            cached = self._identity._sids.get(obj, {}).get(record_type)
         except TypeError:
             cached = None
         if cached is None:
-            cached = self._sids_by_identity.get((record_type, id(obj)))
+            cached = self._identity._sids_by_identity.get((record_type, id(obj)))
         if cached is not None:
             return cached
 
@@ -1074,7 +990,7 @@ class SqlStore:
 
     def _fetch(self, connection: sqlalchemy.Connection, cls: type, sid: int) -> Any:
         sid = int(sid)
-        cached = self._instances.get((cls, sid))
+        cached = self._identity._instances.get((cls, sid))
         if cached is not None:
             return cached
         # The hydrator owns exact decoding and child/reference batching; this
@@ -1102,8 +1018,7 @@ class SqlStore:
     ) -> None:
         if len(family.records) == 1:
             return
-        assert family.dispatch_table_name is not None
-        table = self._table(family.dispatch_table_name)
+        table = self._table(entry_dispatch_table_name(family.name))
         column_name = backing_dispatch_column_name(family.record_names[family.records.index(backing)])
         existing = (
             connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == key))
@@ -1459,30 +1374,10 @@ class SqlStore:
         self._clear_identity_caches()
 
     def _clear_identity_caches(self) -> None:
-        self._instances.clear()
-        self._sids.clear()
-        self._sids_by_identity.clear()
+        self._identity._clear_identity_caches()
 
     def _remember(self, cls: type, sid: int, obj: Any, *, cache_instance: bool = True) -> None:
-        if cache_instance:
-            try:
-                self._instances[(cls, sid)] = obj
-            except TypeError:
-                return  # Not weak-referenceable; identity caching is best-effort.
-        try:
-            sids = self._sids.setdefault(obj, {})
-            sids[cls] = sid
-        except TypeError:
-            # Unhashable (a storable class holding a list field is): key the
-            # reverse cache on identity instead, dropping the entry when the
-            # instance dies. Without this, sid_of() — and so referring() —
-            # would report a just-saved instance as never stored.
-            key = (cls, id(obj))
-            try:
-                weakref.finalize(obj, self._sids_by_identity.pop, key, None)
-            except TypeError:
-                return  # Tuples and other non-weakrefable sources use database lookup.
-            self._sids_by_identity[key] = sid
+        self._identity._remember(cls, sid, obj, cache_instance=cache_instance)
 
 
 def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any) -> FracVector:
@@ -1513,16 +1408,6 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
         )
     rows = cast(tuple[tuple[int, ...], ...], tensor.noms)  # dim was validated two-dimensional above
     return [FracVector(noms_row, tensor.denom) for noms_row in rows]
-
-
-def _has_identity_skip(annotation: Any) -> bool:
-    origin = typing.get_origin(annotation)
-    if origin is Annotated:
-        arguments = typing.get_args(annotation)
-        return any(isinstance(marker, IdentitySkip) for marker in arguments[1:]) or _has_identity_skip(arguments[0])
-    if origin in (typing.Union, types.UnionType):
-        return any(_has_identity_skip(argument) for argument in typing.get_args(annotation))
-    return False
 
 
 def _field_path(path: str, field: str) -> str:

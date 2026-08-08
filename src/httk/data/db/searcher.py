@@ -253,6 +253,12 @@ class SqlColumn:
             return self._codec.encode(value)[self._query_index]
         return value
 
+    def _encode_set_values(self, values: tuple[Any, ...]) -> list[Any]:
+        """Encode set-operation values and reject NULL members on child fields."""
+        if self._from_child and any(value is None for value in values):
+            raise ValueError("None is not a valid member of a child-field set operation")
+        return [self._encode(value) for value in values]
+
     def _plain(self, clause: Any) -> SqlExpression:
         """A comparison on this column, rendered for both clause positions.
 
@@ -369,7 +375,7 @@ class SqlColumn:
         :param \\*values: The values to test for membership.
         :return: The membership condition.
         """
-        encoded = [self._encode(value) for value in values]
+        encoded = self._encode_set_values(values)
         non_null = [value for value in encoded if value is not None]
         includes_null = len(non_null) != len(encoded)
         if self._from_child:
@@ -416,7 +422,7 @@ class SqlColumn:
         :param \\*values: The values of which at least one child must match.
         :return: The matching SQL condition.
         """
-        member = self._element.in_([self._encode(value) for value in values])
+        member = self._element.in_(self._encode_set_values(values))
         return SqlExpression(
             _bool_clause(member),
             _bool_clause(self._match_count(member) > 0),
@@ -433,7 +439,7 @@ class SqlColumn:
         :param \\*values: The complete set of allowed child values.
         :return: The condition requiring every child value to match.
         """
-        outside = self._element.notin_([self._encode(value) for value in values])
+        outside = self._element.notin_(self._encode_set_values(values))
         return SqlExpression(
             sqlalchemy.true(),
             _bool_clause(self._match_count(outside) == 0),

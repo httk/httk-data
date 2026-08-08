@@ -134,56 +134,14 @@ def label_searcher(store):
     return searcher, variable
 
 
-# --------------------------------------------------------------------- operator matrix
-
-
-@pytest.mark.parametrize(
-    "build, expected",
-    [
-        (lambda v: v.formula == "NaCl", {"NaCl"}),
-        (lambda v: v.formula != "NaCl", ALL_FORMULAS - {"NaCl"}),
-        (lambda v: v.spacegroup < 221, {"SrCaTiO", "X"}),
-        (lambda v: v.spacegroup <= 221, {"CaTiO3", "SrCaTiO", "X"}),
-        (lambda v: v.spacegroup > 221, {"NaCl", "MgO", "CaO"}),
-        (lambda v: v.spacegroup >= 225, {"NaCl", "MgO", "CaO"}),
-        (lambda v: v.energy > Fraction(0), {"NaCl", "SrCaTiO", "X"}),
-        (lambda v: v.energy == Fraction(1, 2), {"NaCl"}),
-        (lambda v: v.energy != Fraction(1, 2), ALL_FORMULAS - {"NaCl"}),
-        (lambda v: v.energy < Fraction(0), {"CaTiO3", "MgO"}),
-        (lambda v: v.energy <= Fraction(-1, 3), {"CaTiO3", "MgO"}),
-        (lambda v: v.energy >= Fraction(7, 8), {"SrCaTiO", "X"}),
-        (lambda v: v.formula.contains("aTi"), {"CaTiO3", "SrCaTiO"}),
-        (lambda v: v.formula.startswith("Ca"), {"CaTiO3", "CaO"}),
-        (lambda v: v.formula.endswith("O"), {"MgO", "CaO", "SrCaTiO"}),
-        (lambda v: v.formula.is_in("NaCl", "MgO"), {"NaCl", "MgO"}),
-    ],
-)
-def test_operator_matrix(store, build, expected):
-    searcher, variable = rec_searcher(store)
-    searcher.add(build(variable))
-    assert formulas(searcher) == expected
-
-
-def test_combinators(store):
-    searcher, v = rec_searcher(store)
-    searcher.add((v.spacegroup == 225) & v.formula.startswith("M"))
-    assert formulas(searcher) == {"MgO"}
-
-    searcher, v = rec_searcher(store)
-    searcher.add((v.formula == "X") | (v.formula == "NaCl"))
-    assert formulas(searcher) == {"X", "NaCl"}
-
-    searcher, v = rec_searcher(store)
-    searcher.add(~(v.spacegroup == 225))
-    assert formulas(searcher) == {"CaTiO3", "SrCaTiO", "X"}
-
-
 # --------------------------------------------------------------- literal string matching
 
 # contains/startswith/endswith take literal text: `%` and `_` match themselves.
 # Each case pairs a query with the rows it must match; the LABELS rows that are
 # *not* listed are exactly the ones a naive (unescaped LIKE) rendering would
-# wrongly return.
+# wrongly return.  Case-sensitive matching is the neutral contract; any test
+# whose expected outcome depends on SQLite/DuckDB LIKE case behavior stays in
+# this SQL-side module rather than the shared suite.
 LITERAL_MATCH_CASES = [
     (lambda v: v.text.contains("50%"), {"50% Mg", "Mg 50%"}),
     (lambda v: v.text.contains("a_b"), {"a_b", "Mg a_b"}),
@@ -192,14 +150,6 @@ LITERAL_MATCH_CASES = [
     (lambda v: v.text.endswith("50%"), {"Mg 50%"}),
     (lambda v: v.text.endswith("a_b"), {"a_b", "Mg a_b"}),
 ]
-
-
-@pytest.mark.parametrize("build, expected", LITERAL_MATCH_CASES)
-def test_literal_string_matching_escapes_like_metacharacters(store, build, expected):
-    searcher, v = label_searcher(store)
-    searcher.add(build(v))
-    assert texts(searcher) == expected
-    assert searcher.count() == len(expected)
 
 
 def test_like_is_private_to_the_sql_backend(store):
@@ -213,12 +163,6 @@ def test_like_is_private_to_the_sql_backend(store):
 # --------------------------------------------------------------------- references
 
 
-def test_reference_chain_attribute(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.ref.doi == "10.1/a")
-    assert formulas(searcher) == {"CaTiO3", "NaCl"}
-
-
 def test_reference_chain_shares_one_join(store):
     searcher, v = rec_searcher(store)
     searcher.add(v.ref.doi == "10.1/b")
@@ -228,167 +172,7 @@ def test_reference_chain_shares_one_join(store):
     assert formulas(searcher) == {"MgO", "SrCaTiO"}
 
 
-def test_reference_equals_none(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.ref == None)
-    assert formulas(searcher) == {"CaO", "X"}
-
-
-def test_reference_not_equals_none(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.ref != None)
-    assert formulas(searcher) == ALL_FORMULAS - {"CaO", "X"}
-
-
-def test_reference_equals_stored_object(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.ref == REF_A)
-    assert formulas(searcher) == {"CaTiO3", "NaCl"}
-
-
-def test_reference_equals_unknown_object_raises(store):
-    _searcher, v = rec_searcher(store)
-    with pytest.raises(ValueError, match="has not been stored"):
-        v.ref == Reference("10.9/z", "Zeta")  # noqa: B015
-
-
-def test_reference_join_across_variables(store):
-    searcher = store.searcher()
-    t = searcher.variable(Tag)
-    v = searcher.variable(Rec)
-    searcher.add(t.rec == v)
-    searcher.add(t.tag == "quality")
-    searcher.output(v, "rec")
-    searcher.output(t.value, "value")
-    results = list(searcher)
-    assert {(item[0][0].formula, item[0][1]) for item in results} == {("CaTiO3", "good"), ("MgO", "bad")}
-    assert all(item[1] == ("rec", "value") for item in results)
-
-
-def test_self_join(store):
-    searcher = store.searcher()
-    a = searcher.variable(Rec)
-    b = searcher.variable(Rec)
-    searcher.add(a.formula == "NaCl")
-    searcher.add(a.spacegroup == b.spacegroup)
-    searcher.add(b.formula != "NaCl")
-    searcher.output(b, "rec")
-    assert formulas(searcher) == {"MgO", "CaO"}
-
-
 # --------------------------------------------------------------------- child set operations
-
-
-def test_has_any_where_position(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_any("O"))
-    assert formulas(searcher) == {"CaTiO3", "MgO", "CaO", "SrCaTiO"}
-
-
-def test_has_any_does_not_duplicate_parents(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_any("O", "Ca"))
-    results = list(searcher)
-    assert len(results) == 4  # CaTiO3 and CaO match twice each, but appear once
-    assert {item[0][0].formula for item in results} == {"CaTiO3", "MgO", "CaO", "SrCaTiO"}
-
-
-def test_has_only_exact_subset_superset_disjoint(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
-    # exact ({O,Ca,Ti}) and subset ({Ca,O}) match; superset (+Sr) and
-    # disjoint ({Na,Cl}, {Mg,O}) do not; the empty set matches (see below).
-    assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
-
-
-def test_has_only_includes_empty_child_record(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_only("Na", "Cl"))
-    # Locked-in semantics: a record with no child rows satisfies has_only
-    # (the empty set is a subset of any value set), matching the reference
-    # in-memory store's exact set predicate.
-    assert formulas(searcher) == {"NaCl", "X"}
-
-
-def test_has_any_excludes_empty_child_record(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_any("O", "Ca", "Ti", "Sr", "Na", "Cl", "Mg"))
-    assert formulas(searcher) == ALL_FORMULAS - {"X"}
-
-
-def test_not_has_any(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(~v.symbols.has_any("Ca", "Ti"))
-    # NOT (symbols HAS ANY "Ca","Ti"): records with no symbol in the set,
-    # including the record with no symbols at all. This is the exact result set
-    # the removed `~has_inv_any(...)` + add_all pattern produced.
-    assert formulas(searcher) == {"NaCl", "MgO", "X"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_not_has_only(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(~v.symbols.has_only("O", "Ca", "Ti"))
-    # NOT (symbols HAS ONLY "O","Ca","Ti"): some symbol outside the set. The
-    # exact result set the removed `~has_inv_only(...)` + add_all pattern gave.
-    assert formulas(searcher) == {"NaCl", "MgO", "SrCaTiO"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_has_only_alone_is_complete(store):
-    # Previously `add(has_only(...))` on its own rendered as constant TRUE and
-    # matched everything; the expression now carries its own post-filter
-    # placement, so one add() is the whole condition.
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.has_only("O", "Ca", "Ti"))
-    assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
-    assert searcher.count() == 3
-
-
-def test_is_in_on_a_child_field_is_for_all(store):
-    # On a child field is_in reads as "every child value is in the set" — the
-    # same aggregate as has_only, and likewise complete from a single add().
-    searcher, v = rec_searcher(store)
-    searcher.add(v.symbols.is_in("O", "Ca", "Ti"))
-    assert formulas(searcher) == {"CaTiO3", "CaO", "X"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_not_has_all_is_negation_of_anded_has_any(store):
-    # NOT (symbols HAS ALL "Ca","Ti"): everything except the records holding
-    # both. Negating a conjunction of set predicates goes through the aggregate.
-    searcher, v = rec_searcher(store)
-    searcher.add(~(v.symbols.has_any("Ca") & v.symbols.has_any("Ti")))
-    assert formulas(searcher) == ALL_FORMULAS - {"CaTiO3", "SrCaTiO"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_double_not_round_trips(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(~~v.symbols.has_any("Ca", "Ti"))
-    assert formulas(searcher) == {"CaTiO3", "CaO", "SrCaTiO"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_not_inside_and_with_a_scalar(store):
-    searcher, v = rec_searcher(store)
-    searcher.add((v.spacegroup == 225) & ~v.symbols.has_any("Ca"))
-    assert formulas(searcher) == {"NaCl", "MgO"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_not_over_a_mixed_conjunction(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(~((v.spacegroup == 225) & v.symbols.has_any("Ca")))
-    assert formulas(searcher) == ALL_FORMULAS - {"CaO"}
-    assert searcher.count() == len(list(searcher))
-
-
-def test_not_over_a_mixed_disjunction(store):
-    searcher, v = rec_searcher(store)
-    searcher.add(~((v.spacegroup == 225) | v.symbols.has_any("Ti")))
-    assert formulas(searcher) == {"X"}
-    assert searcher.count() == len(list(searcher))
 
 
 def test_repeated_child_access_makes_fresh_joins(store):
