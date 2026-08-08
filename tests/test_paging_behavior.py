@@ -39,7 +39,7 @@ ROWS = (
 @pytest.fixture(autouse=True)
 def _require_query_support(store_factory):
     """Paging behavior is deferred for backends without a searcher."""
-    if not hasattr(store_factory(), "searcher"):
+    if not hasattr(store_factory(), "searcher") or not getattr(store_factory(), "supports_page", True):
         pytest.skip("backend has no query support yet")
 
 

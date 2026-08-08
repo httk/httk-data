@@ -94,6 +94,9 @@ class MongoStore:
         persisted layout is not trusted by this implementation.
     """
 
+    supports_page = True
+    """Whether this backend implements keyset result paging."""
+
     def __init__(
         self,
         database: MongoDatabase,
@@ -989,6 +992,19 @@ class MongoStore:
         sid = int(document["_id"])
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
+
+    def searcher(self) -> Any:
+        """Return a Mongo searcher bound to this store's read path.
+
+        Queries use the active transaction session when one is open, so they
+        see that transaction's uncommitted writes, and object outputs hydrate
+        through :meth:`fetch`, preserving the identity-cache contract.
+
+        :return: A new MongoDB searcher bound to this store.
+        """
+        from .searcher import MongoSearcher
+
+        return MongoSearcher(self)
 
     def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
         """Return records whose reference field points at ``to``, ordered by sid.

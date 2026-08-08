@@ -19,15 +19,11 @@ child-of-storable fields.
 """
 
 from collections.abc import Callable, Mapping
-from typing import Any, cast
+from typing import Any
 
-from httk.core import (
-    EntryTypeDefinition,
-    PropertyDefinition,
-)
+from httk.core import EntryTypeDefinition
 from httk.core.optimade import FilterAst
 
-from httk.data.db.entry_provider import served_specs
 from httk.data.db.schema import resolve_schema
 from httk.data.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable
 from httk.data.db.store import SqlStore
@@ -39,24 +35,11 @@ from httk.data.query.optimade_filters import (
     set_handler,
     simple_property_handlers,
 )
+from httk.data.served_specs import definition_fulltype, served_specs
 
 __all__ = [
     "optimade_filter_searcher",
 ]
-
-
-def _fulltype_from_doc(doc: Mapping[str, Any]) -> str:
-    optimade_type = doc["x-optimade-type"]
-    if optimade_type == "list":
-        return "list of " + _fulltype_from_doc(doc["items"])
-    if optimade_type == "dictionary":
-        return "dict"
-    return cast(str, optimade_type)
-
-
-def _definition_fulltype(definition: PropertyDefinition) -> str:
-    """The ``fulltype`` string a property definition describes."""
-    return _fulltype_from_doc(definition.as_optimade())
 
 
 def _related_sid(related_type: str, value: Any) -> int:
@@ -181,7 +164,7 @@ def optimade_filter_searcher(
         for name, prop in definition.properties.items():
             if name in ("id", "type"):
                 continue
-            property_fulltypes[name] = _definition_fulltype(prop)
+            property_fulltypes[name] = definition_fulltype(prop)
 
     handlers = simple_property_handlers(cls.__name__, property_keys, property_fulltypes)
     # The default id/type handlers of simple_property_handlers query the

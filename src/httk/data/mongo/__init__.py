@@ -6,24 +6,46 @@ loaded lazily so applications that do not use MongoDB do not need the optional
 """
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .database import MongoDatabase, TransactionsUnavailableError
+    from .documents import RecordTooLargeError
+    from .fsck import FsckCollectionSummary, FsckSummary
+    from .leases import StoreLockedError, clear_stale_lock
+    from .optimade import optimade_filter_searcher
+    from .results import MongoResultSet
+    from .searcher import MongoExpression, MongoField, MongoSearcher, MongoVariable
+    from .store import MongoStore
 
 __all__ = [
     "FsckCollectionSummary",
     "FsckSummary",
     "MongoDatabase",
+    "MongoExpression",
+    "MongoField",
+    "MongoResultSet",
+    "MongoSearcher",
     "MongoStore",
+    "MongoVariable",
     "RecordTooLargeError",
     "StoreLockedError",
     "TransactionsUnavailableError",
     "clear_stale_lock",
+    "optimade_filter_searcher",
 ]
 
 _MONGO_EXPORTS = {
     "FsckCollectionSummary": ".fsck",
     "FsckSummary": ".fsck",
     "MongoDatabase": ".database",
+    "MongoExpression": ".searcher",
+    "MongoField": ".searcher",
+    "MongoResultSet": ".results",
+    "MongoSearcher": ".searcher",
     "MongoStore": ".store",
+    "MongoVariable": ".searcher",
+    "optimade_filter_searcher": ".optimade",
     "RecordTooLargeError": ".documents",
     "StoreLockedError": ".leases",
     "TransactionsUnavailableError": ".database",

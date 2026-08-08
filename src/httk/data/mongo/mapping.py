@@ -308,12 +308,15 @@ def validator_for(schema: TableSchema) -> dict[str, Any]:
         field_properties.update(field_props)
         dependencies.update(field_dependencies)
         field_required.extend(required_fields)
-    properties["f"] = {
+    f_schema: dict[str, Any] = {
         "bsonType": "object",
         "properties": field_properties,
-        "required": field_required,
         "additionalProperties": True,
     }
+    # MongoDB rejects ``required: []`` even though JSON Schema permits it.
+    if field_required:
+        f_schema["required"] = field_required
+    properties["f"] = f_schema
     if dependencies:
         properties["f"]["dependencies"] = dependencies
     return {
