@@ -20,8 +20,10 @@ entries are already absolute.
 """
 
 import os
+import uuid
 
 import pytest
+
 from httk.data.db import Database, SqlStore
 
 _PYTHONPATH = os.environ.get("PYTHONPATH")
@@ -31,11 +33,27 @@ if _PYTHONPATH:
     )
 
 
-@pytest.fixture(params=["sqlite", "duckdb"])
+@pytest.fixture(params=["sqlite", "duckdb", "mongo"])
 def store_backend(request):
     """Select each backend supported by the neutral store behavior suite."""
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
+    if request.param == "mongo":
+        uri = os.environ.get("HTTK_TEST_MONGODB_URI")
+        if not uri:
+            pytest.skip("HTTK_TEST_MONGODB_URI is not set")
+        from pymongo import MongoClient
+
+        try:
+            client = MongoClient(uri, serverSelectionTimeoutMS=1000)
+            client.admin.command("ping")
+        except Exception as error:
+            pytest.skip(f"MongoDB test server is unreachable: {error}")
+        finally:
+            try:
+                client.close()
+            except UnboundLocalError:
+                pass
     yield request.param
 
 
@@ -50,12 +68,21 @@ class _StoreFactory:
     def __call__(self, *, entry_records=None):
         if self._backend == "sqlite":
             database = Database.sqlite()
-        else:
-            # A later MongoDB backend can join by adding one param + one branch.
+            declaration = entry_records if entry_records is not None else {}
+            store = SqlStore(database, entry_records=declaration)
+        elif self._backend == "duckdb":
             database = Database.duckdb()
+            declaration = entry_records if entry_records is not None else {}
+            store = SqlStore(database, entry_records=declaration)
+        else:
+            from httk.data.mongo import MongoDatabase, MongoStore
+
+            name = f"httk_behavior_{uuid.uuid4().hex}"
+            uri = os.environ["HTTK_TEST_MONGODB_URI"]
+            database = MongoDatabase.connect(uri, database=name, transactions="never")
+            declaration = entry_records if entry_records is not None else {}
+            store = MongoStore(database, entry_records=declaration)
         self._databases.append(database)
-        declaration = entry_records if entry_records is not None else {}
-        store = SqlStore(database, entry_records=declaration)
         self._stores[id(store)] = (store, database, declaration)
         return store
 
@@ -67,7 +94,14 @@ class _StoreFactory:
             raise ValueError("store was not created by this store_factory") from error
         if original is not store:
             raise ValueError("store was not created by this store_factory")
-        # A future MongoDB branch returns a new MongoStore over the same server database.
+        if self._backend == "mongo":
+            from httk.data.mongo import MongoDatabase, MongoStore
+
+            mongo_database = MongoDatabase.connect(
+                os.environ["HTTK_TEST_MONGODB_URI"], database=database.database.name, transactions="never"
+            )
+            self._databases.append(mongo_database)
+            return MongoStore(mongo_database, entry_records=declaration)
         return SqlStore(database, entry_records=declaration)
 
 
@@ -81,4 +115,27 @@ def store_factory(store_backend):
         yield factory
     finally:
         for database in databases:
+            if factory._backend == "mongo":
+                database.client.drop_database(database.database.name)
             database.dispose()
+
+
+@pytest.fixture
+def mongo_test_database():
+    """Yield a fresh live MongoDB database when the test URI is configured."""
+    uri = os.environ.get("HTTK_TEST_MONGODB_URI")
+    if not uri:
+        pytest.skip("HTTK_TEST_MONGODB_URI is not set")
+    from httk.data.mongo import MongoDatabase
+
+    name = f"httk_test_{uuid.uuid4().hex}"
+    try:
+        database = MongoDatabase.connect(uri, database=name)
+        database.database.command("ping")
+    except Exception as error:
+        pytest.skip(f"MongoDB test server is unreachable: {error}")
+    try:
+        yield database
+    finally:
+        database.client.drop_database(name)
+        database.dispose()

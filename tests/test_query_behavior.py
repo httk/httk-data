@@ -16,6 +16,13 @@ from test_db_searcher import ALL_FORMULAS, ALL_LABELS, LABELS, RECORDS, REF_A, R
 from test_db_stored_properties import CalculationEntry, FIRST, SECOND, GenericCalculationFirst, GenericCalculationSecond
 
 
+@pytest.fixture(autouse=True)
+def _require_query_support(store_factory):
+    """Query behavior is deferred for backends without a searcher."""
+    if not hasattr(store_factory(), "searcher"):
+        pytest.skip("backend has no query support yet")
+
+
 @pytest.fixture
 def query_store(store_factory):
     store = store_factory()

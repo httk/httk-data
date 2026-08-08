@@ -121,6 +121,9 @@ nitpick_ignore = [
     ("py:class", "typing.Optional"),
     ("py:class", "typing.Union"),
     ("py:class", "Ellipsis"),
+    # PyMongo publishes no usable intersphinx target for its client class; this
+    # targeted ignore follows the sanctioned external-type precedent in httk-core.
+    ("py:class", "pymongo.MongoClient"),
     # sqlalchemy is an optional dependency ([db] extra) whose docs inventory is
     # not vendored; the SQL layer's internal-facing signatures reference it.
     ("py:class", "sqlalchemy.Engine"),
