@@ -134,6 +134,118 @@ While a saved or fetched instance is alive, fetching its sid again returns the
 very same object. Join-objects pointing at a stored instance are found with
 `store.referring(TagClass, field="structure", to=record)`.
 
+## Bulk ingestion
+
+`store.bulk_ingest()` is a faster path than a `save()` loop for **building a
+store from scratch or appending a large increment** to one. It returns a
+`httk.data.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
+encoded rows with pre-assigned sids and appends them in `executemany` batches
+inside one transaction, instead of one statement round-trip and an in-database
+deduplication protocol per record. It is a near drop-in for the save loop:
+
+```python
+# Per-record save loop
+with store.transaction():
+    for structure in structures:
+        store.save(structure)
+```
+
+```python
+# Bulk-ingest drop-in
+with store.bulk_ingest() as bulk:
+    for structure in structures:
+        bulk.save(structure)
+```
+
+Reach for it when the increment is large; for a handful of records the ordinary
+`save()` path is simpler and the round-trips it saves are negligible.
+
+### Contract
+
+**Exclusive write ownership.** While a `bulk_ingest()` context is open the
+store's ordinary write path belongs to it: `save()`, `ensure_tables()`, and
+`transaction()` on the same `httk.data.db.SqlStore` raise `RuntimeError`, and a
+second `bulk_ingest()` context on the same store is refused. Reads are
+unaffected.
+
+**One spanning transaction, all-or-nothing.** The whole ingest runs in a single
+transaction that commits only on clean exit. Any exception — a metadata
+conflict, a uniqueness violation, or one you raise inside the block — rolls the
+transaction back, drops every table the context created, restores any index it
+dropped, removes its staging tables, and clears the store's identity caches,
+leaving the store exactly as it was before the context opened. Dropping the
+whole increment and retrying is therefore safe.
+
+**Deduplication and uniqueness are post-conditions, not per-row checks.** Within
+the stream, records deduplicate set-wise in memory by the class's
+`StorageInfo.dedup` policy (content identity by default, `by_value`, or `none`),
+exactly as `save()` would. Global uniqueness against what is already stored is
+enforced at the boundaries rather than per row: on a physically empty store the
+record tables are created index-less and their separable indexes (content-id
+uniqueness, `Indexed`/`Unique`, composite, and child parent-sid) are built once
+the stream completes — building the unique index *is* the verification, and a
+duplicate aborts the ingest. On a populated store each flushed chunk is staged
+into an ordinary `bulkstage_<table>` table and resolved set-wise against the
+target: a content-id anti-join, a `by_value` whole-parent-column anti-join with
+null-safe equality, and a sid remap that rewrites every still-buffered reference
+to the deduplicated existing sid.
+
+**Returned sids are provisional.** `bulk.save()` returns an integer sid like
+`save()`, but it is provisional while the context is open: a record that
+deduplicates against a row the store already held is remapped to that existing
+sid at flush. After the context exits cleanly,
+`httk.data.db.bulk.BulkIngest.resolved_sid` maps any returned sid — provisional
+or final — to its durable stored sid. It keys on the bare sid value, so resolve
+a returned sid against the type it was saved as (sids are allocated per table,
+and one value can recur across tables).
+
+**`verify_metadata`** (default `True`, a plain `bool`) controls whether a
+content-id hit compares its identity-excluded metadata against the first
+in-memory occurrence — or against the stored row for a hit against existing
+data — reproducing `save()` and raising
+`httk.data.store_common.EntryMetadataConflictError` on a conflict. Pass
+`verify_metadata=False` to skip the comparison when the stream is
+known-consistent.
+
+**`index_strategy`** (`"auto"`, `"keep"`, or `"rebuild"`, default `"auto"`)
+governs only how an *existing* table's separable indexes are handled during an
+append: `"keep"` appends through them, `"rebuild"` drops and recreates them at
+the end (where the unique-index creation re-verifies global uniqueness), and
+`"auto"` chooses per table by the staged-to-existing row ratio. On DuckDB, which
+reserves a dropped index's name until commit, a `"rebuild"` decision instead
+keeps the indexes in place — relying on their incremental maintenance — and
+verifies content-id uniqueness with a duplicate scan at finalize; the final
+indexes are identical either way.
+
+**Nested conflict paths differ by prefix.** Because the bulk encoder resolves
+referenced and child records eagerly and only discovers their existing-row hits
+at flush, an `httk.data.store_common.EntryMetadataConflictError` reached through
+a `descend` field (a non-skipped reference whose target itself carries skipped
+metadata) is reported at the descendant record's own path (`"Leaf.note"`) rather
+than the ancestor field path `save()` would use (`"Root.primary.note"`). The
+exception type, message template, and roll-back are identical; only the path
+prefix differs.
+
+**`chunk_size`** (default `100_000`) is the number of top-level `save()` calls
+buffered before a flush. Buffered rows and the in-memory dedup indexes are held
+until the next flush, so peak memory scales with the chunk size and each
+record's fan-out into child and reference rows: lower it for very wide records
+or a tight memory budget, raise it to amortize the staging round-trips over more
+rows. Identity caches are deliberately not populated by bulk ingestion.
+
+**`on_progress`** is an optional `(records_buffered_total, rows_flushed_total)`
+callback invoked after each flush, for progress reporting over a long build.
+
+### Performance
+
+Bulk ingestion gains most on flat records with little fan-out: measured against
+the per-record `save()` loop it is roughly **30x** faster on DuckDB and **13x**
+on SQLite for flat rows, easing to about **5x** (DuckDB) and **4x** (SQLite) for
+structure-shaped records whose child and reference tables dominate the row
+count. These figures come from single-threaded runs against a tmpfs database, so
+the per-record baseline they improve on is already I/O-favorable; both the
+speed-up and the absolute throughput will differ on slower storage.
+
 ## Searching
 
 `store.searcher()` opens a query through the backend-agnostic protocols in

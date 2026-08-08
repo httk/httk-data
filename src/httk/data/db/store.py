@@ -35,8 +35,8 @@ import contextlib
 import datetime
 import threading
 import typing
-from collections.abc import Iterable, Iterator, Mapping
-from typing import Any, cast
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import sqlalchemy
 from httk.core import (
@@ -93,7 +93,14 @@ from httk.data.store_common import (
     reject_cursor_proxy,
 )
 
+if TYPE_CHECKING:
+    from httk.data.db.bulk import BulkIngest
+
 _Projection = SaveProjection
+
+# A sid resolver assigns (by saving recursively, or by an in-memory allocator)
+# an integer sid to a referenced record: ``(record_type, source, path) -> sid``.
+type SidResolver = Callable[[type, Any, str], int]
 
 __all__ = [
     "EntryDispatchIntegrityError",
@@ -143,6 +150,7 @@ class SqlStore:
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
         self._identity = IdentityCaches()
         self._local = threading.local()
+        self._bulk_active = False
         self._initialize_layout(entry_records)
 
     @property
@@ -358,12 +366,73 @@ class SqlStore:
 
     # ------------------------------------------------------------------ tables and transactions
 
+    def _reject_during_bulk(self) -> None:
+        """Refuse ordinary writes while a :meth:`bulk_ingest` context owns the store.
+
+        :raises RuntimeError: If a bulk-ingest context is currently open.
+        """
+        if self._bulk_active:
+            raise RuntimeError(
+                "this SqlStore has an open bulk_ingest context; ordinary save/ensure_tables/transaction "
+                "operations are refused until it exits"
+            )
+
+    def bulk_ingest(
+        self,
+        *,
+        chunk_size: int = 100_000,
+        verify_metadata: bool = True,
+        index_strategy: Literal["auto", "keep", "rebuild"] = "auto",
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> "BulkIngest":
+        """Return a context manager that appends a stream of objects into this store.
+
+        The returned :class:`~httk.data.db.bulk.BulkIngest` exposes
+        ``save(obj, *, as_record=None) -> int`` mirroring :meth:`save`, but
+        buffers encoded rows with pre-assigned sids and appends them in
+        executemany batches. On a physically empty store the record tables are
+        created index-less and their separable indexes are built once the stream
+        completes; on a populated store each flushed chunk is staged and
+        resolved set-wise against the existing rows (content-id anti-join with
+        metadata verification, ``by_value`` whole-column anti-join, and a sid
+        remap of the surviving references) before it is appended. While the
+        context is open the store's ordinary write path is exclusively owned:
+        :meth:`save`, :meth:`ensure_tables` and :meth:`transaction` raise
+        :class:`RuntimeError`.
+
+        A sid returned by ``save`` inside the context is provisional: a record
+        that deduplicates against a pre-existing row is remapped at flush, so its
+        durable sid is obtained from :meth:`~httk.data.db.bulk.BulkIngest.resolved_sid`
+        once the context has exited cleanly.
+
+        :param chunk_size: The number of top-level saves buffered before a flush.
+        :param verify_metadata: Whether content-id hits compare identity-excluded metadata.
+        :param index_strategy: How an existing table's separable indexes are handled during the append —
+            ``"keep"`` appends through them, ``"rebuild"`` drops and recreates them, and ``"auto"`` picks
+            per table by the staged-to-existing row ratio. On DuckDB, which reserves a dropped index's name
+            until commit, ``"rebuild"`` instead keeps the indexes and verifies content-id uniqueness with a
+            duplicate scan; the final indexes are the same either way.
+        :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
+        :return: A bulk-ingest context manager bound to this store.
+        """
+        from httk.data.db.bulk import BulkIngest
+
+        return BulkIngest(
+            self,
+            chunk_size=chunk_size,
+            verify_metadata=verify_metadata,
+            index_strategy=index_strategy,
+            on_progress=on_progress,
+        )
+
     def ensure_tables(self, *classes: type) -> None:
         r"""Create the requested tables as an explicit write operation.
 
         :param \*classes: The storable classes whose tables should exist.
         :return: None.
+        :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
+        self._reject_during_bulk()
         with self._write_connection() as connection:
             self._create_tables_for_write(connection, classes)
 
@@ -376,6 +445,7 @@ class SqlStore:
 
     @contextlib.contextmanager
     def _transaction_scope(self) -> Iterator[None]:
+        self._reject_during_bulk()
         stack = self._connection_stack()
         if stack:
             yield
@@ -560,7 +630,9 @@ class SqlStore:
         :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
         :raises httk.data.db.store.EntryMetadataConflictError: If a deduplication hit has conflicting metadata.
         :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
+        :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
+        self._reject_during_bulk()
         reject_cursor_proxy(obj)
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
@@ -711,37 +783,11 @@ class SqlStore:
         path: str,
     ) -> dict[str, Any]:
         """Encode projected parent columns, saving referenced records recursively."""
-        values: dict[str, Any] = {}
-        for spec in schema.fields:
-            if spec.role == "child":
-                if spec.optional:
-                    values[f"{spec.field}_present"] = (
-                        self._projected_value(schema.cls, source, projected, spec) is not None
-                    )
-                continue
-            value = self._projected_value(schema.cls, source, projected, spec)
-            if value is None:
-                for column in spec.columns:
-                    values[column.name] = None
-            elif spec.role == "scalar":
-                values[spec.columns[0].name] = value
-            elif spec.role == "encoded":
-                assert spec.codec_name is not None
-                encoded = codec_named(spec.codec_name).encode(value)
-                for column, part in zip(spec.columns, encoded, strict=True):
-                    values[column.name] = part
-            elif spec.role == "fixed_array":
-                assert spec.shape is not None
-                tensor = _as_fixed_tensor(schema, spec, spec.shape, value)
-                for i, part in enumerate(encode_fracvector_floats(tensor)):
-                    values[f"{spec.field}_{i}"] = part
-                values[f"{spec.field}_exact"] = encode_fracvector_exact(tensor)
-            else:  # reference
-                assert spec.target is not None
-                values[spec.columns[0].name] = self._save(
-                    connection, spec.target, value, projection, _field_path(path, spec.field)
-                )
-        return values
+
+        def resolve_sid(record_type: type, value: Any, field_path: str) -> int:
+            return self._save(connection, record_type, value, projection, field_path)
+
+        return _encode_parent_row(schema, source, projected, path, resolve_sid)
 
     @staticmethod
     def _projected_value(record_type: type, source: Any, projected: Mapping[str, object], spec: FieldSpec) -> Any:
@@ -768,32 +814,13 @@ class SqlStore:
         path: str,
     ) -> None:
         assert spec.child is not None
-        table = self._table(spec.child.table_name)
-        parent_column = f"{schema.table_name}_sid"
-        index_column = f"{spec.field}_index"
-        rows: list[dict[str, Any]] = []
-        if spec.shape is not None:
-            for position, row_tensor in enumerate(_tensor_rows(schema, spec, spec.shape, value)):
-                row: dict[str, Any] = {parent_column: sid, index_column: position}
-                for i, part in enumerate(encode_fracvector_floats(row_tensor)):
-                    row[f"{spec.field}_{i}"] = part
-                row[f"{spec.field}_exact"] = encode_fracvector_exact(row_tensor)
-                rows.append(row)
-        else:
-            codec = codec_named(spec.codec_name) if spec.codec_name is not None else None
-            for position, element in enumerate(value if value is not None else ()):
-                row = {parent_column: sid, index_column: position}
-                if spec.target is not None:
-                    row[spec.child.element_columns[0].name] = self._save(
-                        connection, spec.target, element, projection, f"{path}[{position}]"
-                    )
-                elif codec is not None:
-                    for column, part in zip(spec.child.element_columns, codec.encode(element), strict=True):
-                        row[column.name] = part
-                else:
-                    row[spec.child.element_columns[0].name] = element
-                rows.append(row)
+
+        def resolve_sid(record_type: type, element: Any, element_path: str) -> int:
+            return self._save(connection, record_type, element, projection, element_path)
+
+        rows = _encode_child_rows(schema, spec, sid, value, path, resolve_sid)
         if rows:
+            table = self._table(spec.child.table_name)
             connection.execute(sqlalchemy.insert(table), rows)
 
     # ------------------------------------------------------------------ fetching
@@ -1422,6 +1449,106 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
 
 def _field_path(path: str, field: str) -> str:
     return f"{path}.{field}" if path else field
+
+
+def _encode_parent_row(
+    schema: TableSchema,
+    source: Any,
+    projected: Mapping[str, object],
+    path: str,
+    resolve_sid: SidResolver,
+) -> dict[str, Any]:
+    """Encode projected parent columns, resolving referenced records through ``resolve_sid``.
+
+    Connection-free counterpart of :meth:`SqlStore._parent_row`: every branch
+    but the reference one is pure, and references defer to ``resolve_sid`` so
+    the same encoder serves both recursive-save and bulk-allocation callers.
+
+    :param schema: The parent record's resolved table schema.
+    :param source: The instance (or projection source) being encoded.
+    :param projected: The projected field mapping for ``source``.
+    :param path: The projection path prefix used for diagnostics.
+    :param resolve_sid: The callback assigning a sid to each referenced record.
+    :return: The encoded parent-table column values.
+    """
+    values: dict[str, Any] = {}
+    for spec in schema.fields:
+        if spec.role == "child":
+            if spec.optional:
+                values[f"{spec.field}_present"] = (
+                    SqlStore._projected_value(schema.cls, source, projected, spec) is not None
+                )
+            continue
+        value = SqlStore._projected_value(schema.cls, source, projected, spec)
+        if value is None:
+            for column in spec.columns:
+                values[column.name] = None
+        elif spec.role == "scalar":
+            values[spec.columns[0].name] = value
+        elif spec.role == "encoded":
+            assert spec.codec_name is not None
+            encoded = codec_named(spec.codec_name).encode(value)
+            for column, part in zip(spec.columns, encoded, strict=True):
+                values[column.name] = part
+        elif spec.role == "fixed_array":
+            assert spec.shape is not None
+            tensor = _as_fixed_tensor(schema, spec, spec.shape, value)
+            for i, part in enumerate(encode_fracvector_floats(tensor)):
+                values[f"{spec.field}_{i}"] = part
+            values[f"{spec.field}_exact"] = encode_fracvector_exact(tensor)
+        else:  # reference
+            assert spec.target is not None
+            values[spec.columns[0].name] = resolve_sid(spec.target, value, _field_path(path, spec.field))
+    return values
+
+
+def _encode_child_rows(
+    schema: TableSchema,
+    spec: FieldSpec,
+    sid: int,
+    value: Any,
+    path: str,
+    resolve_sid: SidResolver,
+) -> list[dict[str, Any]]:
+    """Build the child-table rows for one child field, resolving element records through ``resolve_sid``.
+
+    Connection-free counterpart of the row-building loop in
+    :meth:`SqlStore._insert_child_rows`: tensor and codec branches are pure, and
+    storable-element references defer to ``resolve_sid``; the caller owns the
+    ``executemany`` on the returned rows.
+
+    :param schema: The parent record's resolved table schema.
+    :param spec: The child field specification being encoded.
+    :param sid: The parent row's sid, stamped into every child row.
+    :param value: The child field value (a sequence, tensor, or ``None``).
+    :param path: The projection path prefix used for diagnostics.
+    :param resolve_sid: The callback assigning a sid to each referenced element record.
+    :return: The encoded child-table rows in element order.
+    """
+    assert spec.child is not None
+    parent_column = f"{schema.table_name}_sid"
+    index_column = f"{spec.field}_index"
+    rows: list[dict[str, Any]] = []
+    if spec.shape is not None:
+        for position, row_tensor in enumerate(_tensor_rows(schema, spec, spec.shape, value)):
+            row: dict[str, Any] = {parent_column: sid, index_column: position}
+            for i, part in enumerate(encode_fracvector_floats(row_tensor)):
+                row[f"{spec.field}_{i}"] = part
+            row[f"{spec.field}_exact"] = encode_fracvector_exact(row_tensor)
+            rows.append(row)
+    else:
+        codec = codec_named(spec.codec_name) if spec.codec_name is not None else None
+        for position, element in enumerate(value if value is not None else ()):
+            row = {parent_column: sid, index_column: position}
+            if spec.target is not None:
+                row[spec.child.element_columns[0].name] = resolve_sid(spec.target, element, f"{path}[{position}]")
+            elif codec is not None:
+                for column, part in zip(spec.child.element_columns, codec.encode(element), strict=True):
+                    row[column.name] = part
+            else:
+                row[spec.child.element_columns[0].name] = element
+            rows.append(row)
+    return rows
 
 
 def _metadata_scalar_equal(left: Any, right: Any) -> bool:

@@ -51,6 +51,7 @@ STORAGE_PROTOCOL_VERSION: Final = "v2.0.3"
 
 __all__ = [
     "STORAGE_PROTOCOL_VERSION",
+    "BulkIngest",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -79,6 +80,7 @@ __all__ = [
 ]
 
 _SQL_EXPORTS = {
+    "BulkIngest": ".bulk",
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
