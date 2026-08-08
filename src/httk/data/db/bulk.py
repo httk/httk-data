@@ -40,6 +40,25 @@ Multi-record entry families buffer one deduplicated dispatch row per content id,
 raising :class:`~httk.data.store_common.EntryDispatchIntegrityError` on a
 conflicting backing.
 
+A third, opt-in mode parallelizes the encode. ``bulk_ingest(workers=N)`` with
+``N > 1`` forks a pool of worker processes (the ``fork`` start method, so each
+inherits the unpicklable store and never touches its database) and pickles each
+saved object onto a shared task queue. Every worker runs the *same* pure
+encoders against a per-worker :class:`~httk.data.store_common.SaveProjection`,
+allocating sids from a disjoint block and writing per-table shard files
+(pyarrow Parquet on DuckDB — the optional ``parallel`` extra — or a native
+SQLite database per worker). The main process then merges the shards inside the
+ingest's spanning transaction: it loads every shard under the block sids,
+collapses cross-worker duplicates set-wise (content-id and by_value), verifies
+each surviving collision's identity-excluded metadata with a grouped scan,
+sweeps rows orphaned by a collapsed duplicate's subtree, and renumbers the
+survivors to a compact range.
+Parallel mode targets the offline *build* of a store and requires a physically
+empty target; incremental appends into a populated store stay on the serial
+path. The implementation lives in :mod:`httk.data.db.bulk_parallel`; see its
+module docstring for the full contract. ``workers=1`` (the default) is exactly
+the serial path described above, unchanged.
+
 Identity caches are not populated by bulk ingestion (documented best-effort);
 they are cleared on failure.
 
@@ -71,6 +90,7 @@ Two behaviors diverge from the per-record ``save()`` loop:
   itself the uniqueness verification. Both leave the same final indexes present.
 """
 
+import contextlib
 from collections.abc import Callable, Mapping
 from types import TracebackType
 from typing import Any, Literal, Self
@@ -118,6 +138,37 @@ __all__ = ["BulkIngest"]
 _AUTO_REBUILD_DIVISOR = 4
 
 
+def _foreign_key_free_clone(table: sqlalchemy.Table) -> sqlalchemy.Table:
+    """A structural copy of ``table`` without foreign-key constraints (indexes are built separately).
+
+    Preserves each column's type, nullability, primary-key membership, and the
+    sid column's sequence default, but drops every ``ForeignKey`` so the parallel
+    merge can renumber and delete rows in place. The separable indexes are added
+    later by :meth:`BulkIngest._create_new_indexes`, exactly as for the serial
+    empty-store path.
+
+    :param table: The registered record or child table to clone.
+    :return: A detached table of the same name and columns without foreign keys.
+    """
+    columns: list[sqlalchemy.Column[Any]] = []
+    for column in table.columns:
+        arguments: list[Any] = []
+        default = column.default
+        if isinstance(default, sqlalchemy.Sequence):
+            arguments.append(sqlalchemy.Sequence(default.name))
+        columns.append(
+            sqlalchemy.Column(
+                column.name,
+                column.type,
+                *arguments,
+                primary_key=column.primary_key,
+                nullable=column.nullable,
+                autoincrement=column.autoincrement,
+            )
+        )
+    return sqlalchemy.Table(table.name, sqlalchemy.MetaData(), *columns)
+
+
 def _sid_sequence(table: sqlalchemy.Table) -> sqlalchemy.Sequence | None:
     """Return the sid primary key's attached sequence, or ``None`` for a child table."""
     if SID_COLUMN not in table.c:
@@ -146,6 +197,7 @@ class BulkIngest:
     :param verify_metadata: Whether content-id hits compare identity-excluded metadata.
     :param index_strategy: How existing tables' separable indexes are handled during the append.
     :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
+    :param workers: The number of worker processes; ``1`` (the default) is the serial path, ``>1`` encodes in parallel and merges shards.
     """
 
     def __init__(
@@ -156,16 +208,33 @@ class BulkIngest:
         verify_metadata: bool = True,
         index_strategy: Literal["auto", "keep", "rebuild"] = "auto",
         on_progress: Callable[[int, int], None] | None = None,
+        workers: int = 1,
     ) -> None:
         if chunk_size < 1:
             raise ValueError("chunk_size must be a positive integer")
         if index_strategy not in ("auto", "keep", "rebuild"):
             raise ValueError("index_strategy must be one of 'auto', 'keep', or 'rebuild'")
+        if workers < 1:
+            raise ValueError("workers must be a positive integer")
+        if workers > 1 and on_progress is not None:
+            raise ValueError(
+                "on_progress is not supported with workers>1: worker processes encode asynchronously, "
+                "so per-flush buffered/flushed counts are not observable from the main process"
+            )
         self._store = store
         self._chunk_size = chunk_size
         self._verify_metadata = verify_metadata
         self._index_strategy = index_strategy
         self._on_progress = on_progress
+        self._workers = workers
+        self._parallel = workers > 1
+        # Parallel-mode state (unused on the serial path).
+        self._controller: Any = None
+        self._next_token = 0
+        self._schema_graph_seen: set[type] = set()
+        # SQLite shard aliases the merge attached; detached in _release_connection
+        # after the transaction closes (SQLite forbids DETACH inside a transaction).
+        self._parallel_attached: list[str] = []
         self._connection: sqlalchemy.Connection | None = None
         self._transaction: Any = None
         self._closed = False
@@ -224,22 +293,93 @@ class BulkIngest:
                 "the ingest owns its own spanning transaction"
             )
         store._bulk_active = True
+        # The worker pool is forked before the spanning transaction opens, so no
+        # child inherits an open database connection or transaction.
+        if self._parallel:
+            try:
+                self._start_workers()
+            except BaseException:
+                store._bulk_active = False
+                raise
+        # Own the connection explicitly (not engine.begin(), which returns it to
+        # the pool on commit): the SQLite shard DETACH must run on this exact
+        # connection *after* the transaction closes but *before* it is released,
+        # so no other thread can check it out in that window.
+        connection = None
         try:
-            transaction = store._database.engine.begin()
-            connection = transaction.__enter__()
+            connection = store._database.engine.connect()
+            transaction = connection.begin()
         except BaseException:
+            if connection is not None:
+                connection.close()
+            self._close_workers()
             store._bulk_active = False
             raise
         self._transaction = transaction
         self._connection = connection
         try:
             self._preexisting = self._scan_store(connection)
-        except BaseException as error:
-            transaction.__exit__(type(error), error, error.__traceback__)
+            if self._parallel:
+                self._require_empty_store(connection)
+                self._require_no_foreign_key_enforcement(connection)
+        except BaseException:
+            transaction.rollback()
+            connection.close()
+            self._close_workers()
             store._bulk_active = False
             raise
         self._entered = True
         return self
+
+    def _start_workers(self) -> None:
+        """Validate the parallel prerequisites and fork the worker pool."""
+        from httk.data.db.bulk_parallel import ParallelController
+
+        backend = self._store._database.engine.dialect.name
+        if backend == "duckdb":
+            try:
+                import importlib
+
+                importlib.import_module("pyarrow")
+            except ImportError as error:
+                raise ImportError(
+                    "bulk_ingest(workers>1) on a DuckDB store needs pyarrow; "
+                    "install the 'httk-data[parallel]' extra to use it"
+                ) from error
+        self._controller = ParallelController(
+            self._store, workers=self._workers, chunk_size=self._chunk_size, backend=backend
+        )
+        self._controller.start()
+
+    def _close_workers(self) -> None:
+        if self._controller is not None:
+            self._controller.close()
+            self._controller = None
+
+    def _require_empty_store(self, connection: sqlalchemy.Connection) -> None:
+        """Refuse parallel ingest into a store the merge cannot treat as a clean build.
+
+        On DuckDB a pre-existing application table already carries its foreign-key
+        constraints, which the merge's in-place collapse and renumber cannot work
+        through, so *any* pre-existing application table is refused. On SQLite —
+        which does not enforce foreign keys unless the engine turns them on (see
+        :meth:`_require_no_foreign_key_enforcement`) — only pre-existing rows are
+        refused.
+        """
+        if not self._preexisting:
+            return
+        if connection.dialect.name == "duckdb":
+            raise RuntimeError(
+                "bulk_ingest(workers>1) on a DuckDB store requires no pre-existing application tables "
+                f"(found {', '.join(sorted(self._preexisting))}); drop them or use workers=1."
+            )
+        for name in self._preexisting:
+            count = connection.execute(sqlalchemy.text(f'SELECT count(*) FROM "{name}"')).scalar_one()
+            if int(count) > 0:
+                raise RuntimeError(
+                    "bulk_ingest(workers>1) requires a physically empty store; "
+                    f"table {name!r} already holds rows. Use workers=1 for incremental appends."
+                )
 
     def __exit__(
         self,
@@ -256,31 +396,78 @@ class BulkIngest:
         """
         store = self._store
         transaction = self._transaction
+        connection = self._connection
         self._closed = True
         try:
             if exc_type is None:
                 try:
                     self._finalize()
-                except BaseException as error:
-                    transaction.__exit__(type(error), error, error.__traceback__)
+                except BaseException:
+                    transaction.rollback()
+                    self._release_connection(connection)  # detach shards, then release to the pool
                     self._clean_up_after_failure()
                     raise
                 try:
-                    transaction.__exit__(None, None, None)  # commit
+                    transaction.commit()
                 except BaseException:
                     # A failing commit still needs the created tables dropped,
                     # dropped indexes restored, and staging tables removed.
+                    self._release_connection(connection)
                     self._clean_up_after_failure()
                     raise
+                self._release_connection(connection)
                 store._tables_present.update(self._created)
                 self._final_sids_ready = True
                 return
-            transaction.__exit__(exc_type, exc, traceback)
+            transaction.rollback()
+            self._release_connection(connection)
             self._clean_up_after_failure()
         finally:
+            self._release_connection(connection)  # idempotent: no-op if already released
+            self._close_workers()
             self._connection = None
             self._transaction = None
             store._bulk_active = False
+
+    def _release_connection(self, connection: sqlalchemy.Connection | None) -> None:
+        """Detach any SQLite shards on ``connection`` and return it to the pool (idempotent).
+
+        SQLite forbids ``DETACH`` inside a transaction, so this runs only after
+        the spanning transaction has committed or rolled back — and on the exact
+        connection that ran the ``ATTACH``, before it is released, so no other
+        thread can check it out with the shards still attached.
+        """
+        if connection is None or connection.closed:
+            return
+        if self._parallel_attached:
+            # Best-effort on the raw DB-API connection (a stale alias must never
+            # mask the ingest's own outcome); ``exec_driver_sql`` would open a new
+            # transaction, which DETACH forbids.
+            with contextlib.suppress(Exception):
+                raw: Any = connection.connection.driver_connection
+                for alias in self._parallel_attached:
+                    with contextlib.suppress(Exception):
+                        raw.execute(f"DETACH DATABASE {alias}")
+            self._parallel_attached = []
+        connection.close()
+
+    def _require_no_foreign_key_enforcement(self, connection: sqlalchemy.Connection) -> None:
+        """Refuse a parallel SQLite ingest when the engine enforces foreign keys.
+
+        The merge collapses and renumbers rows in place; a live foreign key would
+        block that. SQLite does not enforce foreign keys by default, but a
+        user-supplied engine can turn ``PRAGMA foreign_keys`` on, so this checks
+        the ingest connection and refuses rather than silently corrupting.
+        """
+        if connection.dialect.name != "sqlite":
+            return
+        enforced = connection.exec_driver_sql("PRAGMA foreign_keys").scalar()
+        if enforced:
+            raise RuntimeError(
+                "bulk_ingest(workers>1) on SQLite requires foreign-key enforcement to be off "
+                "(PRAGMA foreign_keys=OFF): the merge collapses and renumbers rows in place, which a "
+                "live foreign key would block. Disable enforcement on the engine, or use workers=1."
+            )
 
     def _scan_store(self, connection: sqlalchemy.Connection) -> frozenset[str]:
         """Return the application tables that already exist in the store.
@@ -361,6 +548,8 @@ class BulkIngest:
         if not self._entered or self._closed:
             raise RuntimeError("bulk_ingest().save() is only usable inside an open bulk context")
         reject_cursor_proxy(obj)
+        if self._parallel:
+            return self._parallel_save(obj, as_record)
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
         sid = self._encode(record_type, obj, projection, "")
@@ -399,6 +588,81 @@ class BulkIngest:
         if (table_name, sid) not in self._returned_sids:
             raise KeyError((record_type, sid))
         return self._resolved_map.get((table_name, sid), sid)
+
+    def _parallel_save(self, obj: Any, as_record: type | None) -> int:
+        """Dispatch ``obj`` to a worker and return a provisional token resolved after the merge.
+
+        In parallel mode the encode happens asynchronously in a worker, so the
+        sid is not known synchronously. ``save`` instead returns a unique token
+        that :meth:`resolved_sid` maps to the durable stored sid once the context
+        has exited cleanly. The token is a proper stand-in: it is never a real
+        row sid, and every equivalence guarantee flows through
+        :meth:`resolved_sid`.
+
+        :param obj: The object to store.
+        :param as_record: The alternate record representation to use, if any.
+        :return: A provisional token (see :meth:`resolved_sid`).
+        """
+        record_type = resolve_storage_record(obj, as_record=as_record)
+        # Validate the metadata shape (and record the schema graph) before any DDL,
+        # so a rejected type fails fast without leaving an empty table behind.
+        self._record_schema_graph(record_type)
+        self._ensure_tables(record_type)
+        table_name = resolve_schema(record_type).table_name
+        token = self._next_token
+        self._next_token += 1
+        self._returned_sids.add((table_name, token))
+        self._records_total += 1
+        assert self._controller is not None
+        self._controller.dispatch(token, obj, as_record)
+        return token
+
+    def _record_schema_graph(self, record_type: type) -> None:
+        """Validate and record every record table's schema in the graph rooted at ``record_type``.
+
+        Rejects, up front, any record type whose identity-excluded metadata shape
+        the set-wise merge cannot verify (see
+        :func:`~httk.data.db.bulk_parallel.unsupported_metadata_reason`), so an
+        unsupported ingest fails on its first ``save`` rather than silently
+        skipping a conflict check.
+        """
+        self._validate_schema_graph(record_type, set())
+
+    def _validate_schema_graph(self, record_type: type, visiting: set[type]) -> None:
+        """Depth-first validate the metadata graph, committing a type as seen only once its whole subgraph passes.
+
+        A type is added to ``_schema_graph_seen`` (and ``_parent_schema``) *after*
+        its entire referenced subgraph validates. If any descendant is rejected,
+        the exception unwinds before any ancestor is committed, so a caller that
+        catches the rejection inside the context and re-saves the same object is
+        re-validated and rejected again — the fail-fast cannot be bypassed.
+        ``visiting`` breaks reference cycles during the walk without prematurely
+        marking a type validated.
+
+        :param record_type: The record class to validate and record.
+        :param visiting: The types on the current recursion path (cycle guard).
+        """
+        if record_type in self._schema_graph_seen or record_type in visiting:
+            return
+        visiting.add(record_type)
+        if self._verify_metadata:
+            from httk.data.db.bulk_parallel import unsupported_metadata_reason
+
+            reason = unsupported_metadata_reason(record_type)
+            if reason is not None:
+                raise ValueError(
+                    f"bulk_ingest(workers>1) cannot verify this identity-excluded metadata shape: {reason}. "
+                    "Use workers=1 for records of this kind, or open with verify_metadata=False."
+                )
+        schema = resolve_schema(record_type)
+        for target in schema.referenced_classes():
+            self._validate_schema_graph(target, visiting)
+        for spec in schema.fields:
+            if spec.child is not None and spec.target is not None:
+                self._validate_schema_graph(spec.target, visiting)
+        # The whole subgraph validated: only now commit this type.
+        self._schema_graph_seen.add(record_type)
+        self._parent_schema[schema.table_name] = schema
 
     def _encode(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
         active_key = (record_type, id(source))
@@ -547,9 +811,20 @@ class BulkIngest:
                 # bind, otherwise ordinary post-ingest saves lose their sid
                 # allocator. SQLite ignores the sequence entirely.
                 self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE IF NOT EXISTS "{sequence.name}"'))
+        create = table
+        if self._parallel and self._connection.dialect.name == "duckdb" and not table.name.startswith("_httk_"):
+            # The parallel merge remaps and deletes rows in place while collapsing
+            # cross-worker duplicates and compacting the block sids. DuckDB refuses
+            # to delete or renumber a row a foreign key still references, so on
+            # DuckDB record and child tables are created without their reference
+            # constraints. SQLite keeps them: it does not enforce foreign keys
+            # unless the engine turns them on, which a parallel ingest refuses.
+            # Every other structure — the sid primary key and sequence, the
+            # content-id uniqueness index, and the separable indexes — is unchanged.
+            create = _foreign_key_free_clone(table)
         # A bare CreateTable (not create_all / Table.create) so the separable
         # indexes stay out until the deferred post-load build.
-        self._connection.execute(sqlalchemy.schema.CreateTable(table))
+        self._connection.execute(sqlalchemy.schema.CreateTable(create))
 
     # ------------------------------------------------------------------ flushing and finalization
 
@@ -606,6 +881,9 @@ class BulkIngest:
             rows.clear()
 
     def _finalize(self) -> None:
+        if self._parallel:
+            self._parallel_finalize()
+            return
         self._flush()
         self._flush_dispatch()
         self._create_new_indexes()
@@ -613,6 +891,34 @@ class BulkIngest:
         self._verify_rebuild_scans()
         self._resync_sequences()
         self._assert_counts()
+
+    def _parallel_finalize(self) -> None:
+        """Join the workers, merge their shards set-wise, then build indexes and verify (parallel mode)."""
+        from httk.data.db.bulk_parallel import merge
+
+        assert self._controller is not None
+        manifests = self._controller.finish()  # re-raises the first worker exception
+        self._assert_no_lost_tasks(manifests)
+        merge(self, manifests)
+        self._create_new_indexes()
+        self._resync_sequences()
+        self._assert_counts()
+
+    def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:
+        """Abort (never commit) if any dispatched task did not come back encoded in a worker manifest."""
+        dispatched = {token for _table, token in self._returned_sids}
+        encoded: set[int] = set()
+        for manifest in manifests:
+            encoded.update(manifest.token_sid)
+        if encoded != dispatched:
+            lost = len(dispatched - encoded)
+            extra = len(encoded - dispatched)
+            raise RuntimeError(
+                "bulk_ingest(workers>1) lost tasks between dispatch and merge: "
+                f"{lost} dispatched record(s) were never encoded"
+                + (f" and {extra} unexpected token(s) were reported" if extra else "")
+                + "; the ingest is aborted rather than committing a partial store"
+            )
 
     def _flush_dispatch(self) -> None:
         assert self._connection is not None

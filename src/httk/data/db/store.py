@@ -384,6 +384,7 @@ class SqlStore:
         verify_metadata: bool = True,
         index_strategy: Literal["auto", "keep", "rebuild"] = "auto",
         on_progress: Callable[[int, int], None] | None = None,
+        workers: int = 1,
     ) -> "BulkIngest":
         """Return a context manager that appends a stream of objects into this store.
 
@@ -413,6 +414,10 @@ class SqlStore:
             until commit, ``"rebuild"`` instead keeps the indexes and verifies content-id uniqueness with a
             duplicate scan; the final indexes are the same either way.
         :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
+        :param workers: The number of worker processes. ``1`` (the default) is the serial path with byte-for-byte
+            unchanged semantics; ``>1`` encodes the stream in forked worker processes and merges their per-table
+            shards set-wise. Parallel mode requires a physically empty target store (the offline-build use case) and,
+            on DuckDB, the ``httk-data[parallel]`` extra (pyarrow); incremental appends stay on the serial path.
         :return: A bulk-ingest context manager bound to this store.
         """
         from httk.data.db.bulk import BulkIngest
@@ -423,6 +428,7 @@ class SqlStore:
             verify_metadata=verify_metadata,
             index_strategy=index_strategy,
             on_progress=on_progress,
+            workers=workers,
         )
 
     def ensure_tables(self, *classes: type) -> None:

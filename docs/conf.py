@@ -146,6 +146,10 @@ nitpick_ignore = [
     # StoredPropertySqlPlan's constructor retains its private backing-plan
     # annotation while AutoAPI intentionally omits that implementation class.
     ("py:class", "_BackingPlan"),
+    # The parallel bulk-ingest merge entry points (bulk_parallel.merge and
+    # ParallelController) carry the module-private worker-manifest type in their
+    # signatures; AutoAPI intentionally omits that implementation dataclass.
+    ("py:class", "_WorkerManifest"),
     # StoredPropertyProjection is new in the sibling core workspace; the
     # committed release inventory cannot name it until core is released.
     ("py:class", "httk.core.storage.StoredPropertyProjection"),

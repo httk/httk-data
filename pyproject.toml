@@ -64,6 +64,7 @@ release = [
 default = ["httk-data[db]"]
 db = ["sqlalchemy>=2.0,<3"]
 duckdb = ["httk-data[db]", "duckdb_engine>=0.13", "duckdb>=1.0"]
+parallel = ["pyarrow>=15"]
 mongodb = ["pymongo>=4.6"]
 
 [tool.setuptools]

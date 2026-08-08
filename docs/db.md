@@ -246,6 +246,81 @@ count. These figures come from single-threaded runs against a tmpfs database, so
 the per-record baseline they improve on is already I/O-favorable; both the
 speed-up and the absolute throughput will differ on slower storage.
 
+### Parallel ingestion
+
+For the *offline build* of a store from a large stream, `bulk_ingest(workers=N)`
+with `N > 1` encodes the stream in a pool of forked worker processes and merges
+their per-table shards set-wise. Encoding — the bottleneck for structure-shaped
+records — runs across cores; the merge (loading shards, collapsing cross-worker
+duplicates, renumbering to compact sids, and building the indexes) runs once in
+the main process inside the ingest's single transaction.
+
+```python
+with store.bulk_ingest(workers=12) as bulk:
+    bulk.save(layout_record)
+    for material in materials:
+        bulk.save(material)
+```
+
+On DuckDB workers hand rows off as Parquet shards, so parallel mode there needs
+`pyarrow`; install it with the combined extra:
+
+```console
+$ pip install "httk-data[duckdb,parallel]"
+```
+
+SQLite workers write one native shard database each and need no extra dependency.
+
+**Empty target only.** Parallel mode is for building a fresh store, not for
+appending: opening `workers>1` on a store that already holds application rows is
+refused (use `workers=1` for incremental appends). On DuckDB the restriction is
+stronger — *any* pre-existing application table is refused, because the merge
+renumbers and deletes rows in place and DuckDB will not do that through a live
+foreign-key constraint.
+
+**DuckDB physical schema omits foreign keys.** To let the merge collapse and
+renumber in place, a parallel build on DuckDB creates its record and child
+tables *without* foreign-key constraints. Every other structure is identical to
+a serial build — the sid primary key and its sequence, the content-id uniqueness
+index, and all secondary indexes — and the referential integrity of the result
+is exactly the same (the merge enforces it directly). Only the physical
+constraints differ, which matters if you introspect the schema, dump it, or run
+your own `INSERT`/`UPDATE` against the file and rely on DuckDB to catch a
+dangling reference. A serial (`workers=1`) build keeps the constraints; SQLite
+parallel builds keep them too (SQLite does not enforce foreign keys by default,
+and a parallel ingest refuses to run against a SQLite engine that has turned
+`PRAGMA foreign_keys` on).
+
+**Provisional tokens.** Because a worker encodes each object asynchronously, the
+sid is not known when `save` returns; in parallel mode `save` returns an opaque
+token instead. After the context exits cleanly,
+`httk.data.db.bulk.BulkIngest.resolved_sid` maps each returned token to its
+durable stored sid, exactly as it maps a provisional sid on the serial path. A
+lost task (an unpicklable object, or a worker that crashed or was killed) aborts
+the ingest rather than committing a partial store, and `on_progress` is rejected
+up front because per-flush counts are not observable across processes.
+
+**Identity-excluded metadata restriction.** The merge verifies identity-excluded
+(`IdentitySkip`) metadata with a grouped column scan rather than by reconstructing
+every duplicate record. That covers scalar skip columns and skipped references to
+content-addressed or by_value records, and it reports a conflict against the
+schema field. A few shapes fall outside it and are rejected up front (naming
+`workers=1`): an identity-excluded child *sequence*, an identity-excluded
+reference to — or `descend` into — a non-deduplicated (`dedup="none"`) record,
+and a self-referential identity-excluded reference. Opening with
+`verify_metadata=False` lifts the restriction.
+
+**Measured speed-up.** Building the ~9,000-material altermagnets store into a
+file-backed DuckDB database, parallel mode reaches about **6.6x** at 24 workers
+when replicas share substructure (the realistic case, where the merge collapses
+many cross-worker duplicates) and about **11x** at 24 workers with distinct roots
+and shared atomic descendants (each material and its structure distinct, their
+cells/sites/species still shared, so the merge collapses much less). The encode
+phase scales with the worker count; the merge is a small fixed fraction of the total.
+The benefit is real only for large builds — the pool fork, the shard round-trip,
+and the merge are pure overhead on a small stream — so `workers` defaults to `1`.
+Reproduce with `benchmarks/bench50_parallel.py`.
+
 ## Searching
 
 `store.searcher()` opens a query through the backend-agnostic protocols in
