@@ -952,6 +952,16 @@ class SqlStore:
         """
         return SqlSearcher(self)
 
+    def stored_property_plan(self, family: type) -> Any:
+        """Return the SQL stored-property plan for one configured entry family.
+
+        :param family: The logical entry-family class to plan.
+        :return: The validated SQL stored-property plan.
+        """
+        from httk.data.db.stored_properties import stored_property_sql_plan
+
+        return stored_property_sql_plan(self, family)
+
     def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
         """Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
 

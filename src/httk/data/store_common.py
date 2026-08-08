@@ -47,6 +47,14 @@ class EntryStore(Protocol):
         """Fetch the stored record of ``cls`` identified by ``sid``."""
         ...
 
+    def stored_property_plan(self, family: type) -> Any:
+        """Return the backend-specific stored-property plan for one family.
+
+        :param family: The logical entry-family class to plan.
+        :return: The validated stored-property plan consumed by federation.
+        """
+        ...
+
 
 class EntryMetadataConflictError(ValueError):
     """Stored identity-excluded metadata differs from a repeated save."""

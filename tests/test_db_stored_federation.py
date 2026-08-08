@@ -142,6 +142,9 @@ def test_stored_entry_source_accepts_structural_entry_store() -> None:
         def fetch(self, cls: type, sid: int) -> object:
             raise AssertionError("the acceptance test must not fetch from the fake store")
 
+        def stored_property_plan(self, family: type) -> object:
+            raise AssertionError("the acceptance test must not acquire a plan from the fake store")
+
     class MissingEntryStore:
         entry_layout = ()
 

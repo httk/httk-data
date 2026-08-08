@@ -11,12 +11,19 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .database import MongoDatabase, TransactionsUnavailableError
     from .documents import RecordTooLargeError
+    from .entry_provider import StoreEntryProvider, auto_definition
     from .fsck import FsckCollectionSummary, FsckSummary
     from .leases import StoreLockedError, clear_stale_lock
     from .optimade import optimade_filter_searcher
     from .results import MongoResultSet
     from .searcher import MongoExpression, MongoField, MongoSearcher, MongoVariable
     from .store import MongoStore
+    from .stored_properties import (
+        MongoStoredPropertyCandidateStream,
+        MongoStoredPropertyConfigurationError,
+        MongoStoredPropertyPlan,
+        stored_property_mongo_plan,
+    )
 
 __all__ = [
     "FsckCollectionSummary",
@@ -27,12 +34,18 @@ __all__ = [
     "MongoResultSet",
     "MongoSearcher",
     "MongoStore",
+    "MongoStoredPropertyCandidateStream",
+    "MongoStoredPropertyConfigurationError",
+    "MongoStoredPropertyPlan",
     "MongoVariable",
     "RecordTooLargeError",
+    "StoreEntryProvider",
     "StoreLockedError",
     "TransactionsUnavailableError",
+    "auto_definition",
     "clear_stale_lock",
     "optimade_filter_searcher",
+    "stored_property_mongo_plan",
 ]
 
 _MONGO_EXPORTS = {
@@ -42,10 +55,16 @@ _MONGO_EXPORTS = {
     "MongoExpression": ".searcher",
     "MongoField": ".searcher",
     "MongoResultSet": ".results",
+    "StoreEntryProvider": ".entry_provider",
+    "auto_definition": ".entry_provider",
     "MongoSearcher": ".searcher",
     "MongoStore": ".store",
+    "MongoStoredPropertyCandidateStream": ".stored_properties",
+    "MongoStoredPropertyConfigurationError": ".stored_properties",
+    "MongoStoredPropertyPlan": ".stored_properties",
     "MongoVariable": ".searcher",
     "optimade_filter_searcher": ".optimade",
+    "stored_property_mongo_plan": ".stored_properties",
     "RecordTooLargeError": ".documents",
     "StoreLockedError": ".leases",
     "TransactionsUnavailableError": ".database",

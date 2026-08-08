@@ -1006,6 +1006,16 @@ class MongoStore:
 
         return MongoSearcher(self)
 
+    def stored_property_plan(self, family: type) -> Any:
+        """Return the Mongo stored-property plan for one configured entry family.
+
+        :param family: The logical entry-family class.
+        :return: Its validated Mongo stored-property plan.
+        """
+        from .stored_properties import stored_property_mongo_plan
+
+        return stored_property_mongo_plan(self, family)
+
     def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
         """Return records whose reference field points at ``to``, ordered by sid.
 

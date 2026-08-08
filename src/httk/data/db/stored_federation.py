@@ -12,19 +12,15 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import Any, Final
 
 from httk.core.optimade import FilterAst
 
 from httk.data.db.stored_properties import (
     StoredPropertySqlCandidateStream,
     StoredPropertySqlPlan,
-    stored_property_sql_plan,
 )
 from httk.data.store_common import EntryStore
-
-if TYPE_CHECKING:
-    from httk.data.db.store import SqlStore
 
 __all__ = [
     "DuplicateEntryIdError",
@@ -227,8 +223,7 @@ class StoredEntryFederation:
             _ResolvedSource(
                 source,
                 index,
-                # Plan acquisition remains backend-specific until the neutral plan hook lands.
-                stored_property_sql_plan(cast("SqlStore", source.store), source.entry_family),
+                source.store.stored_property_plan(source.entry_family),
             )
             for index, source in enumerate(values)
         )

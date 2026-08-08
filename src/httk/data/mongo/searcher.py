@@ -412,7 +412,7 @@ class MongoExpression:
 class MongoField:
     """A scalar field, or the value channel of an embedded child field."""
 
-    __slots__ = ("_child_keys", "_codec", "_key_path", "_spec", "_variable")
+    __slots__ = ("_child_keys", "_codec", "_key_path", "_presentation_prefix", "_spec", "_variable")
 
     def __init__(
         self,
@@ -421,12 +421,14 @@ class MongoField:
         spec: FieldSpec,
         codec: ValueCodec | None = None,
         child_keys: tuple[str, ...] = (),
+        presentation_prefix: str = "",
     ) -> None:
         self._variable = variable
         self._key_path = key_path
         self._spec = spec
         self._codec = codec
         self._child_keys = child_keys
+        self._presentation_prefix = presentation_prefix
 
     @property
     def _path(self) -> str:
@@ -1007,6 +1009,9 @@ def _scalar_value(document: dict[str, Any], field: MongoField) -> Any:
         return None
     if field._key_path == "_id":
         return source.get("_id")
+    if field._key_path == "content_id":
+        value = source.get("content_id")
+        return None if value is None else field._presentation_prefix + value
     embedded = source.get("f", {})
     spec = field._spec
     if spec.role == "scalar":
