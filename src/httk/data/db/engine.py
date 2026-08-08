@@ -11,7 +11,10 @@ and no interpreter-exit hook; dispose of a database explicitly with
 """
 
 import importlib
+import importlib.util
+import logging
 import os
+import sys
 from fractions import Fraction
 from types import TracebackType
 from typing import Any, Self
@@ -23,6 +26,7 @@ __all__ = [
     "Database",
 ]
 
+_LOGGER = logging.getLogger(__name__)
 
 _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE = "_httk_exact_fraction_functions_installed"
 _EXACT_FRACTION_FUNCTIONS_KEY = "httk_exact_fraction_functions_installed"
@@ -81,6 +85,7 @@ class Database:
                 "the DuckDB backend needs the 'duckdb_engine' SQLAlchemy dialect; "
                 "install the 'httk-data[duckdb]' extra to use Database.duckdb()"
             ) from error
+        _install_missing_pandas_sentinel()
         location = ":memory:" if path is None else os.fspath(path)
         engine = sqlalchemy.create_engine(f"duckdb:///{location}")
         # duckdb_engine derives from the psycopg2 dialect, which doubles
@@ -130,6 +135,36 @@ class Database:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self._engine.url!r})"
+
+
+def _install_missing_pandas_sentinel() -> None:
+    """Cache pandas's absence so DuckDB's per-row import probe stops re-searching ``sys.path``.
+
+    DuckDB binds statement parameters through its native ``_duckdb`` extension
+    (reached from ``duckdb_engine``'s ``CursorWrapper.execute``/``executemany``,
+    which delegate to ``self.__c.execute(...)`` — duckdb_engine ``__init__.py``
+    around line 150). For each bound value that path probes for pandas, roughly
+    once per row. CPython caches a *successful* ``import`` in :data:`sys.modules`,
+    so an installed pandas stays fast; but a *failed* import is not cached, so
+    when pandas is absent every probe re-runs the full ``sys.path`` finder search
+    — profiled at 40.7 s versus 2.86 s (about 14x) for a 50k-row ``executemany``.
+
+    Installing the standard ``None`` failed-import sentinel makes each subsequent
+    ``import pandas`` fail immediately from the :data:`sys.modules` check instead
+    of searching the path; DuckDB tolerates that ``ImportError`` (its parameter
+    binding is unaffected). This only acts when pandas is genuinely unimportable
+    and untouched: an already-imported pandas is left as the real module, and a
+    ``None`` (or any other) entry another party placed is left exactly as found.
+    """
+    if "pandas" in sys.modules:
+        return
+    if importlib.util.find_spec("pandas") is not None:
+        return
+    sys.modules["pandas"] = None  # type: ignore[assignment]  # the standard failed-import cache sentinel
+    _LOGGER.debug(
+        "installed a None sys.modules sentinel for absent pandas to short-circuit DuckDB's per-row import probe",
+        extra={"context": "storage"},
+    )
 
 
 def _install_exact_fraction_functions(engine: sqlalchemy.Engine) -> None:
