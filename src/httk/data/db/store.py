@@ -33,8 +33,10 @@ lookups fall back to the database.
 
 import contextlib
 import datetime
+import json
 import threading
 import typing
+import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -55,7 +57,8 @@ from httk.data.db.codecs import (
     encode_fracvector_exact,
     encode_fracvector_floats,
 )
-from httk.data.db.engine import Database
+from httk.data.db.engine import Database, connection_uses_autocommit
+from httk.data.db.graph import LogicalEdgeGraph
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
     BackendFacts,
@@ -76,6 +79,7 @@ from httk.data.db.layout import (
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    ROLE_COLUMN,
     SID_COLUMN,
     backing_dispatch_column_name,
     dispatch_table_for,
@@ -110,6 +114,14 @@ __all__ = [
     "EntryMetadataConflictError",
     "SqlStore",
 ]
+
+
+class _DegradedWriteCrash(BaseException):
+    """Deterministic test-only hard-stop emitted after one degraded write step."""
+
+    def __init__(self, point: str) -> None:
+        self.point = point
+        super().__init__(f"injected degraded hard crash after {point}")
 
 
 def _schema_object_type(kinds: frozenset[str]) -> object:
@@ -155,12 +167,28 @@ class SqlStore:
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
         self._managed_table_names: frozenset[str] = frozenset()
+        self._known_record_types: set[type] = set()
         self._tables_present: set[str] = set()
         self._initialized = False
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
         self._identity = IdentityCaches()
         self._local = threading.local()
         self._bulk_active = False
+        self._write_profile: Literal["transactional", "degraded"] = "degraded" if database.degraded else "transactional"
+        self._lease_owner = uuid.uuid4().hex
+        self._lease_value: str | None = None
+        self._mutation_lock = threading.RLock()
+        self._lease_callback_registered = False
+        self._lease_lifecycle_generation: int | None = None
+        # A deterministic test seam.  Production instances leave this unset;
+        # returning true simulates a process death *after* the named durable
+        # write, deliberately preserving any dirty marker.
+        self._degraded_fault_hook: Callable[[str], bool] | None = None
+        if self._write_profile == "degraded":
+            # This fence is deliberately registered before layout creation:
+            # initialization can create metadata, and a dispose interleaving
+            # must never leave a later write able to acquire an unowned lease.
+            self._register_degraded_lifecycle_fence()
         self._initialize_layout(entry_records)
 
     @property
@@ -177,6 +205,11 @@ class SqlStore:
         """Return the dialect capabilities resolved when this store was opened."""
         assert self._backend_facts is not None
         return self._backend_facts
+
+    @property
+    def write_profile(self) -> Literal["transactional", "degraded"]:
+        """Return the persisted permanentization write profile."""
+        return self._write_profile
 
     @property
     def _instances(self) -> Any:
@@ -207,8 +240,9 @@ class SqlStore:
     def _initialize_layout(self, entry_records: Mapping[type, type | tuple[type, ...]] | None) -> None:
         supplied = normalize_entry_records(entry_records) if entry_records is not None else None
         try:
-            with self._database.engine.begin() as connection:
-                self._initialize_layout_on_connection(connection, supplied)
+            with self._degraded_lifecycle_guard():
+                with self._database.engine.begin() as connection:
+                    self._initialize_layout_on_connection(connection, supplied)
         except BaseException:
             created_tables = tuple(self._initialization_ddl_journal)
             self._initialization_ddl_journal.clear()
@@ -233,6 +267,7 @@ class SqlStore:
         supplied: StorageLayout | None,
     ) -> None:
         self._backend_facts = backend_facts_for_dialect(connection.dialect.name)
+        self._validate_write_profile_connection(connection, self._write_profile)
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         if METADATA_TABLE_NAME in names_before:
@@ -284,6 +319,39 @@ class SqlStore:
             }
         )
 
+    def _validate_write_profile_connection(
+        self, connection: sqlalchemy.Connection, profile: Literal["transactional", "degraded"]
+    ) -> None:
+        """Require the requested persisted profile to match the live connection.
+
+        ``Database.degraded`` selects a requested profile, but custom engines
+        can disagree with it.  Permanentization's safety properties depend on
+        the DBAPI connection actually being SQLite autocommit, so every open
+        validates both dialect and live isolation state before inspecting or
+        creating store metadata.
+        """
+        autocommit = connection_uses_autocommit(connection)
+        if profile == "degraded":
+            if connection.dialect.name != "sqlite" or not autocommit:
+                raise StorageLayoutUpgradeRequiredError(
+                    {
+                        "declaration": {
+                            "write_profile": {
+                                "expected": "SQLite autocommit connection for degraded profile",
+                                "actual": {
+                                    "dialect": connection.dialect.name,
+                                    "autocommit": autocommit,
+                                },
+                            }
+                        }
+                    }
+                )
+            return
+        if autocommit:
+            raise StorageLayoutUpgradeRequiredError(
+                {"declaration": {"write_profile": "transactional profile rejects an SQLite autocommit engine"}}
+            )
+
     def _open_marked_layout(
         self,
         connection: sqlalchemy.Connection,
@@ -291,10 +359,16 @@ class SqlStore:
         supplied: StorageLayout | None,
     ) -> None:
         required_keys = {"protocol", "entry_declaration"}
-        recognized_runtime_keys = {"ingest_state"}
-        allowed_keys = required_keys | recognized_runtime_keys
+        persistent_optional_keys = {"write_profile"}
+        recognized_runtime_keys = {"ingest_state", "lease"}
+        allowed_keys = required_keys | persistent_optional_keys | recognized_runtime_keys
         diff: dict[str, object] = {}
-        if set(stored) - allowed_keys or not required_keys <= set(stored):
+        unknown_keys = {
+            key
+            for key in stored
+            if key not in allowed_keys and not (key.startswith("dirty:") and len(key) > len("dirty:"))
+        }
+        if unknown_keys or not required_keys <= set(stored):
             diff["declaration"] = {
                 "metadata_keys": {
                     "expected": tuple(sorted(required_keys)),
@@ -304,6 +378,17 @@ class SqlStore:
             }
         if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
             diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
+        persisted_profile = stored.get("write_profile", "transactional")
+        if persisted_profile not in {"transactional", "degraded"}:
+            diff["declaration"] = {"write_profile": {"actual": persisted_profile}}
+        elif persisted_profile != self._write_profile:
+            diff["declaration"] = {
+                "write_profile": {
+                    "expected": self._write_profile,
+                    "actual": persisted_profile,
+                    "message": "open a degraded store with Database.sqlite(..., degraded=True)",
+                }
+            }
         persisted: StorageLayout | None = None
         try:
             persisted = self._layout_from_stored_declaration(stored.get("entry_declaration"))
@@ -321,10 +406,21 @@ class SqlStore:
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None
+        assert persisted_profile in {"transactional", "degraded"}
+        self._write_profile = cast(Literal["transactional", "degraded"], persisted_profile)
+        self._validate_write_profile_connection(connection, self._write_profile)
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
+        invalid_dirty = sorted(
+            key for key in stored if key.startswith("dirty:") and key.removeprefix("dirty:") not in names_before
+        )
+        if invalid_dirty:
+            raise StorageLayoutUpgradeRequiredError(
+                {"declaration": {"metadata_keys": {"invalid_dirty": tuple(invalid_dirty)}}}
+            )
         declaration_owned = {
             METADATA_TABLE_NAME,
+            "_httk_sid_counters",
             *(entry_dispatch_table_name(family.name) for family in persisted.families if len(family.records) > 1),
         }
         object_problems: dict[str, object] = {}
@@ -360,6 +456,7 @@ class SqlStore:
             (
                 {"key": "protocol", "value": STORAGE_PROTOCOL_VERSION},
                 {"key": "entry_declaration", "value": declaration_json(layout)},
+                *(({"key": "write_profile", "value": "degraded"},) if self._write_profile == "degraded" else ()),
             ),
         )
 
@@ -489,12 +586,14 @@ class SqlStore:
             return
         pending = self._pending_table_names()
         try:
-            with self._database.engine.begin() as connection:
-                stack.append(connection)
-                try:
-                    yield
-                finally:
-                    stack.pop()
+            with self._mutation_lock:
+                with self._database.engine.begin() as connection:
+                    self._ensure_degraded_lease(connection)
+                    stack.append(connection)
+                    try:
+                        yield
+                    finally:
+                        stack.pop()
             self._tables_present.update(pending)
         except BaseException:
             pending.clear()
@@ -519,17 +618,29 @@ class SqlStore:
     def _write_connection(self) -> Iterator[sqlalchemy.Connection]:
         current = self._current_connection()
         if current is not None:
-            yield current
+            with self._mutation_lock:
+                with self._degraded_lifecycle_guard():
+                    self._ensure_degraded_lease(current)
+                    started = self._begin_degraded_operation()
+                    try:
+                        yield current
+                    finally:
+                        self._end_degraded_operation(current, started)
             return
         pending = self._pending_table_names()
         try:
-            with self._database.engine.begin() as connection:
-                stack = self._connection_stack()
-                stack.append(connection)
-                try:
-                    yield connection
-                finally:
-                    stack.pop()
+            with self._mutation_lock:
+                with self._degraded_lifecycle_guard():
+                    with self._database.engine.begin() as connection:
+                        self._ensure_degraded_lease(connection)
+                        started = self._begin_degraded_operation()
+                        stack = self._connection_stack()
+                        stack.append(connection)
+                        try:
+                            yield connection
+                        finally:
+                            stack.pop()
+                            self._end_degraded_operation(connection, started)
             self._tables_present.update(pending)
         except BaseException:
             pending.clear()
@@ -538,6 +649,251 @@ class SqlStore:
             raise
         finally:
             pending.clear()
+
+    @contextlib.contextmanager
+    def _fsck_connection(self) -> Iterator[sqlalchemy.Connection]:
+        """Open fsck's mutation scope with SQLite's real exclusive write lock."""
+        if self._current_connection() is not None:
+            raise RuntimeError("fsck cannot run inside an active SqlStore transaction")
+        if self._write_profile == "degraded" or self._database.engine.dialect.name != "sqlite":
+            with self._write_connection() as connection:
+                yield connection
+            return
+        with self._mutation_lock:
+            with self._database.engine.connect() as connection:
+                # ``engine.begin()`` is deferred on SQLite.  fsck must block a
+                # concurrent writer before its first inspection, not merely at
+                # its first DELETE.
+                connection.exec_driver_sql("BEGIN IMMEDIATE")
+                stack = self._connection_stack()
+                stack.append(connection)
+                try:
+                    yield connection
+                except BaseException:
+                    connection.rollback()
+                    raise
+                else:
+                    connection.commit()
+                finally:
+                    stack.pop()
+
+    def _ensure_degraded_lease(self, connection: sqlalchemy.Connection) -> None:
+        """Acquire once and verify on every degraded mutation operation.
+
+        The lease intentionally remains held by this ``Database`` owner until
+        disposal (or an explicit conditional steal).  Transactional stores do
+        not even query the metadata table here, preserving their save hot path.
+        """
+        if self._write_profile != "degraded":
+            return
+        table = metadata_table_for(sqlalchemy.MetaData())
+        if self._lease_value is None:
+            payload = json.dumps(
+                {"owner": self._lease_owner, "acquired_at": datetime.datetime.now(datetime.UTC).isoformat()},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if connection.dialect.name == "sqlite":
+                connection.execute(
+                    sqlalchemy.text(
+                        'INSERT OR IGNORE INTO "_httk_store_metadata" (key, value) VALUES (\'lease\', :value)'
+                    ),
+                    {"value": payload},
+                )
+            else:  # defensive: degraded is SQLite-only, but keep the primitive explicit.
+                connection.execute(
+                    sqlalchemy.text(
+                        'INSERT INTO "_httk_store_metadata" (key, value) '
+                        'SELECT \'lease\', :value WHERE NOT EXISTS '
+                        '(SELECT 1 FROM "_httk_store_metadata" WHERE key = \'lease\')'
+                    ),
+                    {"value": payload},
+                )
+            current = connection.execute(sqlalchemy.select(table.c.value).where(table.c.key == "lease")).scalar_one()
+            if current != payload:
+                raise RuntimeError(f"degraded SqlStore lease is held by {self._lease_description(str(current))}")
+            self._lease_value = payload
+            return
+        current = connection.execute(
+            sqlalchemy.select(table.c.value).where(table.c.key == "lease")
+        ).scalar_one_or_none()
+        if current != self._lease_value:
+            holder = "missing lease" if current is None else self._lease_description(str(current))
+            raise RuntimeError(f"degraded SqlStore lease ownership was lost ({holder})")
+
+    @staticmethod
+    def _lease_description(value: str) -> str:
+        try:
+            parsed = json.loads(value)
+            acquired = datetime.datetime.fromisoformat(str(parsed["acquired_at"]))
+            age = datetime.datetime.now(datetime.UTC) - acquired.astimezone(datetime.UTC)
+            return f"{parsed['owner']!r}, age {age}"
+        except (KeyError, TypeError, ValueError):
+            return repr(value)
+
+    def _register_degraded_lifecycle_fence(self) -> None:
+        """Register this store's disposal release before any mutation can start."""
+        generation = self._database.lifecycle_generation
+        self._database.add_dispose_callback(lambda: self._release_degraded_lease(generation), generation=generation)
+        self._lease_lifecycle_generation = generation
+        self._lease_callback_registered = True
+
+    @contextlib.contextmanager
+    def _degraded_lifecycle_guard(self) -> Iterator[None]:
+        if self._write_profile != "degraded":
+            yield
+            return
+        assert self._lease_lifecycle_generation is not None
+        with self._database.lifecycle_guard(self._lease_lifecycle_generation):
+            yield
+
+    def _release_degraded_lease(self, generation: int) -> None:
+        # Database.dispose may run on a different thread.  Taking this same
+        # lock makes release wait for an in-flight mutation rather than delete
+        # the lease underneath its remaining ordered writes.
+        with self._mutation_lock:
+            if generation != self._lease_lifecycle_generation:
+                return
+            value = self._lease_value
+            try:
+                if value is not None:
+                    with self._database.engine.begin() as connection:
+                        connection.execute(
+                            sqlalchemy.text(
+                                'DELETE FROM "_httk_store_metadata" WHERE key = \'lease\' AND value = :value'
+                            ),
+                            {"value": value},
+                        )
+            finally:
+                self._lease_value = None
+                # Database consumes callbacks for this lifecycle.  A disposed
+                # Database refuses late registration, so this store cannot
+                # mutate again; callers must construct a fresh Database.
+                self._lease_callback_registered = False
+
+    def _operation_dirty_state(self) -> tuple[str, list[str]] | None:
+        return cast(tuple[str, list[str]] | None, getattr(self._local, "dirty_state", None))
+
+    def _begin_degraded_operation(self) -> bool:
+        if self._write_profile != "degraded" or self._operation_dirty_state() is not None:
+            return False
+        self._local.dirty_state = (f"{self._lease_owner}:{uuid.uuid4().hex}", [])
+        return True
+
+    def _end_degraded_operation(self, connection: sqlalchemy.Connection, started: bool) -> None:
+        if not started:
+            return
+        value, touched = cast(tuple[str, list[str]], self._local.dirty_state)
+        try:
+            if getattr(self._local, "degraded_crashed", False):
+                return
+            for table_name in touched:
+                connection.execute(
+                    sqlalchemy.text('DELETE FROM "_httk_store_metadata" WHERE key = :key AND value = :value'),
+                    {"key": f"dirty:{table_name}", "value": value},
+                )
+                self._after_degraded_write(f"dirty-delete:{table_name}")
+        finally:
+            del self._local.dirty_state
+            if hasattr(self._local, "degraded_crashed"):
+                del self._local.degraded_crashed
+
+    def _after_degraded_write(self, point: str) -> None:
+        """Run the deterministic degraded crash hook after a durable step."""
+        hook = self._degraded_fault_hook
+        if hook is not None and hook(point):
+            self._local.degraded_crashed = True
+            raise _DegradedWriteCrash(point)
+
+    def _touch_dirty_table(self, connection: sqlalchemy.Connection, table: sqlalchemy.Table) -> None:
+        """Mark a degraded operation's table before its first physical write."""
+        state = self._operation_dirty_state()
+        if state is None:
+            return
+        value, touched = state
+        if table.name in touched:
+            return
+        metadata = metadata_table_for(sqlalchemy.MetaData())
+        dirty_key = f"dirty:{table.name}"
+        leftover = connection.execute(
+            sqlalchemy.select(metadata.c.value).where(metadata.c.key == dirty_key)
+        ).scalar_one_or_none()
+        if leftover is not None and leftover != value:
+            self._targeted_dirty_sweep(connection, table)
+            connection.execute(
+                sqlalchemy.delete(metadata).where(metadata.c.key == dirty_key, metadata.c.value == leftover)
+            )
+        connection.execute(
+            sqlalchemy.text(
+                'INSERT INTO "_httk_store_metadata" (key, value) VALUES (:key, :value) '
+                'ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+            ),
+            {"key": dirty_key, "value": value},
+        )
+        self._after_degraded_write(f"dirty-upsert:{table.name}")
+        touched.append(table.name)
+
+    def _targeted_dirty_sweep(self, connection: sqlalchemy.Connection, table: sqlalchemy.Table) -> None:
+        """Delete only child-element residue attributable to one dirty table."""
+        schemas = tuple(resolve_schema(record) for record in self._known_record_types)
+        graph = LogicalEdgeGraph.from_store(self, schemas)
+        for edge in graph.ownership():
+            # A dirty parent owns its declared child-element tables; a dirty
+            # child is itself sweepable.  Reference columns never participate,
+            # so a nullable ``*_sid`` reference cannot be mistaken for
+            # ownerless child residue.
+            if edge.source_table == table.name:
+                parent_name, candidate_name = edge.source_table, edge.target_table
+            elif edge.target_table == table.name:
+                parent_name, candidate_name = edge.source_table, edge.target_table
+            else:
+                continue
+            if parent_name not in self._metadata.tables or candidate_name not in self._metadata.tables:
+                continue
+            parent = self._metadata.tables[parent_name]
+            candidate = self._metadata.tables[candidate_name]
+            assert edge.target_column is not None
+            connection.execute(
+                sqlalchemy.delete(candidate).where(
+                    ~sqlalchemy.exists(
+                        sqlalchemy.select(1).where(parent.c[SID_COLUMN] == candidate.c[edge.target_column])
+                    )
+                )
+            )
+
+    def steal_lease(self) -> None:
+        """Conditionally replace the current degraded-store writer lease.
+
+        The compare-and-swap includes the complete observed value so a stale
+        caller can never overwrite a newer owner.
+        """
+        if self._write_profile != "degraded":
+            raise RuntimeError("steal_lease is available only for a degraded-profile store")
+        with self._mutation_lock:
+            with self._degraded_lifecycle_guard():
+                with self._database.engine.begin() as connection:
+                    table = metadata_table_for(sqlalchemy.MetaData())
+                    prior = connection.execute(
+                        sqlalchemy.select(table.c.value).where(table.c.key == "lease")
+                    ).scalar_one_or_none()
+                    if prior is None:
+                        self._ensure_degraded_lease(connection)
+                        return
+                    mine = json.dumps(
+                        {"owner": self._lease_owner, "acquired_at": datetime.datetime.now(datetime.UTC).isoformat()},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    changed = connection.execute(
+                        sqlalchemy.update(table)
+                        .where(table.c.key == "lease", table.c.value == prior)
+                        .values(value=mine)
+                    ).rowcount
+                    if changed != 1:
+                        raise RuntimeError(
+                            f"could not steal degraded SqlStore lease from {self._lease_description(str(prior))}; retry"
+                        )
+                    self._lease_value = mine
 
     def _pending_table_names(self) -> set[str]:
         pending = getattr(self._local, "pending_tables", None)
@@ -577,6 +933,7 @@ class SqlStore:
 
     def _register_tables(self, classes: Iterable[type]) -> sqlalchemy.MetaData:
         requested = tuple(classes)
+        self._known_record_types.update(requested)
         candidate = self._candidate_metadata(requested)
         for cls in requested:
             table_for(resolve_schema(cls), self._metadata)
@@ -618,6 +975,46 @@ class SqlStore:
             # retain empty or partial declaration-shaped tables after rollback;
             # stamp trust accepts that residue and the next write completes it.
             self._pending_table_names().update(missing)
+
+    def _allocate_degraded_sid(self, connection: sqlalchemy.Connection, table_name: str, count: int = 1) -> int:
+        """Reserve a never-reused SQLite sid block while the writer lease is held."""
+        assert self._write_profile == "degraded"
+        if connection.dialect.name != "sqlite":  # pragma: no cover - opener validation protects this
+            raise RuntimeError("degraded SqlStore sid allocation is supported only on SQLite")
+        connection.execute(
+            sqlalchemy.text(
+                'CREATE TABLE IF NOT EXISTS "_httk_sid_counters" '
+                '(table_name TEXT PRIMARY KEY, next_sid INTEGER NOT NULL)'
+            )
+        )
+        self._after_degraded_write(f"counter-table-create:{table_name}")
+
+        def initialize() -> None:
+            quoted = table_name.replace('"', '""')
+            connection.execute(
+                sqlalchemy.text(
+                    'INSERT INTO "_httk_sid_counters" (table_name, next_sid) '
+                    f'SELECT :table_name, COALESCE((SELECT MAX(sid) + 1 FROM "{quoted}"), 1) '
+                    'WHERE NOT EXISTS (SELECT 1 FROM "_httk_sid_counters" WHERE table_name = :table_name)'
+                ),
+                {"table_name": table_name},
+            )
+            self._after_degraded_write(f"counter-init:{table_name}")
+
+        for attempt in range(2):
+            result = connection.execute(
+                sqlalchemy.text(
+                    'UPDATE "_httk_sid_counters" SET next_sid = next_sid + :count '
+                    'WHERE table_name = :table_name RETURNING next_sid'
+                ),
+                {"table_name": table_name, "count": count},
+            ).scalar_one_or_none()
+            if result is not None:
+                self._after_degraded_write(f"counter-allocation:{table_name}")
+                return int(result) - count
+            if attempt == 0:
+                initialize()
+        raise RuntimeError(f"could not initialize degraded sid counter for table {table_name!r}")
 
     def _missing_tables_for_read(self, classes: Iterable[type]) -> bool:
         """Register tables and report absence without issuing DDL."""
@@ -675,7 +1072,7 @@ class SqlStore:
         projection = SaveProjection()
         with self._write_connection() as connection:
             self._create_tables_for_write(connection, (record_type,))
-            sid = self._save(connection, record_type, obj, projection, "")
+            sid = self._save(connection, record_type, obj, projection, "", top_level=True)
             family = self._family_for_backing(record_type)
             if family is not None:
                 self._save_entry_dispatch(connection, family, record_type, sid, projection.content_id(record_type, obj))
@@ -688,13 +1085,15 @@ class SqlStore:
         source: Any,
         projection: _Projection,
         path: str,
+        *,
+        top_level: bool = False,
     ) -> int:
         active_key = (record_type, id(source))
         if active_key in projection.active:
             raise StorageProjectionCycleError(path, record_type)
         projection.active.add(active_key)
         try:
-            return self._save_active(connection, record_type, source, projection, path)
+            return self._save_active(connection, record_type, source, projection, path, top_level=top_level)
         finally:
             projection.active.remove(active_key)
 
@@ -705,6 +1104,8 @@ class SqlStore:
         source: Any,
         projection: _Projection,
         path: str,
+        *,
+        top_level: bool,
     ) -> int:
         schema = resolve_schema(record_type)
         table = self._table(schema.table_name)
@@ -722,11 +1123,21 @@ class SqlStore:
         if schema.dedup == "content_id":
             key = projection.content_id(record_type, source)
             found = connection.execute(
-                sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
+                sqlalchemy.select(table.c[SID_COLUMN], table.c[ROLE_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
             ).first()
             if found is not None:
+                if self._write_profile == "degraded":
+                    self._after_degraded_write(f"content-dedup-select:{table.name}")
                 sid = int(found[0])
+                # Match Mongo's order: a rejected metadata comparison is
+                # observational only and must never promote a dependency.
                 self._check_metadata(connection, record_type, sid, source, projection)
+                if top_level and int(found[1]) == 0:
+                    connection.execute(
+                        sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({ROLE_COLUMN: 1})
+                    )
+                    if self._write_profile == "degraded":
+                        self._after_degraded_write(f"content-promotion-update:{table.name}")
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
 
@@ -739,25 +1150,65 @@ class SqlStore:
             conditions = [
                 table.c[name].is_(None) if value is None else table.c[name] == value for name, value in values.items()
             ]
-            statement = sqlalchemy.select(table.c[SID_COLUMN])
+            statement = sqlalchemy.select(table.c[SID_COLUMN], table.c[ROLE_COLUMN])
             if conditions:
                 statement = statement.where(*conditions)
             found = connection.execute(statement.limit(1)).first()
             if found is not None:
                 sid = int(found[0])
+                if top_level and int(found[1]) == 0:
+                    connection.execute(
+                        sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({ROLE_COLUMN: 1})
+                    )
                 self._discard_inserted(connection, projection, checkpoint)
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
 
+        if self._write_profile == "degraded":
+            # Permanentization is deliberately sid-write-last: dependent
+            # records are encoded first by _parent_row, element rows are made
+            # durable under a reserved sid, and only then is the parent row
+            # written.  No error path deletes this residue.
+            self._touch_dirty_table(connection, table)
+            sid = self._allocate_degraded_sid(connection, table.name)
+            values[SID_COLUMN] = sid
+            values[ROLE_COLUMN] = int(top_level)
+            if key is not None:
+                values[CONTENT_ID_COLUMN] = key
+            for spec in schema.fields:
+                if spec.role == "child":
+                    self._insert_child_rows(
+                        connection,
+                        schema,
+                        spec,
+                        sid,
+                        self._projected_value(record_type, source, projected, spec),
+                        projection,
+                        _field_path(path, spec.field),
+                    )
+            connection.execute(sqlalchemy.insert(table).values(values))
+            self._after_degraded_write(f"parent-row-write:{table.name}")
+            projection.inserted.append((record_type, sid))
+            self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
+            return sid
+
         if key is not None:
             values[CONTENT_ID_COLUMN] = key
+            values[ROLE_COLUMN] = int(top_level)
             sid, inserted = self._insert_content_row(connection, table, values, key)
             if not inserted:
                 self._discard_inserted(connection, projection, checkpoint)
                 self._check_metadata(connection, record_type, sid, source, projection)
+                if top_level:
+                    connection.execute(
+                        sqlalchemy.update(table)
+                        .where(table.c[SID_COLUMN] == sid, table.c[ROLE_COLUMN] == 0)
+                        .values({ROLE_COLUMN: 1})
+                    )
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
         else:
+            values[ROLE_COLUMN] = int(top_level)
             insert = sqlalchemy.insert(table).values(values) if values else sqlalchemy.insert(table)
             result = connection.execute(insert)
             sid = int(cast(Any, result.inserted_primary_key)[0])
@@ -822,7 +1273,7 @@ class SqlStore:
         """Encode projected parent columns, saving referenced records recursively."""
 
         def resolve_sid(record_type: type, value: Any, field_path: str) -> int:
-            return self._save(connection, record_type, value, projection, field_path)
+            return self._save(connection, record_type, value, projection, field_path, top_level=False)
 
         return _encode_parent_row(schema, source, projected, path, resolve_sid)
 
@@ -853,12 +1304,14 @@ class SqlStore:
         assert spec.child is not None
 
         def resolve_sid(record_type: type, element: Any, element_path: str) -> int:
-            return self._save(connection, record_type, element, projection, element_path)
+            return self._save(connection, record_type, element, projection, element_path, top_level=False)
 
         rows = _encode_child_rows(schema, spec, sid, value, path, resolve_sid)
         if rows:
             table = self._table(spec.child.table_name)
+            self._touch_dirty_table(connection, table)
             connection.execute(sqlalchemy.insert(table), rows)
+            self._after_degraded_write(f"child-row-write:{table.name}")
 
     # ------------------------------------------------------------------ fetching
 
@@ -1016,6 +1469,32 @@ class SqlStore:
         """
         return SqlSearcher(self)
 
+    def fsck(
+        self,
+        *,
+        repair: bool = True,
+        collect_garbage: bool = True,
+        repair_conflicts: bool = False,
+        known_types: tuple[type, ...] = (),
+        exclusive: bool = False,
+    ) -> Any:
+        """Repair dispatches and reclaim permanentization residue.
+
+        Only tables attributable to the persisted layout or ``known_types``
+        are swept; unrelated application tables make collection refuse.
+        """
+        self._reject_during_bulk()
+        from httk.data.db.fsck import run_fsck
+
+        return run_fsck(
+            self,
+            repair=repair,
+            collect_garbage=collect_garbage,
+            repair_conflicts=repair_conflicts,
+            known_types=known_types,
+            exclusive=exclusive,
+        )
+
     def stored_property_plan(self, family: type) -> Any:
         """Return the SQL stored-property plan for one configured entry family.
 
@@ -1109,6 +1588,8 @@ class SqlStore:
         values = {DISPATCH_CONTENT_ID_COLUMN: key, column_name: sid}
         inserted = self._insert_dispatch_row(connection, table, values)
         if inserted:
+            if self._write_profile == "degraded":
+                self._after_degraded_write(f"dispatch-row-write:{table.name}")
             return
         # ``ON CONFLICT DO NOTHING`` keeps SQLite, DuckDB and PostgreSQL
         # transactions usable after either uniqueness conflict. Diagnose the
@@ -1433,6 +1914,11 @@ class SqlStore:
     # ------------------------------------------------------------------ identity caches
 
     def _discard_inserted(self, connection: sqlalchemy.Connection, projection: _Projection, checkpoint: int) -> None:
+        # In the autocommit permanentization profile, pre-parent residue is the
+        # deliberate crash-recovery input for fsck; only transactional saves
+        # compensate dependency inserts after a dedup hit.
+        if self._write_profile == "degraded":
+            return
         if checkpoint == len(projection.inserted):
             return
         for record_type, sid in reversed(projection.inserted[checkpoint:]):

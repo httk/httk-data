@@ -25,4 +25,5 @@ The full guide, {doc}`details/db`, covers declaring storable classes with the
 httk-core marker vocabulary, entry families and multi-record dispatch, the
 search DSL and stored properties, bulk ingestion (including
 `bulk_ingest(workers=N)` and the crash-safe `finalize="deferred"` fresh-store
-profile), OPTIMADE serving, and store-layout versioning.
+profile), the permanentization role model with `store.fsck()` recovery,
+OPTIMADE serving, and store-layout versioning.

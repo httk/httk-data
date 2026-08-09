@@ -42,6 +42,7 @@ from httk.data.db.schema import (
 __all__ = [
     "CONTENT_ID_COLUMN",
     "DISPATCH_CONTENT_ID_COLUMN",
+    "ROLE_COLUMN",
     "SID_COLUMN",
     "backing_dispatch_column_name",
     "dispatch_table_for",
@@ -55,6 +56,9 @@ SID_COLUMN: Final = "sid"
 
 CONTENT_ID_COLUMN: Final = "content_id"
 """The store-managed content-identity column of tables with the ``"content_id"`` dedup policy."""
+
+ROLE_COLUMN: Final = "_httk_role"
+"""The permanentization role of a parent record — ``0`` dependency, ``1`` main."""
 
 DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
 """The content identity primary key of an entry-family dispatch table."""
@@ -197,6 +201,12 @@ def _build_parent_table(schema: TableSchema, metadata: sqlalchemy.MetaData) -> s
             autoincrement=True,
         )
     ]
+    # This is storage bookkeeping, deliberately not part of a schema's value
+    # identity, canonical content encoding, or hydrated entry surface.
+    items.append(sqlalchemy.Column(ROLE_COLUMN, sqlalchemy.SmallInteger, nullable=False))
+    items.append(
+        sqlalchemy.CheckConstraint(f"{ROLE_COLUMN} IN (0, 1)", name=_index_name("ck", name, (ROLE_COLUMN, "valid")))
+    )
     if schema.dedup == "content_id":
         items.append(sqlalchemy.Column(CONTENT_ID_COLUMN, sqlalchemy.Text, nullable=False))
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))

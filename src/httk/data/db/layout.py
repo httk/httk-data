@@ -37,8 +37,9 @@ __all__ = [
     "backend_facts_for_dialect",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.2.0"
-# One bump covers the FK-free DDL and under-construction marker semantics.
+STORAGE_PROTOCOL_VERSION: Final = "v2.3.0"
+# One bump covers permanentization roles, write profile metadata, and the
+# degraded SQLite protocol in addition to the v2.2.0 layout semantics.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"
@@ -74,7 +75,7 @@ class BackendFacts:
 
 
 _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
-    "sqlite": BackendFacts(False, True, False, True, "sqlite", "sqlite", True, False),
+    "sqlite": BackendFacts(False, True, False, True, "sqlite", "sqlite", True, True),
     "duckdb": BackendFacts(True, True, True, True, "duckdb-attach", "parquet", True, False),
 }
 

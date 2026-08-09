@@ -55,6 +55,7 @@ __all__ = [
     "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "FsckSummary",  # pyright: ignore[reportUnsupportedDunderAll]
     "MultipleResultsError",
     "NoResultError",
     "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -98,6 +99,7 @@ _SQL_EXPORTS = {
     "stored_property_sql_plan": ".stored_properties",
     "StaleResultError": ".rows",
     "ExpiredCursorRowError": ".results",
+    "FsckSummary": ".fsck",
     "ResultColumn": ".results",
     "SqlResultSet": ".results",
 }

@@ -134,6 +134,58 @@ While a saved or fetched instance is alive, fetching its sid again returns the
 very same object. Join-objects pointing at a stored instance are found with
 `store.referring(TagClass, field="structure", to=record)`.
 
+## Permanentization, degraded writes, and fsck
+
+SQL stores use a storage-only `_httk_role` parent column: `1` marks a record
+saved at the public top level and `0` marks a recursively saved dependency.
+The column is not part of content identity, by-value matching, canonical
+encoding, hydrated records, or query results. Saving a dependency again at the
+top level promotes its existing row to main; bulk canonicalization likewise
+keeps the maximum role of all collapsed occurrences.
+
+The usual `Database.sqlite(...)` and `Database.duckdb(...)` stores have the
+persisted `transactional` write profile (the absent metadata value means the
+same thing). SQLite additionally exposes an explicitly opt-in, artificial
+transactionless conformance vehicle:
+
+```python
+db = Database.sqlite("recovery-test.sqlite", degraded=True)
+store = SqlStore(db, entry_records={})
+```
+
+That construction stamps the `degraded` profile and can only reopen through a
+similarly configured database. Opening validates the live SQLite DB-API
+autocommit state, not just the construction flag; a transactional profile also
+rejects an autocommit engine. It is SQLite-only in this release: it uses DB-API
+autocommit to model SQL-like backends that cannot provide transaction rollback.
+The profile is deliberately single-writer. A database-visible writer lease is
+acquired on mutation and held until `Database.dispose()`; another instance can
+inspect the holder/age and explicitly call `store.steal_lease()` when recovery
+authority is clear.
+
+Degraded saves permanently write dependencies first, then child-element rows
+under a preallocated monotonic sid, then the parent sid row last. Thus a visible
+parent means its subtree is complete; a failed write may leave only dependency
+or child residue. No compensation deletion is attempted. Per-operation dirty
+markers cost one lookup, one upsert, and one conditional delete per touched
+table; a leftover marker arranges a targeted ownerless-child sweep before the
+next write to that table. Sid counters are created and initialized lazily at
+the first allocation for each parent table. `bulk_ingest()` is intentionally unavailable for degraded stores in
+v2.3.0; use ordered `save()` calls.
+
+Run `store.fsck(known_types=(...))` after a failed degraded writer (or for an
+integrity audit). It repairs missing dispatch rows for main entries, sweeps
+ownerless child rows, marks from main and dispatch roots, removes unreachable
+dependency rows, and reports dangling logical references. It refuses garbage
+collection if it finds an ordinary application table it cannot attribute to
+the declared layout or `known_types`; no unrelated table is guessed or swept.
+SQLite transactional fsck uses `BEGIN IMMEDIATE`. DuckDB callers must pass
+`exclusive=True`, which is an explicit acknowledgement that the database is
+offline from all writers for the entire fsck; DuckDB cannot otherwise enforce
+the necessary read/delete exclusion. Invalid role values are violations; with
+`repair=True` fsck normalizes them to dependency role `0` rather than inventing
+a new root.
+
 ## Bulk ingestion
 
 `store.bulk_ingest()` is a faster path than a `save()` loop for **building a

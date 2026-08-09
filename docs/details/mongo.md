@@ -229,6 +229,8 @@ are operational behavior, not guarantees to be inferred from SQL parity.
 4. **Orphan documents.** Unreachable orphan documents, for any dedup policy,
    can exist between a degraded-mode crash or dedup-discard and the next fsck.
    Degraded-mode compensation deletes nothing; fsck is the collector.
+   SQL's v2.3.0 degraded SQLite profile follows the same main/dependency role
+   and fsck model; see [the SQL permanentization section](db.md#permanentization-degraded-writes-and-fsck).
 
 5. **Client-verified exact predicates.** `scaled_exact_equal()` and any
    client-verified predicate cost client-side verification and over-fetch. If

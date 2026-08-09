@@ -15,8 +15,11 @@ import importlib.util
 import logging
 import os
 import sys
+import threading
+from contextlib import contextmanager
 from fractions import Fraction
 from types import TracebackType
+from collections.abc import Callable
 from typing import Any, Self
 
 import sqlalchemy
@@ -43,12 +46,17 @@ class Database:
     :param engine: The configured SQLAlchemy engine to wrap.
     """
 
-    def __init__(self, engine: sqlalchemy.Engine) -> None:
+    def __init__(self, engine: sqlalchemy.Engine, *, degraded: bool = False) -> None:
         self._engine = engine
+        self._degraded = degraded
+        self._dispose_callbacks: list[Callable[[], None]] = []
+        self._dispose_lock = threading.RLock()
+        self._disposed = False
+        self._lifecycle_generation = 0
         _install_exact_fraction_functions(engine)
 
     @classmethod
-    def sqlite(cls, path: str | os.PathLike[str] | None = None) -> Self:
+    def sqlite(cls, path: str | os.PathLike[str] | None = None, *, degraded: bool = False) -> Self:
         """Create an SQLite database stored in ``path``, or in memory when ``path`` is None.
 
         The in-memory variant is configured (via a static connection pool with a
@@ -60,14 +68,17 @@ class Database:
         :return: The configured database wrapper.
         """
         if path is None:
-            engine = sqlalchemy.create_engine(
-                "sqlite://",
-                poolclass=sqlalchemy.StaticPool,
-                connect_args={"check_same_thread": False},
-            )
+            options: dict[str, Any] = {
+                "poolclass": sqlalchemy.StaticPool,
+                "connect_args": {"check_same_thread": False},
+            }
+            if degraded:
+                options["isolation_level"] = "AUTOCOMMIT"
+            engine = sqlalchemy.create_engine("sqlite://", **options)
         else:
-            engine = sqlalchemy.create_engine(f"sqlite:///{os.fspath(path)}")
-        return cls(engine)
+            options = {"isolation_level": "AUTOCOMMIT"} if degraded else {}
+            engine = sqlalchemy.create_engine(f"sqlite:///{os.fspath(path)}", **options)
+        return cls(engine, degraded=degraded)
 
     @classmethod
     def duckdb(cls, path: str | os.PathLike[str] | None = None) -> Self:
@@ -97,6 +108,42 @@ class Database:
         return cls(engine)
 
     @property
+    def degraded(self) -> bool:
+        """Whether this wrapper deliberately uses the SQLite autocommit vehicle."""
+        return self._degraded
+
+    @property
+    def lifecycle_generation(self) -> int:
+        """Return the active lifecycle generation for guarded storage callbacks."""
+        with self._dispose_lock:
+            if self._disposed:
+                raise RuntimeError("cannot obtain a lifecycle generation from a disposed Database")
+            return self._lifecycle_generation
+
+    def add_dispose_callback(self, callback: Callable[[], None], *, generation: int | None = None) -> int:
+        """Register a best-effort callback for the active lifecycle generation.
+
+        A disposed wrapper deliberately rejects late registration: accepting a
+        callback after :meth:`dispose` snapshots its callback list can strand a
+        store-owned lease on a newly recreated pool.
+        """
+        with self._dispose_lock:
+            if self._disposed:
+                raise RuntimeError("cannot register a disposal callback on a disposed Database")
+            if generation is not None and generation != self._lifecycle_generation:
+                raise RuntimeError("Database lifecycle generation changed before callback registration")
+            self._dispose_callbacks.append(callback)
+            return self._lifecycle_generation
+
+    @contextmanager
+    def lifecycle_guard(self, generation: int) -> Any:
+        """Prevent disposal while one store mutation uses ``generation``."""
+        with self._dispose_lock:
+            if self._disposed or generation != self._lifecycle_generation:
+                raise RuntimeError("Database has been disposed; create a new Database before mutating this store")
+            yield
+
+    @property
     def engine(self) -> sqlalchemy.Engine:
         """Return the underlying SQLAlchemy engine for the storage layer.
 
@@ -109,6 +156,17 @@ class Database:
 
         :return: None.
         """
+        with self._dispose_lock:
+            if self._disposed:
+                return
+            self._disposed = True
+            self._lifecycle_generation += 1
+            callbacks, self._dispose_callbacks = self._dispose_callbacks, []
+        for callback in callbacks:
+            try:
+                callback()
+            except Exception:
+                _LOGGER.exception("database disposal callback failed", extra={"context": "storage"})
         self._engine.dispose()
 
     def __enter__(self) -> Self:
@@ -135,6 +193,30 @@ class Database:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self._engine.url!r})"
+
+
+def connection_uses_autocommit(connection: sqlalchemy.Connection) -> bool:
+    """Return the DBAPI connection's actual autocommit state.
+
+    SQLAlchemy's execution options describe an engine's intent, but a caller
+    can wrap any preconfigured engine in :class:`Database`.  Permanentization
+    must therefore inspect the live SQLite DBAPI connection rather than trust
+    ``Database.degraded``.  ``sqlite3.Connection.isolation_level is None`` is
+    SQLite's documented autocommit mode; the SQLAlchemy checks cover alternate
+    DBAPI wrappers while still requiring the live connection to agree.
+    """
+    if connection.dialect.name != "sqlite":
+        return False
+    raw = connection.connection.driver_connection
+    if getattr(raw, "isolation_level", object()) is None:
+        return True
+    execution_mode = connection.get_execution_options().get("isolation_level")
+    if isinstance(execution_mode, str) and execution_mode.upper() == "AUTOCOMMIT":
+        return True
+    try:
+        return str(connection.get_isolation_level()).upper() == "AUTOCOMMIT"
+    except (AttributeError, NotImplementedError):
+        return False
 
 
 def _install_missing_pandas_sentinel() -> None:

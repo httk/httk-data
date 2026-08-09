@@ -63,6 +63,7 @@ from httk.core.storage import StorageProjectionCycleError, resolve_storage_recor
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    ROLE_COLUMN,
     SID_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
@@ -452,6 +453,7 @@ class _WorkerEncoder:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
         sid = self._encode(record_type, obj, projection, "")
+        self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
         table_name = resolve_schema(record_type).table_name
         family = self._store._family_for_backing(record_type)
         if family is not None and len(family.records) > 1:
@@ -523,7 +525,7 @@ class _WorkerEncoder:
                 "reduce the worker count or split the ingest"
             )
         self._next_sid[table_name] = sid + 1
-        row = {SID_COLUMN: sid, **values}
+        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             for field_name, column_name in _plain_float_skip_fields(record_type):
@@ -553,6 +555,12 @@ class _WorkerEncoder:
             for child_row in child_rows:
                 self._buffer(spec.child.table_name, child_row)
         return sid
+
+    def _promote_buffered_role(self, table_name: str, sid: int) -> None:
+        for row in self._rows.get(table_name, ()):
+            if row[SID_COLUMN] == sid:
+                row[ROLE_COLUMN] = 1
+                return
 
     def _register(self, record_type: type) -> None:
         if record_type in self._registered:
@@ -987,7 +995,7 @@ class _Merger:
         self._apply_collapse(table, schema, pairs)
 
     def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> bool:
-        value_columns = [column.name for column in table.columns if column.name != SID_COLUMN]
+        value_columns = [column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN)]
         while True:
             keep = (
                 sqlalchemy.select(
@@ -1014,6 +1022,17 @@ class _Merger:
 
     def _apply_collapse(self, table: sqlalchemy.Table, schema: TableSchema, pairs: list[tuple[int, int]]) -> None:
         name = table.name
+        # Role is a monotone bookkeeping bit, not part of either identity.  A
+        # canonical bulk row is main whenever any collapsed occurrence was a
+        # top-level record.
+        for old, keep in pairs:
+            old_role = self._connection.execute(
+                sqlalchemy.select(table.c[ROLE_COLUMN]).where(table.c[SID_COLUMN] == old)
+            ).scalar_one()
+            if int(old_role) == 1:
+                self._connection.execute(
+                    sqlalchemy.update(table).where(table.c[SID_COLUMN] == keep).values({ROLE_COLUMN: 1})
+                )
         for old, keep in pairs:
             self._collapse[(name, old)] = keep
         child_links = {

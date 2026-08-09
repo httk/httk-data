@@ -166,7 +166,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":1}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.2.0"
+    assert STORAGE_PROTOCOL_VERSION == "v2.3.0"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -230,14 +230,20 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
         assert actual_table_names(connection) == before
 
 
-def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(database: Database) -> None:
+@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0"])
+def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
+    database: Database, old_protocol: str
+) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         # This is the prior persisted protocol, not an arbitrary malformed value.
-        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.1.0' WHERE key = 'protocol'"))
+        connection.execute(
+            sqlalchemy.text("UPDATE _httk_store_metadata SET value = :protocol WHERE key = 'protocol'"),
+            {"protocol": old_protocol},
+        )
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(database)
-    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "v2.1.0"}
+    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": old_protocol}
 
 
 def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:
@@ -246,7 +252,7 @@ def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:
     assert store.backend_facts.serial_stage_format == "sqlite"
     assert store.backend_facts.parallel_shard_format == "sqlite"
     assert store.backend_facts.supports_deferred_finalize
-    assert not store.backend_facts.supports_degraded
+    assert store.backend_facts.supports_degraded
     assert backend_facts_for_dialect("sqlite") == store.backend_facts
     with pytest.raises(ValueError, match="does not support dialect"):
         backend_facts_for_dialect("unknown")

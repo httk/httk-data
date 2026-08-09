@@ -111,6 +111,7 @@ from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    ROLE_COLUMN,
     SID_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
@@ -299,6 +300,10 @@ class BulkIngest:
 
     def __enter__(self) -> Self:
         store = self._store
+        if store.write_profile == "degraded":
+            raise RuntimeError(
+                "bulk_ingest is not supported by the SQLite degraded write profile; use ordered save() or fsck()"
+            )
         if store._bulk_active:
             raise RuntimeError("this SqlStore already has an open bulk_ingest context")
         if store._current_connection() is not None:
@@ -726,6 +731,7 @@ class BulkIngest:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
         sid = self._encode(record_type, obj, projection, "")
+        self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
         table_name = resolve_schema(record_type).table_name
         family = self._store._family_for_backing(record_type)
         if family is not None and len(family.records) > 1:
@@ -958,7 +964,7 @@ class BulkIngest:
 
         sid = self._next_sid[table_name]
         self._next_sid[table_name] = sid + 1
-        row = {SID_COLUMN: sid, **values}
+        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             self._content_index[table_name][key] = sid
@@ -984,6 +990,13 @@ class BulkIngest:
             for child_row in child_rows:
                 self._buffer_row(spec.child.table_name, child_row)
         return sid
+
+    def _promote_buffered_role(self, table_name: str, sid: int) -> None:
+        """Mark a top-level bulk occurrence main without making role a dedup key."""
+        for row in self._rows.get(table_name, ()):
+            if row[SID_COLUMN] == sid:
+                row[ROLE_COLUMN] = 1
+                return
 
     def _buffer_row(self, table_name: str, row: dict[str, Any]) -> None:
         self._rows.setdefault(table_name, []).append(row)
@@ -1648,6 +1661,7 @@ class BulkIngest:
             content_map[key] = existing_sid
         if self._verify_metadata:
             self._verify_existing_metadata(hits)
+        self._promote_existing_roles(table, rows, sid_map)
         for staged_sid, existing_sid in sid_map.items():
             self._resolved_map[(name, staged_sid)] = existing_sid
         self._drop_hit_rows(name, schema, sid_map)
@@ -1685,9 +1699,33 @@ class BulkIngest:
                 sid_map[staged_sid] = existing_sid
                 value_map[_value_tuple(row_by_sid[staged_sid])] = existing_sid
                 self._resolved_map[(name, staged_sid)] = existing_sid
+            self._promote_existing_roles(table, rows, sid_map)
             self._drop_hit_rows(name, schema, sid_map)
             self._apply_remap(name, sid_map, fk_columns)
         return found_any
+
+    def _promote_existing_roles(
+        self, table: sqlalchemy.Table, staged_rows: list[dict[str, Any]], sid_map: Mapping[int, int]
+    ) -> None:
+        """Propagate a collapsed staged main occurrence to an existing winner.
+
+        This runs after content metadata verification, so a rejected staged
+        content-id hit cannot mutate the existing row.  By-value has no
+        metadata comparison, matching ordinary by-value save semantics.
+        """
+        assert self._connection is not None
+        main_existing = {
+            existing_sid
+            for row in staged_rows
+            if row[SID_COLUMN] in sid_map and int(row.get(ROLE_COLUMN, 0)) == 1
+            for existing_sid in (sid_map[row[SID_COLUMN]],)
+        }
+        if main_existing:
+            self._connection.execute(
+                sqlalchemy.update(table)
+                .where(table.c[SID_COLUMN].in_(main_existing), table.c[ROLE_COLUMN] == 0)
+                .values({ROLE_COLUMN: 1})
+            )
 
     def _stage_content_hits(self, table: sqlalchemy.Table, rows: list[dict[str, Any]]) -> list[tuple[int, int, str]]:
         """Stage ``rows`` and return ``(staged_sid, existing_sid, content_id)`` for each content-id hit."""
@@ -1706,7 +1744,7 @@ class BulkIngest:
         assert self._connection is not None
         stage = self._create_stage(table, rows)
         try:
-            value_columns = [column.name for column in table.columns if column.name != SID_COLUMN]
+            value_columns = [column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN)]
             condition = sqlalchemy.and_(*(stage.c[name].is_not_distinct_from(table.c[name]) for name in value_columns))
             statement = (
                 sqlalchemy.select(stage.c[SID_COLUMN], sqlalchemy.func.min(table.c[SID_COLUMN]))
@@ -2046,4 +2084,4 @@ class BulkIngest:
 
 def _value_tuple(row: Mapping[str, Any]) -> tuple[Any, ...]:
     """The whole-parent-column dedup key of a by_value row (its sid excluded)."""
-    return tuple(sorted((name, value) for name, value in row.items() if name != SID_COLUMN))
+    return tuple(sorted((name, value) for name, value in row.items() if name not in (SID_COLUMN, ROLE_COLUMN)))
