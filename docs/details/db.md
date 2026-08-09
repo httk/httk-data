@@ -14,6 +14,7 @@ The SQL layer is an optional extra (plain `import httk.data` works without it):
 ```bash
 python -m pip install "httk-data[db]"      # SQLite (built into Python) via sqlalchemy
 python -m pip install "httk-data[duckdb]"  # additionally the DuckDB backend
+python -m pip install "httk-data[clickhouse]"  # ClickHouse backend
 ```
 
 Touching a SQL-backed name (such as `httk.data.db.Database`) without the extra
@@ -186,14 +187,49 @@ the necessary read/delete exclusion. Invalid role values are violations; with
 `repair=True` fsck normalizes them to dependency role `0` rather than inventing
 a new root.
 
+### ClickHouse bulk-fenced writes
+
+ClickHouse uses KeeperMap metadata and the persisted `bulk-fenced` profile.
+Reads do not acquire a lease. A bulk writer acquires a fresh, never-reused
+token with a strict insert, verifies that exact value during the P2 bulk-entry
+and marker operations, and releases it with an exact-value delete when
+`Database.dispose()` runs. P3 adds verification around its durable phases. The
+`ingest_state` marker is also a strict insert and carries the lease token plus
+a fresh per-ingest nonce; it is cleared only by an exact-value delete after a
+successful ingest.
+`steal_lease()` is intentionally unavailable.
+
+If a writer dies with only a lease residue, inspect `_httk_store_metadata`,
+verify that the writer is no longer alive, and delete only the observed lease
+value with a ClickHouse client:
+
+```sql
+SELECT key, value FROM _httk_store_metadata WHERE key = 'lease';
+DELETE FROM _httk_store_metadata
+WHERE key = 'lease' AND value = '<observed lease JSON>';
+```
+
+Never clear `ingest_state` merely because its lease was removed. Its presence
+means the store may contain partial or inconsistent physical state, so the
+default remedy is `DROP DATABASE`, recreate the bootstrap table, and re-ingest.
+Only after a verified cleanup/rebuild has restored the declared empty-store
+invariant may an operator clear the exact observed marker value. Do not delete
+values belonging to a live writer or use broad key-only deletes.
+
 ## Bulk ingestion
 
-`store.bulk_ingest()` is a faster path than a `save()` loop for **building a
-store from scratch or appending a large increment** to one. It returns a
+For SQLite and DuckDB, `store.bulk_ingest()` is a faster path than a `save()`
+loop for **building a store from scratch or appending a large increment** to
+one. It returns a
 `httk.data.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
 encoded rows with pre-assigned sids and appends them in `executemany` batches
 inside one transaction, instead of one statement round-trip and an in-database
 deduplication protocol per record. It is a near drop-in for the save loop:
+
+ClickHouse bulk ingestion is currently fresh-store-only and stops at the P2
+lease-plus-marker boundary until P3 supplies its nontransactional loader and
+finalizer. It does not provide rollback or exact restoration; marker residue
+fails closed and the default recovery is drop-and-reingest.
 
 ```python
 # Per-record save loop
@@ -221,8 +257,8 @@ second `bulk_ingest()` context on the same store is refused. Reads from an
 already-open store remain available; a new open is rejected while an
 empty-store ingest marker is present.
 
-**One spanning transaction, all-or-nothing.** The whole ingest runs in a single
-transaction that commits only on clean exit. Any exception — a metadata
+**SQLite/DuckDB transaction and restoration.** On SQLite and DuckDB, the whole
+ingest runs in a single transaction that commits only on clean exit. Any exception — a metadata
 conflict, a uniqueness violation, or one you raise inside the block — rolls the
 transaction back, drops every table the context created, restores any index it
 dropped, removes its staging tables, and clears the store's identity caches,
@@ -231,6 +267,10 @@ empty-store ingest, cleanup verifies that only the metadata table remains and
 then clears its marker, so retrying is safe. A hard crash can leave the marker
 behind; subsequent opens reject that store and require dropping and re-ingesting
 it.
+
+These transaction and restoration guarantees do not apply to ClickHouse. Its
+nontransactional P3 ingest will use the marker as a fail-closed recovery gate;
+an interrupted marker defaults to drop-and-re-ingest.
 
 **Deduplication and uniqueness are post-conditions, not per-row checks.** Within
 the stream, records deduplicate set-wise in memory by the class's

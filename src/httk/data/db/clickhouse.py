@@ -5,6 +5,8 @@ objects.  This module is the adapter boundary for ClickHouse's physical types,
 MergeTree sorting keys, system catalogue, and KeeperMap metadata protocol.
 """
 
+import datetime
+import json
 import threading
 import uuid
 from collections.abc import Iterator, Mapping
@@ -19,20 +21,27 @@ _MIN_SERVER_VERSION = (26, 8, 1, 1028)
 _BOOTSTRAP_TABLE = "_httk_bootstrap"
 _BOOTSTRAP_PATH = "/_httk_bootstrap"
 _METADATA_MARKER = "httk_metadata"
+_LEASE_KEY = "lease"
+_INGEST_STATE_KEY = "ingest_state"
 _BOOTSTRAP_LOCK_MESSAGE = "ClickHouse Keeper bootstrap lock is unavailable; Keeper is required"
 
 __all__ = [
+    "acquire_lease",
     "actual_columns",
     "actual_schema_objects",
     "bootstrap_fence",
+    "clear_ingest_marker",
     "decorate_table",
     "ensure_bootstrap_table",
     "install_connection_guards",
     "keeper_database_uuid",
     "keeper_metadata_path",
+    "release_lease",
     "stamp_store_metadata",
     "validate_metadata_table",
     "verify_clickhouse_connection",
+    "verify_lease",
+    "write_ingest_marker",
 ]
 
 
@@ -256,6 +265,191 @@ def _bootstrap_table() -> sqlalchemy.Table:
         sqlalchemy.Column("key", sqlalchemy.Text, primary_key=True, nullable=False),
         sqlalchemy.Column("value", sqlalchemy.Text, nullable=False),
     )
+
+
+def _metadata_table() -> sqlalchemy.Table:
+    metadata = sqlalchemy.MetaData()
+    return sqlalchemy.Table(
+        "_httk_store_metadata",
+        metadata,
+        sqlalchemy.Column("key", sqlalchemy.Text, primary_key=True, nullable=False),
+        sqlalchemy.Column("value", sqlalchemy.Text, nullable=False),
+    )
+
+
+def _metadata_value(connection: sqlalchemy.Connection, key: str) -> str | None:
+    table = _metadata_table()
+    return connection.execute(sqlalchemy.select(table.c.value).where(table.c.key == key)).scalar_one_or_none()
+
+
+def _lease_description(value: str) -> str:
+    try:
+        parsed = json.loads(value)
+        acquired = datetime.datetime.fromisoformat(str(parsed["acquired_at"]))
+        age = datetime.datetime.now(datetime.UTC) - acquired.astimezone(datetime.UTC)
+        return f"holder {parsed['owner']!r}, age {age}"
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return f"holder value {value!r} (unparseable age)"
+
+
+def _manual_lease_recovery(key: str, value: str | None) -> str:
+    if value is None:
+        return (
+            "manual recovery (lease): inspect _httk_store_metadata for a stale lease, "
+            "verify the writer is dead, then issue an exact-value lease DELETE"
+        )
+    escaped = value.replace("'", "''")
+    return (
+        "manual recovery (lease): after verifying the writer is dead, issue "
+        f"DELETE FROM _httk_store_metadata WHERE key = '{key}' AND value = '{escaped}'"
+    )
+
+
+def _exception_chain(error: BaseException) -> Iterator[BaseException]:
+    """Yield an exception and its DBAPI/SQLAlchemy causes once each."""
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        yield current
+        for attribute in ("orig", "__cause__", "__context__"):
+            cause = getattr(current, attribute, None)
+            if isinstance(cause, BaseException):
+                pending.append(cause)
+
+
+def _keeper_error_code(error: BaseException) -> int | None:
+    for current in _exception_chain(error):
+        try:
+            code = getattr(current, "code", None)
+        except BaseException:
+            code = None
+        if code is None:
+            continue
+        try:
+            return int(code)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_keeper_node_exists(error: BaseException) -> bool:
+    code = _keeper_error_code(error)
+    if code is not None:
+        return code == 999
+    text = " ".join(str(current) for current in _exception_chain(error)).casefold()
+    return "node exists" in text or "already exists" in text
+
+
+def _strict_insert(
+    connection: sqlalchemy.Connection,
+    key: str,
+    value: str,
+) -> None:
+    table = _metadata_table()
+    connection.execute(
+        sqlalchemy.insert(table).values(key=key, value=value).execution_options(settings={"keeper_map_strict_mode": 1})
+    )
+
+
+def acquire_lease(connection: sqlalchemy.Connection, owner: str) -> str:
+    """Strictly acquire the store lease and return its complete JSON value."""
+    token = uuid.uuid4().hex
+    payload = json.dumps(
+        {
+            "owner": owner,
+            "token": token,
+            "acquired_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    try:
+        _strict_insert(connection, _LEASE_KEY, payload)
+    except BaseException as error:
+        held = None
+        diagnostic_error: BaseException | None = None
+        try:
+            held = _metadata_value(connection, _LEASE_KEY)
+        except BaseException as diagnostic:
+            diagnostic_error = diagnostic
+        if held is not None and _is_keeper_node_exists(error):
+            raise RuntimeError(
+                f"ClickHouse lease is held ({_lease_description(str(held))}); "
+                f"{_manual_lease_recovery(_LEASE_KEY, str(held))}"
+            ) from error
+        if held is not None:
+            raise RuntimeError(
+                f"ClickHouse lease acquisition failed; {_lease_description(str(held))}; "
+                f"{_manual_lease_recovery(_LEASE_KEY, str(held))}"
+            ) from error
+        raise RuntimeError(
+            f"ClickHouse lease acquisition failed; Keeper is required; {_manual_lease_recovery(_LEASE_KEY, None)}"
+            + (f" (diagnostic read failed: {diagnostic_error})" if diagnostic_error is not None else "")
+        ) from error
+    return payload
+
+
+def verify_lease(connection: sqlalchemy.Connection, lease_value: str) -> None:
+    """Verify that the current KeeperMap lease still contains ``lease_value``."""
+    current = _metadata_value(connection, _LEASE_KEY)
+    if current != lease_value:
+        holder = "missing lease" if current is None else _lease_description(str(current))
+        raise RuntimeError(f"ClickHouse lease ownership was lost ({holder})")
+
+
+def release_lease(connection: sqlalchemy.Connection, lease_value: str | None) -> None:
+    """Idempotently delete only the exact lease value owned by this writer."""
+    if lease_value is None:
+        return
+    table = _metadata_table()
+    connection.execute(sqlalchemy.delete(table).where(table.c.key == _LEASE_KEY, table.c.value == lease_value))
+
+
+def write_ingest_marker(connection: sqlalchemy.Connection, lease_value: str) -> str:
+    """Strictly insert the token-carrying bulk-ingest marker."""
+    verify_lease(connection, lease_value)
+    lease = json.loads(lease_value)
+    marker = json.dumps(
+        {
+            "state": "bulk-ingest",
+            "token": lease["token"],
+            "acquired_at": lease["acquired_at"],
+            "nonce": uuid.uuid4().hex,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    try:
+        _strict_insert(connection, _INGEST_STATE_KEY, marker)
+    except BaseException:
+        # KeeperMap writes are durable independently of the client response.
+        # If an ambiguous insert did land this exact token, remove only that
+        # observed value; a different marker is foreign crash residue.
+        try:
+            observed = _metadata_value(connection, _INGEST_STATE_KEY)
+        except BaseException:
+            observed = None
+        if observed == marker:
+            try:
+                clear_ingest_marker(connection, marker)
+            except BaseException as cleanup_error:
+                raise RuntimeError(
+                    "ClickHouse ingest marker insert was ambiguous and exact-token cleanup failed"
+                ) from cleanup_error
+        raise
+    return marker
+
+
+def clear_ingest_marker(connection: sqlalchemy.Connection, marker_value: str | None) -> None:
+    """Idempotently clear only the exact marker value from this ingest."""
+    if marker_value is None:
+        return
+    table = _metadata_table()
+    connection.execute(sqlalchemy.delete(table).where(table.c.key == _INGEST_STATE_KEY, table.c.value == marker_value))
 
 
 def _expected_bootstrap_engine() -> str:

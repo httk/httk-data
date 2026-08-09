@@ -184,11 +184,13 @@ class BulkIngest:
     (staged and resolved set-wise against any existing rows), the separable
     indexes are created or rebuilt (verifying uniqueness), DuckDB sid sequences
     are resynchronized, per-table row counts are asserted against the encoder's
-    bookkeeping, and the single spanning transaction commits. On any exception
-    the transaction rolls back, every table the context created is dropped, any
-    index the context dropped is restored, staging tables are removed, and the
-    store's identity caches are cleared, leaving the store exactly as it was
-    before the context opened.
+    bookkeeping, and the single spanning transaction commits on SQLite and
+    DuckDB. On those backends, any exception rolls the transaction back, drops
+    every table the context created, restores any index the context dropped,
+    removes staging tables, and clears the store's identity caches, leaving the
+    store exactly as it was before the context opened. ClickHouse is
+    fresh-store-only and fail-closed through its KeeperMap marker; its P3
+    loader/finalizer owns the durable ingest path.
 
     :param store: The store to ingest into.
     :param chunk_size: The number of top-level saves buffered before a flush.
@@ -265,7 +267,11 @@ class BulkIngest:
         self._rebuild_scan_tables: set[str] = set()
         self._staging_tables: set[str] = set()
         self._marker_active = False
+        self._marker_value: str | None = None
         self._entry_catalog: tuple[tuple[str, ...], ...] | None = None
+        self._bulk_lock_held = False
+        self._bulk_lifecycle_guard: Any = None
+        self._preserve_clickhouse_fence = False
 
         # Encoder bookkeeping, keyed by table name.
         self._next_sid: dict[str, int] = {}
@@ -305,14 +311,28 @@ class BulkIngest:
             raise RuntimeError(
                 "bulk_ingest is not supported by the SQLite degraded write profile; use ordered save() or fsck()"
             )
-        if store._bulk_active:
-            raise RuntimeError("this SqlStore already has an open bulk_ingest context")
         if store._current_connection() is not None:
             raise RuntimeError(
                 "bulk_ingest cannot be opened inside an open store.transaction() or write scope on this thread; "
                 "the ingest owns its own spanning transaction"
             )
-        store._bulk_active = True
+        store._claim_bulk_context()
+        if store.write_profile == "bulk-fenced":
+            try:
+                store._mutation_lock.acquire()
+            except BaseException:
+                store._release_bulk_context()
+                raise
+            self._bulk_lock_held = True
+            try:
+                self._bulk_lifecycle_guard = store._degraded_lifecycle_guard()
+                self._bulk_lifecycle_guard.__enter__()
+            except BaseException:
+                self._bulk_lifecycle_guard = None
+                store._mutation_lock.release()
+                self._bulk_lock_held = False
+                store._release_bulk_context()
+                raise
         connection = None
         try:
             with store._database.engine.connect() as probe:
@@ -326,7 +346,15 @@ class BulkIngest:
                 empty_deferred_bulk=self._deferred and physically_empty,
             )
             if store._database.engine.dialect.name == "clickhousedb" and self._deferred:
-                raise NotImplementedError("ClickHouse deferred bulk ingestion is implemented in P3")
+                # P2's deliberate boundary is after both durable KeeperMap
+                # mutations. __enter__ raises here, so Python cannot invoke
+                # __exit__; preserving these values is the crash-equivalent
+                # path used by the recovery tests.
+                self._acquire_clickhouse_lease()
+                self._after_clickhouse_lease_acquired()
+                self._write_ingest_marker()
+                self._marker_active = True
+                self._clickhouse_p3_boundary()
             if self._deferred and preexisting:
                 raise RuntimeError(
                     'bulk_ingest(finalize="deferred") requires a physically empty store; use finalize="parity"'
@@ -337,7 +365,7 @@ class BulkIngest:
             # so no child inherits an open database connection or transaction.
             if self._parallel:
                 self._start_workers()
-            if physically_empty:
+            if physically_empty and not self._marker_active:
                 self._write_ingest_marker()
                 self._marker_active = True
             connection = store._database.engine.connect()
@@ -346,9 +374,11 @@ class BulkIngest:
             if connection is not None:
                 self._release_connection(connection)
             self._close_workers()
-            self._clean_up_after_failure()
-            self._clear_marker_after_failure()
-            store._bulk_active = False
+            if not self._preserve_clickhouse_fence:
+                self._clean_up_after_failure()
+                self._clear_marker_after_failure()
+            self._release_bulk_ownership()
+            store._release_bulk_context()
             raise
         self._transaction = transaction
         self._connection = connection
@@ -362,10 +392,24 @@ class BulkIngest:
             self._close_workers()
             self._clean_up_after_failure()
             self._clear_marker_after_failure()
-            store._bulk_active = False
+            self._release_bulk_ownership()
+            store._release_bulk_context()
             raise
         self._entered = True
         return self
+
+    def _clickhouse_p3_boundary(self) -> None:
+        """Stop ClickHouse bulk entry after P2 fencing and before P3 work."""
+        self._preserve_clickhouse_fence = True
+        raise NotImplementedError("ClickHouse deferred bulk ingestion is implemented in P3")
+
+    def _acquire_clickhouse_lease(self) -> None:
+        """Durably acquire the ClickHouse lease before the marker operation."""
+        with self._store._database.engine.begin() as connection:
+            self._store._ensure_degraded_lease(connection)
+
+    def _after_clickhouse_lease_acquired(self) -> None:
+        """Fault seam immediately after lease acquisition and before marker insert."""
 
     def _select_finalize_profile(self) -> None:
         """Resolve ``auto`` after the physical-empty probe, before any mutation.
@@ -552,24 +596,58 @@ class BulkIngest:
             self._close_workers()
             self._connection = None
             self._transaction = None
-            store._bulk_active = False
+            self._release_bulk_ownership()
+            try:
+                self._before_bulk_context_release()
+            finally:
+                store._release_bulk_context()
+
+    def _release_bulk_ownership(self) -> None:
+        """Release the in-memory bulk mutex and lifecycle guard, never the lease."""
+        guard = self._bulk_lifecycle_guard
+        self._bulk_lifecycle_guard = None
+        if guard is not None:
+            guard.__exit__(None, None, None)
+        if self._bulk_lock_held:
+            self._store._mutation_lock.release()
+            self._bulk_lock_held = False
 
     def _write_ingest_marker(self) -> None:
         """Commit ``ingest_state=bulk-ingest`` before an empty-store mutation."""
         with self._store._database.engine.begin() as connection:
-            connection.execute(
-                sqlalchemy.text(
-                    "INSERT INTO \"_httk_store_metadata\" (key, value) VALUES ('ingest_state', 'bulk-ingest')"
+            if self._store.write_profile == "bulk-fenced":
+                from httk.data.db.clickhouse import write_ingest_marker
+
+                self._store._ensure_degraded_lease(connection)
+                self._marker_value = write_ingest_marker(connection, self._store._lease_value or "")
+            else:
+                connection.execute(
+                    sqlalchemy.text(
+                        "INSERT INTO \"_httk_store_metadata\" (key, value) VALUES ('ingest_state', 'bulk-ingest')"
+                    )
                 )
-            )
 
     def _clear_ingest_marker(self) -> None:
         """Clear the marker only after all successful finalize work has committed."""
         if not self._marker_active:
             return
         with self._store._database.engine.begin() as connection:
-            connection.execute(sqlalchemy.text('DELETE FROM "_httk_store_metadata" WHERE key = \'ingest_state\''))
+            if self._store.write_profile == "bulk-fenced":
+                from httk.data.db.clickhouse import clear_ingest_marker, verify_lease
+
+                verify_lease(connection, self._store._lease_value or "")
+                self._before_clickhouse_marker_clear()
+                clear_ingest_marker(connection, self._marker_value)
+            else:
+                connection.execute(sqlalchemy.text('DELETE FROM "_httk_store_metadata" WHERE key = \'ingest_state\''))
         self._marker_active = False
+        self._marker_value = None
+
+    def _before_clickhouse_marker_clear(self) -> None:
+        """Fault seam immediately before the exact ClickHouse marker delete."""
+
+    def _before_bulk_context_release(self) -> None:
+        """Fault seam while admission remains closed during teardown."""
 
     def _clear_marker_after_failure(self) -> None:
         """Clear a failure marker only after restoring the complete entry catalog."""

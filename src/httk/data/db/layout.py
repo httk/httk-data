@@ -59,6 +59,10 @@ class StoreUnderConstructionError(RuntimeError):
     old clean state remains accepted; after the marker and through ingest,
     finalize, or before marker clear the store is rejected; after clear it is
     accepted again.  The marker is intentionally not a resume protocol.
+
+    ClickHouse marker residue is fail-closed: the default recovery is to drop
+    the database and re-ingest. Clearing the marker is valid only after an
+    operator has restored and verified the declared empty-store invariant.
     """
 
 

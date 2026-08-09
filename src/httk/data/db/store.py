@@ -175,6 +175,7 @@ class SqlStore:
         self._identity = IdentityCaches()
         self._local = threading.local()
         self._bulk_active = False
+        self._bulk_state_lock = threading.Lock()
         self._write_profile: Literal["transactional", "degraded", "bulk-fenced"] = database.write_profile
         self._lease_owner = uuid.uuid4().hex
         self._lease_value: str | None = None
@@ -185,7 +186,7 @@ class SqlStore:
         # returning true simulates a process death *after* the named durable
         # write, deliberately preserving any dirty marker.
         self._degraded_fault_hook: Callable[[str], bool] | None = None
-        if self._write_profile == "degraded":
+        if self._write_profile in {"degraded", "bulk-fenced"}:
             # This fence is deliberately registered before layout creation:
             # initialization can create metadata, and a dispose interleaving
             # must never leave a later write able to acquire an unowned lease.
@@ -376,7 +377,10 @@ class SqlStore:
         if stored is None:
             raise StorageLayoutUpgradeRequiredError({"declaration": {"metadata": "missing"}})
         if "ingest_state" in stored:
-            raise StoreUnderConstructionError("interrupted bulk ingest; the store must be dropped and re-ingested")
+            raise StoreUnderConstructionError(
+                "ingest_state marker from an interrupted bulk ingest is present; "
+                "the database must be dropped and re-ingested rather than clearing the marker"
+            )
         self._open_marked_layout(connection, stored, supplied)
 
     def _validate_write_profile_connection(
@@ -575,11 +579,25 @@ class SqlStore:
 
         :raises RuntimeError: If a bulk-ingest context is currently open.
         """
-        if self._bulk_active:
+        with self._bulk_state_lock:
+            active = self._bulk_active
+        if active:
             raise RuntimeError(
                 "this SqlStore has an open bulk_ingest context; ordinary save/ensure_tables/transaction "
                 "operations are refused until it exits"
             )
+
+    def _claim_bulk_context(self) -> None:
+        """Atomically reserve this store for one bulk context."""
+        with self._bulk_state_lock:
+            if self._bulk_active:
+                raise RuntimeError("this SqlStore already has an open bulk_ingest context")
+            self._bulk_active = True
+
+    def _release_bulk_context(self) -> None:
+        """Release the short-lived in-memory bulk admission state."""
+        with self._bulk_state_lock:
+            self._bulk_active = False
 
     def _check_mutation_policy(self, operation: str, *, empty_deferred_bulk: bool = False) -> None:
         """Apply the single public mutation policy for backend capability gates."""
@@ -774,6 +792,14 @@ class SqlStore:
         disposal (or an explicit conditional steal).  Transactional stores do
         not even query the metadata table here, preserving their save hot path.
         """
+        if self._write_profile == "bulk-fenced":
+            from httk.data.db.clickhouse import acquire_lease, verify_lease
+
+            if self._lease_value is None:
+                self._lease_value = acquire_lease(connection, self._lease_owner)
+            else:
+                verify_lease(connection, self._lease_value)
+            return
         if self._write_profile != "degraded":
             return
         table = metadata_table_for(sqlalchemy.MetaData())
@@ -830,7 +856,7 @@ class SqlStore:
 
     @contextlib.contextmanager
     def _degraded_lifecycle_guard(self) -> Iterator[None]:
-        if self._write_profile != "degraded":
+        if self._write_profile not in {"degraded", "bulk-fenced"}:
             yield
             return
         assert self._lease_lifecycle_generation is not None
@@ -848,12 +874,17 @@ class SqlStore:
             try:
                 if value is not None:
                     with self._database.engine.begin() as connection:
-                        connection.execute(
-                            sqlalchemy.text(
-                                'DELETE FROM "_httk_store_metadata" WHERE key = \'lease\' AND value = :value'
-                            ),
-                            {"value": value},
-                        )
+                        if self._write_profile == "bulk-fenced":
+                            from httk.data.db.clickhouse import release_lease
+
+                            release_lease(connection, value)
+                        else:
+                            connection.execute(
+                                sqlalchemy.text(
+                                    'DELETE FROM "_httk_store_metadata" WHERE key = \'lease\' AND value = :value'
+                                ),
+                                {"value": value},
+                            )
             finally:
                 self._lease_value = None
                 # Database consumes callbacks for this lifecycle.  A disposed
