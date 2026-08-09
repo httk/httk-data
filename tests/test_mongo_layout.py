@@ -50,7 +50,24 @@ def test_first_open_stamps_five_keys_and_reopen_trusts(mongo_test_database) -> N
     document = mongo_test_database.database[METADATA_COLLECTION].find_one({"_id": "layout"})
     assert document is not None
     assert set(document) == {"_id", "protocol", "entry_declaration", "document_layout", "generation"}
+    assert document["protocol"] == "v2.1.0"
+    assert document["document_layout"] == "mongo-v2"
     assert MongoStore(mongo_test_database).layout == store.layout
+
+
+def test_old_protocol_stamp_is_refused_on_reopen(mongo_test_database) -> None:
+    """A Mongo store stamped by the previous format cannot be adopted."""
+    MongoStore(mongo_test_database, entry_records={})
+    mongo_test_database.database[METADATA_COLLECTION].update_one(
+        {"_id": "layout"},
+        {"$set": {"protocol": "v2.0.3", "document_layout": "mongo-v1"}},
+    )
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        MongoStore(mongo_test_database)
+    assert error.value.diff["protocol"]["actual"] == {
+        "protocol": "v2.0.3",
+        "document_layout": "mongo-v1",
+    }
 
 
 def test_missing_entry_records_is_rejected_on_first_open(mongo_test_database) -> None:

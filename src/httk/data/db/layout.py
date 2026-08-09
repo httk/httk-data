@@ -33,7 +33,7 @@ __all__ = [
     "read_store_metadata",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.0.3"
+STORAGE_PROTOCOL_VERSION: Final = "v2.1.0"
 # One bump covers this stamp-trust/DDL-on-write cycle's layout changes.
 """The persisted SqlStore layout protocol implemented by this package."""
 

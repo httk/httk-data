@@ -8,7 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any, Protocol, TypeVar, runtime_checkable
 
-from httk.core.storage import IdentitySkip, content_id, project_storage_record
+from httk.core.storage import IdentitySkip, project_storage_record
+from httk.core.storage.identity import _trusted_content_id
 
 from httk.data.db.schema import FieldSpec, resolve_schema
 
@@ -85,7 +86,11 @@ class SaveProjection:
         return values
 
     def content_id(self, record_type: type, source: Any) -> str:
-        return content_id(source, as_record=record_type, projector=self.projector)
+        # SaveProjection only memoizes the standard deterministic projection;
+        # use core's trusted route so the source-owned content-id cache is
+        # shared across saves.  Arbitrary custom projectors remain uncached via
+        # the public content_id path.
+        return _trusted_content_id(source, as_record=record_type, projector=self.projector)
 
 
 @dataclass(frozen=True)

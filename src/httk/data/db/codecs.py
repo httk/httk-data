@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
 from httk.core.storage import register_canonical_encoder
+from httk.core.storage.rational_text import fraction_to_text
 
 if TYPE_CHECKING:
     import httk.data.db.codecs
@@ -217,7 +218,7 @@ def encode_fraction_exact(value: fractions.Fraction) -> str:
     :param value: The fraction to encode.
     :return: The canonical ``p/q`` text.
     """
-    return f"{value.numerator}/{value.denominator}"
+    return fraction_to_text(value)
 
 
 def decode_fraction_exact(text: str) -> fractions.Fraction:

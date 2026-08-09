@@ -71,7 +71,7 @@ def test_distinct_but_equal_nested_instances_give_the_same_parent_id():
     other = _article(author=Author("Goldschmidt", 1926))
     assert one.author is not other.author
     assert content_id(one) == content_id(other)
-    assert '"identity_name":"test_db_identity.Author"' in canonical_form(one)
+    assert '"type":"record_ref"' in canonical_form(one)
 
 
 def test_nested_field_change_changes_the_parent_id():
@@ -96,6 +96,6 @@ def test_derived_and_skipped_values_do_not_affect_the_id():
 
 def test_canonical_form_uses_exact_texts():
     form = canonical_form(_article())
-    assert '"type":"rational","value":[-13,3]' in form
+    assert '"type":"rational","value":"-13/3"' in form
     assert '"denominator":6,"nominators":[[6,3],[0,4]]' in form
     assert '"2026-07-24T12:00:00.000000"' in form

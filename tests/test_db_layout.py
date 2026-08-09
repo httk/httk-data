@@ -162,7 +162,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":1}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.0.3"
+    assert STORAGE_PROTOCOL_VERSION == "v2.1.0"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -229,10 +229,11 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(database: Database) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'old' WHERE key = 'protocol'"))
+        # This is the prior persisted protocol, not an arbitrary malformed value.
+        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.0.3' WHERE key = 'protocol'"))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(database)
-    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "old"}
+    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "v2.0.3"}
 
 
 def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: Database) -> None:

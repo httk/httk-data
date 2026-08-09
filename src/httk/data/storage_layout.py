@@ -31,7 +31,7 @@ __all__ = [
     "normalize_entry_records",
 ]
 
-DECLARATION_PROTOCOL_VERSION: Final = "v2.0.3"
+DECLARATION_PROTOCOL_VERSION: Final = "v2.1.0"
 """The current backend-neutral declaration protocol."""
 
 

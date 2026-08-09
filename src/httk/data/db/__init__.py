@@ -40,14 +40,11 @@ without sqlalchemy installed raises :class:`ImportError` naming the extra.
 """
 
 import importlib
-from typing import Any, Final
+from typing import Any
 
 from ..query import MultipleResultsError, NoResultError, ResultRow
 from .codecs import ValueCodec, register_value_codec
 from .schema import SchemaError, register_schema_override, resolve_schema
-
-STORAGE_PROTOCOL_VERSION: Final = "v2.0.3"
-"""The current persisted ``SqlStore`` physical-layout protocol."""
 
 __all__ = [
     "STORAGE_PROTOCOL_VERSION",
@@ -80,6 +77,7 @@ __all__ = [
 ]
 
 _SQL_EXPORTS = {
+    "STORAGE_PROTOCOL_VERSION": ".layout",
     "BulkIngest": ".bulk",
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",

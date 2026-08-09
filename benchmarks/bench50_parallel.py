@@ -31,6 +31,7 @@ import dataclasses
 import sys
 import tempfile
 import time
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 
@@ -51,10 +52,11 @@ def _load_stream(replicate: int, mode: str) -> list[object]:
     species, compositions) — a realistic offline build where the merge collapses
     many cross-worker duplicates. In ``distinct`` mode each replica also perturbs
     its structure's ``charge`` (part of the structure's content identity), giving
-    distinct roots — each material and its structure distinct — while the atomic
-    descendants (cells, sites, species, compositions) stay shared, so the merge
-    collapses much less. Only ~180 materials' detail files are present in this
-    checkout, hence replication.
+    distinct roots — each material and its structure distinct — while atomic
+    descendants stay shared. ``all-distinct`` additionally salts each root's
+    cell, sites, and species records, providing a control in which descendant
+    identities cannot collapse. Only ~180 materials' detail files are present in
+    this checkout, hence replication.
     """
     from fractions import Fraction
 
@@ -64,21 +66,71 @@ def _load_stream(replicate: int, mode: str) -> list[object]:
     stream: list[object] = [ms.StoreLayout(ms.STORE_LAYOUT_VERSION)]
     for copy in range(replicate):
         suffix = "" if copy == 0 else f"-rep{copy}"
-        for material in base:
-            if not suffix:
+        for material_index, material in enumerate(base):
+            salt = copy * len(base) + material_index + 1
+            if not suffix and mode != "all-distinct":
                 stream.append(material)
                 continue
             perturbed = dataclasses.replace(material, id=f"{material.id}{suffix}")
-            if mode == "distinct" and perturbed.structure is not None:
+            if mode in {"distinct", "all-distinct"} and perturbed.structure is not None:
                 perturbed = dataclasses.replace(
                     perturbed, structure=dataclasses.replace(perturbed.structure, charge=Fraction(copy + 1, 1_000_003))
+                )
+            if mode == "all-distinct" and perturbed.structure is not None:
+                precision = Fraction(salt, 10_000_019)
+                structure = perturbed.structure
+                cell = dataclasses.replace(structure.cell, precision=precision)
+                sites = dataclasses.replace(structure.sites, precision=precision)
+                species = tuple(
+                    dataclasses.replace(
+                        value,
+                        original_name=f"{value.original_name or value.name}-bench-{salt}",
+                    )
+                    for value in structure.species
+                )
+                perturbed = dataclasses.replace(
+                    perturbed,
+                    structure=dataclasses.replace(structure, cell=cell, sites=sites, species=species),
                 )
             stream.append(perturbed)
     return stream
 
 
+def _iter_storable_records(value: object) -> Iterator[object]:
+    """Yield every storable record reachable from a benchmark input object."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        if hasattr(type(value), "__httk_storage__"):
+            yield value
+        for field in dataclasses.fields(value):
+            yield from _iter_storable_records(getattr(value, field.name))
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            yield from _iter_storable_records(key)
+            yield from _iter_storable_records(item)
+        return
+    if isinstance(value, (tuple, list, set, frozenset)):
+        for item in value:
+            yield from _iter_storable_records(item)
+
+
+def _expected_table_counts(stream: list[object]) -> dict[str, int]:
+    """Return expected unique content-ID rows by physical table."""
+    from httk.core.storage import content_id
+
+    from httk.data.db.schema import resolve_schema
+
+    expected: dict[str, set[str]] = {}
+    for value in stream:
+        for record in _iter_storable_records(value):
+            table_name = resolve_schema(type(record)).table_name
+            expected.setdefault(table_name, set()).add(content_id(record))
+    return {name: len(keys) for name, keys in expected.items()}
+
+
 def _build(stream: list[object], workers: int, directory: Path, materials: int) -> dict[str, float]:
     import sqlalchemy
+
     from httk.data.db import Database, SqlStore
     from httk.data.db.mapping import CONTENT_ID_COLUMN
 
@@ -93,17 +145,23 @@ def _build(stream: list[object], workers: int, directory: Path, materials: int) 
             dispatched = time.perf_counter()
         finished = time.perf_counter()
         # Post-ingest verification: a silently lost task or a botched merge must
-        # never flatter the timing. Every material must be present, and every
-        # content-addressed table must hold each content id exactly once.
+        # never flatter the timing. Every material and every expected
+        # content-addressed descendant must be present exactly once.
+        expected_counts = _expected_table_counts(stream)
         with database.engine.connect() as connection:
+            material_table = store._metadata.tables["altermagnets_material_records"]
             stored = connection.execute(
-                sqlalchemy.text('SELECT count(*) FROM "altermagnets_material_records"')
+                sqlalchemy.select(sqlalchemy.func.count()).select_from(material_table)
             ).scalar_one()
             if int(stored) != materials:
                 raise SystemExit(f"verification failed: stored {stored} materials, expected {materials}")
             for name, table in store._metadata.tables.items():
                 if name.startswith("_httk_") or CONTENT_ID_COLUMN not in table.c:
                     continue
+                actual = connection.execute(sqlalchemy.select(sqlalchemy.func.count()).select_from(table)).scalar_one()
+                expected = expected_counts.get(name, 0)
+                if int(actual) != expected:
+                    raise SystemExit(f"verification failed: stored {actual} rows in {name}, expected {expected}")
                 duplicate = connection.execute(
                     sqlalchemy.select(table.c[CONTENT_ID_COLUMN])
                     .group_by(table.c[CONTENT_ID_COLUMN])
@@ -112,6 +170,8 @@ def _build(stream: list[object], workers: int, directory: Path, materials: int) 
                 ).first()
                 if duplicate is not None:
                     raise SystemExit(f"verification failed: duplicate content id in {name}")
+        structure_count = expected_counts.get("atomistic_unitcell_structure_v2", 0)
+        print(f"verified {len(expected_counts)} tables (structures={structure_count})")
         return {
             "total": finished - started,
             "dispatch": dispatched - started,
@@ -129,11 +189,12 @@ def main() -> int:
     parser.add_argument("--replicate", type=int, default=50, help="distinct copies of the base materials (50 ~= 9,000)")
     parser.add_argument(
         "--mode",
-        choices=("shared", "distinct"),
+        choices=("shared", "distinct", "all-distinct"),
         default="shared",
         help=(
             "shared: replicas share substructure (merge collapses many dups); "
-            "distinct: distinct roots (material+structure) with shared atomic descendants"
+            "distinct: distinct roots (material+structure) with shared atomic descendants; "
+            "all-distinct: salt each root's cell, sites, and species descendants"
         ),
     )
     parser.add_argument("--altermagnets", default=None, help="path to the altermagnets checkout")
@@ -148,18 +209,24 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="bench50_") as directory:
         base = Path(directory)
-        header = f"{'mode':>8} {'repeat':>6} {'total':>9} {'dispatch':>9} {'finalize':>9}"
+        header = f"{'workers':>8} {'repeat':>6} {'state':>6} {'total':>9} {'dispatch':>9} {'finalize':>9}"
         print(header)
         print("-" * len(header))
         best: dict[int, float] = {}
         for workers in arguments.workers:
             totals: list[float] = []
             for repeat in range(arguments.repeats):
-                timing = _build(stream, workers, base, materials)
+                # Each repetition is a cold cell: v2 content-ID caches belong to
+                # record instances, so reusing ``stream`` would benchmark warm
+                # repeats and make ``best`` select a misleading minimum.
+                cold_stream = _load_stream(arguments.replicate, arguments.mode)
+                if len(cold_stream) - 1 != materials:
+                    raise SystemExit("cold stream material count changed during benchmark")
+                timing = _build(cold_stream, workers, base, materials)
                 totals.append(timing["total"])
                 mode = "serial" if workers == 1 else f"w={workers}"
                 print(
-                    f"{mode:>8} {repeat:>6} "
+                    f"{mode:>8} {repeat:>6} {'cold':>6} "
                     f"{timing['total']:>8.1f}s {timing['dispatch']:>8.1f}s {timing['finalize']:>8.1f}s"
                 )
             best[workers] = min(totals)

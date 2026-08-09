@@ -55,7 +55,7 @@ from .mapping import (
 
 __all__ = ["MongoStore"]
 
-_DOCUMENT_LAYOUT = "mongo-v1"
+_DOCUMENT_LAYOUT = "mongo-v2"
 _RESERVED_PREFIX = "_httk_"
 _METADATA_KEYS = frozenset({"_id", "protocol", "entry_declaration", "document_layout", "generation"})
 _LOGGER = logging.getLogger("httk.data.mongo")
