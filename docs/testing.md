@@ -7,8 +7,9 @@ are marked `extended` and are skipped by this default profile.
 
 Run `make test-extended` after larger implementation work. It includes every
 test case and has an approximately ten-minute budget. Both targets run under
-the repository memory guard; `HTTK_TEST_MAX_RSS_GB` can override its limit
-when diagnosing a failure.
+the `python -m httk.core.memguard` process-group guard supplied by
+*httk-core*; `HTTK_TEST_MAX_RSS_GB` can override its limit when diagnosing a
+failure.
 
 Performance investigations are separate from correctness testing. `make
 benchmarks` runs the opt-in harnesses in `benchmarks/`; benchmark code is not

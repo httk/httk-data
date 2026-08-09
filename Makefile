@@ -65,7 +65,7 @@ typecheck_pyright:
 typecheck:
 	$(PYTHON) -m mypy
 
-MEMGUARD = $(PYTHON) tools/memguard.py --max-rss-gb $(or $(HTTK_TEST_MAX_RSS_GB),$(1)) --
+MEMGUARD = $(PYTHON) -m httk.core.memguard --max-rss-gb $(or $(HTTK_TEST_MAX_RSS_GB),$(1)) --
 TEST_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),3072)
 EXTENDED_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),16384)
 
