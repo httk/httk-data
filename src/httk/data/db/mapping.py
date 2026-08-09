@@ -3,7 +3,7 @@
 :func:`table_for` turns one resolved schema into a :class:`sqlalchemy.Table`
 registered in a :class:`sqlalchemy.MetaData` (idempotently: an already-built
 table is returned as-is), recursing into referenced and child-element storable
-classes so that every foreign-key target exists in the same metadata.
+classes so that the complete logical layout is present in the same metadata.
 :func:`sqlalchemy_metadata` is the convenience wrapper that maps a batch of
 schemas into one fresh metadata.
 
@@ -14,10 +14,9 @@ documents, plus the store-managed columns:
   with an attached ``<table>_sid_seq`` sequence for dialects such as DuckDB
   that need one; SQLite ignores it) and — only under the ``"content_id"``
   dedup policy — a unique-indexed ``content_id`` text column;
-- every child table gets a ``<parent table>_sid`` integer foreign key (NOT
-  NULL, indexed) and a ``<field>_index`` integer ordering column ahead of its
-  element columns; storable elements become a ``<field>_sid`` foreign key to
-  the element class's table.
+- every child table gets a ``<parent table>_sid`` integer sid column (NOT NULL,
+  indexed) and a ``<field>_index`` integer ordering column ahead of its element
+  columns; logical references are defined by :mod:`httk.data.db.graph`.
 
 Index names are deterministic and table-scoped — ``ix_<table>_<column>`` for
 plain indexes, ``uq_<table>_<column>`` for unique ones, columns joined by
@@ -136,7 +135,6 @@ def dispatch_table_for(
             sqlalchemy.Column(
                 column_name,
                 sqlalchemy.Integer,
-                sqlalchemy.ForeignKey(f"{schema.table_name}.{SID_COLUMN}"),
                 nullable=True,
                 unique=True,
             )
@@ -152,8 +150,8 @@ def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData) -> sqlalchemy.
     Building is idempotent per metadata — if the table is already registered it
     is returned unchanged — and recursive: the child tables of the schema and
     the tables of every referenced storable class (reference fields and
-    storable child elements alike) are built into the same metadata, so all
-    foreign keys resolve.
+    storable child elements alike) are built into the same metadata, so the
+    complete logical layout is available to the storage algorithms.
     """
     existing = metadata.tables.get(schema.table_name)
     if existing is not None:
@@ -176,11 +174,8 @@ def _index_name(prefix: str, table_name: str, columns: Sequence[str]) -> str:
     return name
 
 
-def _column(spec: ColumnSpec, foreign_key: str | None = None) -> sqlalchemy.Column[Any]:
-    args: list[Any] = []
-    if foreign_key is not None:
-        args.append(sqlalchemy.ForeignKey(foreign_key))
-    return sqlalchemy.Column(spec.name, _TYPE_FOR_KIND[spec.kind](), *args, nullable=spec.nullable)
+def _column(spec: ColumnSpec) -> sqlalchemy.Column[Any]:
+    return sqlalchemy.Column(spec.name, _TYPE_FOR_KIND[spec.kind](), nullable=spec.nullable)
 
 
 def _column_index(table_name: str, spec: ColumnSpec) -> sqlalchemy.Index | None:
@@ -210,22 +205,14 @@ def _build_parent_table(schema: TableSchema, metadata: sqlalchemy.MetaData) -> s
             if spec.optional:
                 items.append(sqlalchemy.Column(f"{spec.field}_present", sqlalchemy.Boolean, nullable=False))
             continue
-        foreign_key = _reference_target(spec)
         for column_spec in spec.columns:
-            items.append(_column(column_spec, foreign_key))
+            items.append(_column(column_spec))
             index = _column_index(name, column_spec)
             if index is not None:
                 items.append(index)
     for columns in schema.composite_indexes:
         items.append(sqlalchemy.Index(_index_name("ix", name, columns), *columns))
     return sqlalchemy.Table(name, metadata, *items)
-
-
-def _reference_target(spec: FieldSpec) -> str | None:
-    if spec.role != "reference":
-        return None
-    assert spec.target is not None
-    return f"{resolve_schema(spec.target).table_name}.{SID_COLUMN}"
 
 
 def _build_child_table(
@@ -239,15 +226,11 @@ def _build_child_table(
         sqlalchemy.Column(
             parent_sid,
             sqlalchemy.Integer,
-            sqlalchemy.ForeignKey(f"{schema.table_name}.{SID_COLUMN}"),
             nullable=False,
         ),
         sqlalchemy.Index(_index_name("ix", child.table_name, (parent_sid,)), parent_sid),
         sqlalchemy.Column(f"{spec.field}_index", sqlalchemy.Integer, nullable=False),
     ]
-    element_foreign_key = None
-    if child.target is not None:
-        element_foreign_key = f"{resolve_schema(child.target).table_name}.{SID_COLUMN}"
     for column_spec in child.element_columns:
-        items.append(_column(column_spec, element_foreign_key))
+        items.append(_column(column_spec))
     return sqlalchemy.Table(child.table_name, metadata, *items)

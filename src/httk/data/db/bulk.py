@@ -56,8 +56,9 @@ survivors to a compact range.
 Parallel mode targets the offline *build* of a store and requires a physically
 empty target; incremental appends into a populated store stay on the serial
 path. The implementation lives in :mod:`httk.data.db.bulk_parallel`; see its
-module docstring for the full contract. ``workers=1`` (the default) is exactly
-the serial path described above, unchanged.
+module docstring for the full contract. On a fresh supported store, serial
+``finalize="auto"`` selects the deferred finalizer; parallel ``auto`` remains
+on the parity merge.
 
 Identity caches are not populated by bulk ingestion (documented best-effort);
 they are cleared on failure.
@@ -91,7 +92,9 @@ Two behaviors diverge from the per-record ``save()`` loop:
 """
 
 import contextlib
-from collections.abc import Callable, Mapping
+import tempfile
+import time
+from collections.abc import Callable, Iterable, Mapping
 from types import TracebackType
 from typing import Any, Literal, Self
 
@@ -103,6 +106,7 @@ from httk.core.storage import (
     resolve_storage_record,
 )
 
+from httk.data.db.graph import LogicalEdgeGraph
 from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
@@ -138,35 +142,28 @@ __all__ = ["BulkIngest"]
 _AUTO_REBUILD_DIVISOR = 4
 
 
-def _foreign_key_free_clone(table: sqlalchemy.Table) -> sqlalchemy.Table:
-    """A structural copy of ``table`` without foreign-key constraints (indexes are built separately).
+class _SerialDeferredStage:
+    """Own a dependency-free serial stage directory and its worker encoder."""
 
-    Preserves each column's type, nullability, primary-key membership, and the
-    sid column's sequence default, but drops every ``ForeignKey`` so the parallel
-    merge can renumber and delete rows in place. The separable indexes are added
-    later by :meth:`BulkIngest._create_new_indexes`, exactly as for the serial
-    empty-store path.
+    def __init__(self, temporary_directory: tempfile.TemporaryDirectory[str], encoder: Any) -> None:
+        self._temporary_directory = temporary_directory
+        self._encoder = encoder
+        self._finished: Any = None
 
-    :param table: The registered record or child table to clone.
-    :return: A detached table of the same name and columns without foreign keys.
-    """
-    columns: list[sqlalchemy.Column[Any]] = []
-    for column in table.columns:
-        arguments: list[Any] = []
-        default = column.default
-        if isinstance(default, sqlalchemy.Sequence):
-            arguments.append(sqlalchemy.Sequence(default.name))
-        columns.append(
-            sqlalchemy.Column(
-                column.name,
-                column.type,
-                *arguments,
-                primary_key=column.primary_key,
-                nullable=column.nullable,
-                autoincrement=column.autoincrement,
-            )
-        )
-    return sqlalchemy.Table(table.name, sqlalchemy.MetaData(), *columns)
+    def save(self, token: int, obj: Any, as_record: type | None) -> int:
+        # _WorkerEncoder deliberately exposes the assigned occurrence sid via
+        # its token map, while retaining every metadata-bearing duplicate.
+        self._encoder.save(token, obj, as_record)
+        return self._encoder._token_sid[token][1]
+
+    def finish(self) -> Any:
+        if self._finished is None:
+            self._finished = self._encoder.finish()
+            self._finished.worker_index = 0
+        return self._finished
+
+    def close(self) -> None:
+        self._temporary_directory.cleanup()
 
 
 def _sid_sequence(table: sqlalchemy.Table) -> sqlalchemy.Sequence | None:
@@ -209,6 +206,7 @@ class BulkIngest:
         index_strategy: Literal["auto", "keep", "rebuild"] = "auto",
         on_progress: Callable[[int, int], None] | None = None,
         workers: int = 1,
+        finalize: Literal["auto", "parity", "deferred"] = "auto",
     ) -> None:
         if chunk_size < 1:
             raise ValueError("chunk_size must be a positive integer")
@@ -216,6 +214,8 @@ class BulkIngest:
             raise ValueError("index_strategy must be one of 'auto', 'keep', or 'rebuild'")
         if workers < 1:
             raise ValueError("workers must be a positive integer")
+        if finalize not in ("auto", "parity", "deferred"):
+            raise ValueError("finalize must be one of 'auto', 'parity', or 'deferred'")
         if workers > 1 and on_progress is not None:
             raise ValueError(
                 "on_progress is not supported with workers>1: worker processes encode asynchronously, "
@@ -228,8 +228,18 @@ class BulkIngest:
         self._on_progress = on_progress
         self._workers = workers
         self._parallel = workers > 1
+        self._requested_finalize = finalize
+        self._finalize_profile = "parity"
+        self._deferred = False
         # Parallel-mode state (unused on the serial path).
         self._controller: Any = None
+        self._serial_stage: Any = None
+        self._serial_public_stage_sid: dict[tuple[str, int], int] = {}
+        self._serial_public_content: dict[tuple[str, str], int] = {}
+        self._serial_public_value: dict[tuple[str, tuple[tuple[str, object], ...]], int] = {}
+        self._serial_public_next: dict[str, int] = {}
+        self._serial_next_token = 0
+        self._deferred_top_types: set[type] = set()
         self._next_token = 0
         self._schema_graph_seen: set[type] = set()
         # SQLite shard aliases the merge attached; detached in _release_connection
@@ -252,6 +262,8 @@ class BulkIngest:
         self._index_decided: set[str] = set()
         self._rebuild_scan_tables: set[str] = set()
         self._staging_tables: set[str] = set()
+        self._marker_active = False
+        self._entry_catalog: tuple[tuple[str, ...], ...] | None = None
 
         # Encoder bookkeeping, keyed by table name.
         self._next_sid: dict[str, int] = {}
@@ -275,6 +287,8 @@ class BulkIngest:
         self._returned_sids: set[tuple[str, int]] = set()
         self._resolved_map: dict[tuple[str, int], int] = {}
         self._final_sids_ready = False
+        # Debug/benchmark surface: populated only by deferred finalization.
+        self.finalize_timings: dict[str, float] = {}
 
         # Progress counters.
         self._records_total = 0
@@ -293,43 +307,120 @@ class BulkIngest:
                 "the ingest owns its own spanning transaction"
             )
         store._bulk_active = True
-        # The worker pool is forked before the spanning transaction opens, so no
-        # child inherits an open database connection or transaction.
-        if self._parallel:
-            try:
-                self._start_workers()
-            except BaseException:
-                store._bulk_active = False
-                raise
-        # Own the connection explicitly (not engine.begin(), which returns it to
-        # the pool on commit): the SQLite shard DETACH must run on this exact
-        # connection *after* the transaction closes but *before* it is released,
-        # so no other thread can check it out in that window.
         connection = None
         try:
+            with store._database.engine.connect() as probe:
+                preexisting = self._scan_store(probe)
+                self._entry_catalog = self._catalog_snapshot(probe)
+                physically_empty = self._physically_empty(probe, preexisting)
+            self._preexisting = preexisting
+            self._select_finalize_profile()
+            if self._deferred and preexisting:
+                raise RuntimeError(
+                    'bulk_ingest(finalize="deferred") requires a physically empty store; use finalize="parity"'
+                )
+            if self._deferred:
+                self._validate_declared_deferred_metadata()
+            # The worker pool is forked before any main-store transaction opens,
+            # so no child inherits an open database connection or transaction.
+            if self._parallel:
+                self._start_workers()
+            if physically_empty:
+                self._write_ingest_marker()
+                self._marker_active = True
             connection = store._database.engine.connect()
-            transaction = connection.begin()
+            transaction = None if self._deferred else connection.begin()
         except BaseException:
             if connection is not None:
-                connection.close()
+                self._release_connection(connection)
             self._close_workers()
+            self._clean_up_after_failure()
+            self._clear_marker_after_failure()
             store._bulk_active = False
             raise
         self._transaction = transaction
         self._connection = connection
         try:
-            self._preexisting = self._scan_store(connection)
             if self._parallel:
                 self._require_empty_store(connection)
-                self._require_no_foreign_key_enforcement(connection)
         except BaseException:
-            transaction.rollback()
-            connection.close()
+            if transaction is not None:
+                transaction.rollback()
+            self._release_connection(connection)
             self._close_workers()
+            self._clean_up_after_failure()
+            self._clear_marker_after_failure()
             store._bulk_active = False
             raise
         self._entered = True
         return self
+
+    def _select_finalize_profile(self) -> None:
+        """Resolve ``auto`` after the physical-empty probe, before any mutation.
+
+        At current batch scales the parallel in-database merge is faster, so
+        parallel ``auto`` stays on parity while serial ``auto`` gains about 36%
+        from deferred finalization.
+        """
+        requested = self._requested_finalize
+        override = type(self._store).bulk_ingest_finalize_default
+        if requested == "auto" and override != "auto":
+            requested = override
+        if requested == "deferred":
+            if not self._store.backend_facts.supports_deferred_finalize:
+                raise RuntimeError(
+                    'bulk_ingest(finalize="deferred") is not supported by this backend; use finalize="parity"'
+                )
+            self._finalize_profile = "deferred"
+            self._deferred = True
+            return
+        if (
+            requested == "auto"
+            and self._workers == 1
+            and not self._preexisting
+            and self._store.backend_facts.supports_deferred_finalize
+            and not self._declared_unsupported_metadata_reason()
+        ):
+            # A declared unsupported shape is statically knowable.  Keep auto
+            # backwards compatible rather than consuming a stream only to fail.
+            self._finalize_profile = "deferred"
+            self._deferred = True
+
+    def _declared_unsupported_metadata_reason(self) -> str | None:
+        if not self._verify_metadata:
+            return None
+        from httk.data.db.bulk_parallel import unsupported_metadata_reason
+
+        seen: set[type] = set()
+
+        def visit(record_type: type) -> str | None:
+            if record_type in seen:
+                return None
+            seen.add(record_type)
+            reason = unsupported_metadata_reason(record_type)
+            if reason is not None:
+                return reason
+            schema = resolve_schema(record_type)
+            for target in schema.referenced_classes():
+                nested = visit(target)
+                if nested is not None:
+                    return nested
+            return None
+
+        for family in self._store.layout.families:
+            for record_type in family.records:
+                reason = visit(record_type)
+                if reason is not None:
+                    return reason
+        return None
+
+    def _validate_declared_deferred_metadata(self) -> None:
+        reason = self._declared_unsupported_metadata_reason()
+        if reason is not None:
+            raise ValueError(
+                "bulk_ingest(finalize=\"deferred\") cannot verify this identity-excluded metadata shape: "
+                f"{reason}. Use finalize=\"parity\" for records of this kind, or open with verify_metadata=False."
+            )
 
     def _start_workers(self) -> None:
         """Validate the parallel prerequisites and fork the worker pool."""
@@ -359,12 +450,9 @@ class BulkIngest:
     def _require_empty_store(self, connection: sqlalchemy.Connection) -> None:
         """Refuse parallel ingest into a store the merge cannot treat as a clean build.
 
-        On DuckDB a pre-existing application table already carries its foreign-key
-        constraints, which the merge's in-place collapse and renumber cannot work
-        through, so *any* pre-existing application table is refused. On SQLite —
-        which does not enforce foreign keys unless the engine turns them on (see
-        :meth:`_require_no_foreign_key_enforcement`) — only pre-existing rows are
-        refused.
+        Parallel ingest requires a physically empty application store. On DuckDB
+        this also avoids loading a pre-existing table into the offline merge;
+        incremental appends remain on the serial path.
         """
         if not self._preexisting:
             return
@@ -399,6 +487,24 @@ class BulkIngest:
         connection = self._connection
         self._closed = True
         try:
+            if self._deferred:
+                if exc_type is None:
+                    try:
+                        self._deferred_finalize()
+                    except BaseException:
+                        self._release_connection(connection)
+                        self._clean_up_after_failure()
+                        self._clear_marker_after_failure()
+                        raise
+                    self._release_connection(connection)
+                    self._clear_ingest_marker()
+                    store._tables_present.update(self._created)
+                    self._final_sids_ready = True
+                    return
+                self._release_connection(connection)
+                self._clean_up_after_failure()
+                self._clear_marker_after_failure()
+                return
             if exc_type is None:
                 try:
                     self._finalize()
@@ -406,6 +512,7 @@ class BulkIngest:
                     transaction.rollback()
                     self._release_connection(connection)  # detach shards, then release to the pool
                     self._clean_up_after_failure()
+                    self._clear_marker_after_failure()
                     raise
                 try:
                     transaction.commit()
@@ -414,20 +521,59 @@ class BulkIngest:
                     # dropped indexes restored, and staging tables removed.
                     self._release_connection(connection)
                     self._clean_up_after_failure()
+                    self._clear_marker_after_failure()
                     raise
                 self._release_connection(connection)
+                self._clear_ingest_marker()
                 store._tables_present.update(self._created)
                 self._final_sids_ready = True
                 return
             transaction.rollback()
             self._release_connection(connection)
             self._clean_up_after_failure()
+            self._clear_marker_after_failure()
         finally:
             self._release_connection(connection)  # idempotent: no-op if already released
+            if self._serial_stage is not None:
+                self._serial_stage.close()
+                self._serial_stage = None
             self._close_workers()
             self._connection = None
             self._transaction = None
             store._bulk_active = False
+
+    def _write_ingest_marker(self) -> None:
+        """Commit ``ingest_state=bulk-ingest`` before an empty-store mutation."""
+        with self._store._database.engine.begin() as connection:
+            connection.execute(
+                sqlalchemy.text(
+                    "INSERT INTO \"_httk_store_metadata\" (key, value) VALUES ('ingest_state', 'bulk-ingest')"
+                )
+            )
+
+    def _clear_ingest_marker(self) -> None:
+        """Clear the marker only after all successful finalize work has committed."""
+        if not self._marker_active:
+            return
+        with self._store._database.engine.begin() as connection:
+            connection.execute(sqlalchemy.text('DELETE FROM "_httk_store_metadata" WHERE key = \'ingest_state\''))
+        self._marker_active = False
+
+    def _clear_marker_after_failure(self) -> None:
+        """Clear a failure marker only after restoring the complete entry catalog."""
+        if not self._marker_active:
+            return
+        try:
+            with self._store._database.engine.connect() as connection:
+                if self._entry_catalog != self._catalog_snapshot(connection):
+                    return
+            if self._entry_catalog is None:
+                return
+            self._clear_ingest_marker()
+        except BaseException:
+            # The original ingest exception remains primary; the marker must
+            # stay if emptiness or marker cleanup cannot be verified.
+            return
 
     def _release_connection(self, connection: sqlalchemy.Connection | None) -> None:
         """Detach any SQLite shards on ``connection`` and return it to the pool (idempotent).
@@ -449,25 +595,15 @@ class BulkIngest:
                     with contextlib.suppress(Exception):
                         raw.execute(f"DETACH DATABASE {alias}")
             self._parallel_attached = []
-        connection.close()
-
-    def _require_no_foreign_key_enforcement(self, connection: sqlalchemy.Connection) -> None:
-        """Refuse a parallel SQLite ingest when the engine enforces foreign keys.
-
-        The merge collapses and renumbers rows in place; a live foreign key would
-        block that. SQLite does not enforce foreign keys by default, but a
-        user-supplied engine can turn ``PRAGMA foreign_keys`` on, so this checks
-        the ingest connection and refuses rather than silently corrupting.
-        """
-        if connection.dialect.name != "sqlite":
-            return
-        enforced = connection.exec_driver_sql("PRAGMA foreign_keys").scalar()
-        if enforced:
-            raise RuntimeError(
-                "bulk_ingest(workers>1) on SQLite requires foreign-key enforcement to be off "
-                "(PRAGMA foreign_keys=OFF): the merge collapses and renumbers rows in place, which a "
-                "live foreign key would block. Disable enforcement on the engine, or use workers=1."
+        if connection.dialect.name == "duckdb" and self._entry_catalog is not None:
+            raw = connection.connection.driver_connection
+            attached = tuple(
+                sorted(str(row[0]) for row in raw.execute("SELECT database_name FROM duckdb_databases()").fetchall())
             )
+            if attached != tuple(sorted(self._entry_catalog[2])):
+                connection.close()
+                raise RuntimeError("bulk_ingest failed to restore the DuckDB attached-database set")
+        connection.close()
 
     def _scan_store(self, connection: sqlalchemy.Connection) -> frozenset[str]:
         """Return the application tables that already exist in the store.
@@ -486,6 +622,41 @@ class BulkIngest:
                 continue
             preexisting.add(name)
         return frozenset(preexisting)
+
+    def _physically_empty(self, connection: sqlalchemy.Connection, tables: Iterable[str]) -> bool:
+        """Whether all application tables are empty, including pre-created SQLite tables."""
+        return all(
+            int(connection.execute(sqlalchemy.text(f'SELECT count(*) FROM "{name}"')).scalar_one()) == 0
+            for name in tables
+        )
+
+    @staticmethod
+    def _catalog_snapshot(connection: sqlalchemy.Connection) -> tuple[tuple[str, ...], ...]:
+        """Capture durable and connection-local catalog state for marker recovery."""
+        objects = tuple(
+            sorted(f"{name}:{','.join(sorted(kinds))}" for name, kinds in actual_schema_objects(connection).items())
+        )
+        if connection.dialect.name == "sqlite":
+            temporary = tuple(
+                f"{row[0]}:{row[1]}"
+                for row in connection.execute(
+                    sqlalchemy.text(
+                        "SELECT name, type FROM sqlite_temp_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name"
+                    )
+                )
+            )
+            attached = tuple(
+                f"{row[1]}:{row[2]}" for row in connection.execute(sqlalchemy.text("PRAGMA database_list"))
+            )
+        else:
+            temporary = ()
+            attached = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    sqlalchemy.text("SELECT database_name FROM duckdb_databases() ORDER BY database_name")
+                )
+            )
+        return objects, temporary, attached
 
     def _clean_up_after_failure(self) -> None:
         """Undo a failed ingest: drop created and staging tables, restore dropped indexes, clear caches."""
@@ -550,6 +721,8 @@ class BulkIngest:
         reject_cursor_proxy(obj)
         if self._parallel:
             return self._parallel_save(obj, as_record)
+        if self._deferred:
+            return self._deferred_serial_save(obj, as_record)
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
         sid = self._encode(record_type, obj, projection, "")
@@ -564,6 +737,71 @@ class BulkIngest:
         if self._since_flush >= self._chunk_size:
             self._flush()
         return sid
+
+    def _deferred_serial_save(self, obj: Any, as_record: type | None) -> int:
+        """Stage one serial occurrence without importing the parallel extra.
+
+        The worker encoder is deliberately reused here: it is the only encoder
+        which retains duplicate occurrences for the later grouped conflict
+        scan.  Its SQLite writer is a dependency-free external artifact even
+        when the target database is DuckDB.
+        """
+        from httk.data.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
+
+        record_type = resolve_storage_record(obj, as_record=as_record)
+        self._record_schema_graph(record_type)
+        self._deferred_top_types.add(record_type)
+        if self._serial_stage is None:
+            temp = tempfile.TemporaryDirectory(prefix="httk_deferred_")
+            stage_backend = "duckdb-stage" if self._store._database.engine.dialect.name == "duckdb" else "sqlite"
+            config = _WorkerConfig(chunk_size=self._chunk_size, shard_dir=temp.name, backend=stage_backend)
+            self._serial_stage = _SerialDeferredStage(temp, _WorkerEncoder(self._store, 0, config))
+        token = self._serial_next_token
+        self._serial_next_token += 1
+        stage_sid = self._serial_stage.save(token, obj, as_record)
+        table_name = resolve_schema(record_type).table_name
+        # Worker block sids are deliberately never public.  Removing the
+        # single serial block offset preserves the ordinary serial return value
+        # for the common no-collapse case, while resolved_sid remains the
+        # authoritative adapter after a collapse.
+        public_sid = stage_sid - (1 << 26)
+        schema = resolve_schema(record_type)
+        if schema.dedup == "content_id":
+            key = content_id(obj, as_record=record_type)
+            public_sid = self._serial_public_content.get((table_name, key))
+            if public_sid is None:
+                public_sid = self._serial_public_next.get(table_name, 1)
+                self._serial_public_next[table_name] = public_sid + 1
+                self._serial_public_content[(table_name, key)] = public_sid
+        elif schema.dedup == "by_value":
+            key = self._serial_by_value_key(record_type, obj)
+            public_sid = self._serial_public_value.get((table_name, key))
+            if public_sid is None:
+                public_sid = self._serial_public_next.get(table_name, 1)
+                self._serial_public_next[table_name] = public_sid + 1
+                self._serial_public_value[(table_name, key)] = public_sid
+        self._serial_public_stage_sid.setdefault((table_name, public_sid), stage_sid)
+        self._returned_sids.add((table_name, public_sid))
+        self._records_total += 1
+        return public_sid
+
+    def _serial_by_value_key(self, record_type: type, obj: Any) -> tuple[tuple[str, object], ...]:
+        """Build a lightweight logical parent key for the public by-value adapter.
+
+        References are represented by their content identities rather than the
+        occurrence sids assigned by the stage encoder.  Child rows are omitted,
+        matching the by-value table policy; staging still retains every
+        occurrence for the eventual fixpoint and conflict scan.
+        """
+        schema = resolve_schema(record_type)
+        projection = SaveProjection()
+        projected = projection.projector(record_type, obj)
+
+        def reference_key(target: type, value: Any, _path: str) -> str:
+            return content_id(value, as_record=target)
+
+        values = _encode_parent_row(schema, obj, projected, "", reference_key)
+        return tuple(sorted(values.items()))
 
     def resolved_sid(self, record_type: type, sid: int) -> int:
         """Map a sid returned by :meth:`save` to its durable stored sid after the context exits.
@@ -607,7 +845,10 @@ class BulkIngest:
         # Validate the metadata shape (and record the schema graph) before any DDL,
         # so a rejected type fails fast without leaving an empty table behind.
         self._record_schema_graph(record_type)
-        self._ensure_tables(record_type)
+        if self._deferred:
+            self._deferred_top_types.add(record_type)
+        else:
+            self._ensure_tables(record_type)
         table_name = resolve_schema(record_type).table_name
         token = self._next_token
         self._next_token += 1
@@ -650,9 +891,11 @@ class BulkIngest:
 
             reason = unsupported_metadata_reason(record_type)
             if reason is not None:
+                remedy = 'finalize="parity"' if self._deferred else "workers=1"
                 raise ValueError(
-                    f"bulk_ingest(workers>1) cannot verify this identity-excluded metadata shape: {reason}. "
-                    "Use workers=1 for records of this kind, or open with verify_metadata=False."
+                    f"bulk_ingest({'finalize="deferred"' if self._deferred else 'workers>1'}) cannot verify "
+                    f"this identity-excluded metadata shape: {reason}. Use {remedy} for records of this kind, "
+                    "or open with verify_metadata=False."
                 )
         schema = resolve_schema(record_type)
         for target in schema.referenced_classes():
@@ -772,7 +1015,11 @@ class BulkIngest:
         # Reject a record whose table claims a reserved ``_httk_`` name, exactly
         # as the ordinary write path does before creating tables.
         self._store._validate_table_names(frozenset(candidate.tables))
-        for table in candidate.sorted_tables:
+        order = LogicalEdgeGraph.from_store(self._store, (resolve_schema(record_type),)).dependency_order(
+            candidate.tables
+        )
+        for name in order:
+            table = candidate.tables[name]
             name = table.name
             if name in self._created_set:
                 continue
@@ -811,20 +1058,9 @@ class BulkIngest:
                 # bind, otherwise ordinary post-ingest saves lose their sid
                 # allocator. SQLite ignores the sequence entirely.
                 self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE IF NOT EXISTS "{sequence.name}"'))
-        create = table
-        if self._parallel and self._connection.dialect.name == "duckdb" and not table.name.startswith("_httk_"):
-            # The parallel merge remaps and deletes rows in place while collapsing
-            # cross-worker duplicates and compacting the block sids. DuckDB refuses
-            # to delete or renumber a row a foreign key still references, so on
-            # DuckDB record and child tables are created without their reference
-            # constraints. SQLite keeps them: it does not enforce foreign keys
-            # unless the engine turns them on, which a parallel ingest refuses.
-            # Every other structure — the sid primary key and sequence, the
-            # content-id uniqueness index, and the separable indexes — is unchanged.
-            create = _foreign_key_free_clone(table)
         # A bare CreateTable (not create_all / Table.create) so the separable
         # indexes stay out until the deferred post-load build.
-        self._connection.execute(sqlalchemy.schema.CreateTable(create))
+        self._connection.execute(sqlalchemy.schema.CreateTable(table))
 
     # ------------------------------------------------------------------ flushing and finalization
 
@@ -851,7 +1087,8 @@ class BulkIngest:
         # Resolve every pre-existing content-addressed table first, in FK
         # dependency order (referenced tables before referrers) so a parent's
         # tuples and by_value keys are computed against final, remapped sids.
-        for table in store._metadata.sorted_tables:
+        for name in self._logical_graph().dependency_order(store._metadata.tables):
+            table = store._metadata.tables[name]
             name = table.name
             rows = self._rows.get(name)
             if not rows or name not in self._preexisting:
@@ -869,7 +1106,8 @@ class BulkIngest:
             # that save() would never have created; sweep those unreachable rows.
             self._collect_garbage(fk_columns)
         self._refresh_value_index()
-        for table in store._metadata.sorted_tables:
+        for name in self._logical_graph().dependency_order(store._metadata.tables):
+            table = store._metadata.tables[name]
             name = table.name
             rows = self._rows.get(name)
             if not rows:
@@ -903,6 +1141,376 @@ class BulkIngest:
         self._create_new_indexes()
         self._resync_sequences()
         self._assert_counts()
+
+    def _deferred_finalize(self) -> None:
+        """Build an empty store from external occurrence-preserving stage data.
+
+        Staging has completed before this point.  The main database is touched
+        only in this final transaction (plus the separately committed marker),
+        which is required by DuckDB's one-writable-attached-database rule.
+        """
+        assert self._connection is not None
+        if self._parallel:
+            assert self._controller is not None
+            started = time.perf_counter()
+            manifests = self._controller.finish()
+            self.finalize_timings["stage_finish"] = time.perf_counter() - started
+            self._assert_no_lost_tasks(manifests)
+        else:
+            started = time.perf_counter()
+            manifests = [] if self._serial_stage is None else [self._serial_stage.finish()]
+            self.finalize_timings["stage_finish"] = time.perf_counter() - started
+        transaction = self._connection.begin()
+        try:
+            # Register and create schema-faithful ordinary tables only now,
+            # after staging is complete.  There are no physical FKs, so table
+            # insertion order is intentionally unconstrained.
+            started = time.perf_counter()
+            for record_type in sorted(self._deferred_top_types, key=lambda value: resolve_schema(value).table_name):
+                self._ensure_tables(record_type)
+            self.finalize_timings["ddl"] = time.perf_counter() - started
+            from httk.data.db.bulk_deferred import DeferredFinalizer
+
+            finalizer = DeferredFinalizer(self, manifests)
+            try:
+                try:
+                    finalizer.run()
+                except EntryMetadataConflictError as error:
+                    if not self._parallel:
+                        message = self._serial_conflict_message(str(error))
+                        if message != str(error):
+                            raise EntryMetadataConflictError(message) from error
+                    raise
+                # Serial callers receive a table-scoped public provisional sid,
+                # while stage manifests use unique root tokens.
+                if not self._parallel:
+                    for (table, public_sid), stage_sid in self._serial_public_stage_sid.items():
+                        self._resolved_map[(table, public_sid)] = finalizer._final_for_stage(table, stage_sid)
+                finalizer_timings = dict(finalizer.finalize_timings)
+                self.finalize_timings.update(finalizer_timings)
+                started = time.perf_counter()
+                self._create_new_indexes()
+                self._resync_sequences()
+                self.finalize_timings["indexes"] = time.perf_counter() - started
+                started = time.perf_counter()
+                self._assert_counts()
+                self._validate_deferred_physical()
+                self.finalize_timings["validation"] = time.perf_counter() - started
+            finally:
+                finalizer.cleanup()
+                self.finalize_timings.update(finalizer.finalize_timings)
+            self._validate_deferred_staging_cleared()
+            started = time.perf_counter()
+            transaction.commit()
+            self.finalize_timings["commit"] = time.perf_counter() - started
+        except BaseException:
+            transaction.rollback()
+            raise
+
+    def _serial_conflict_message(self, message: str) -> str:
+        for schema in self._parent_schema.values():
+            prefix = f"metadata conflict for {schema.cls.__name__}."
+            if not message.startswith(prefix):
+                continue
+            field = message[len(prefix) :].split(":", 1)[0]
+            for parent in self._parent_schema.values():
+                for spec in parent.fields:
+                    if spec.role == "reference" and spec.target is schema.cls:
+                        return message.replace(f"{schema.cls.__name__}.{field}", f"{spec.field}.{field}", 1)
+        return message
+
+    def _validate_deferred_physical(self) -> None:
+        """Verify the full declared physical shape before marker clear.
+
+        Deferred load intentionally uses bare table DDL followed by the load
+        and index build.  Validate all parts that can otherwise be made
+        durable by an interrupted or externally-contended finalize: column
+        shape/defaults/nullability, constraints, indexes, sequences, and the
+        absence of physical FKs or stage relations.
+        """
+        assert self._connection is not None
+        objects = actual_schema_objects(self._connection)
+        expected = set(self._created) | {METADATA_TABLE_NAME}
+        actual_tables = {name for name, kinds in objects.items() if "table" in kinds}
+        if actual_tables != expected:
+            raise RuntimeError(
+                "deferred finalize schema tables differ from declaration: "
+                f"expected {', '.join(sorted(expected))}; found {', '.join(sorted(actual_tables))}"
+            )
+        if self._connection.dialect.name == "duckdb" and self._entry_catalog is not None:
+            attached = {
+                str(row[0])
+                for row in self._connection.execute(sqlalchemy.text("SELECT database_name FROM duckdb_databases()"))
+            }
+            expected_attached = set(self._entry_catalog[2]) | set(self._parallel_attached)
+            if attached != expected_attached:
+                raise RuntimeError(
+                    "deferred finalize found unexpected DuckDB attachments: "
+                    f"expected {', '.join(sorted(expected_attached))}; found {', '.join(sorted(attached))}"
+                )
+        for name in self._created:
+            table = self._store._table(name)
+            if self._connection.dialect.name == "sqlite":
+                self._validate_deferred_sqlite_table(name, table)
+            else:
+                self._validate_deferred_duckdb_table(name, table)
+
+    def _validate_deferred_staging_cleared(self) -> None:
+        """Ensure temporary finalizer relations did not escape its cleanup."""
+        assert self._connection is not None
+        lingering = sorted(
+            name
+            for name in actual_schema_objects(self._connection)
+            if name.startswith(("_httk_deferred_", "_httk_stage_"))
+        )
+        if lingering:
+            raise RuntimeError(f"deferred finalize found lingering staging objects: {', '.join(lingering)}")
+        if self._connection.dialect.name == "sqlite":
+            temporary = (
+                self._connection.execute(
+                    sqlalchemy.text("SELECT name FROM sqlite_temp_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
+                )
+                .scalars()
+                .all()
+            )
+            if temporary:
+                raise RuntimeError(f"deferred finalize found lingering SQLite temp objects: {', '.join(temporary)}")
+
+    @staticmethod
+    def _physical_sql(value: object | None) -> str | None:
+        """Canonicalize catalog SQL enough for stable cross-dialect checks."""
+        if value is None:
+            return None
+        normalized = (
+            " ".join(str(value).replace('"', "").lower().split())
+            .replace("double precision", "double")
+            .replace("varchar", "text")
+            .replace("bytea", "blob")
+        )
+        # DuckDB expands CASE expressions and wraps CHECK expressions in
+        # implementation parentheses; neither changes the declared check.
+        if "case" in normalized or normalized.startswith("check"):
+            return normalized.replace("check", "").replace("(", "").replace(")", "").replace(" ", "")
+        return normalized
+
+    def _physical_failure(self, name: str, detail: str) -> None:
+        raise RuntimeError(f"deferred finalize physical validation failed for {name!r}: {detail}")
+
+    def _expected_unique_columns(self, table: sqlalchemy.Table) -> set[tuple[str, ...]]:
+        expected = {
+            tuple(column.name for column in constraint.columns)
+            for constraint in table.constraints
+            if isinstance(constraint, sqlalchemy.UniqueConstraint)
+        }
+        expected.update((column.name,) for column in table.columns if column.unique)
+        return expected
+
+    def _expected_sqlite_unique_columns(self, table: sqlalchemy.Table) -> set[tuple[str, ...]]:
+        expected = self._expected_unique_columns(table)
+        primary = tuple(table.primary_key.columns)
+        # SQLite's single INTEGER primary key aliases rowid and deliberately
+        # has no index_list entry; other primary keys do have an autoindex.
+        if primary and not (len(primary) == 1 and isinstance(primary[0].type, sqlalchemy.Integer)):
+            expected.add(tuple(column.name for column in table.primary_key.columns))
+        expected.update(tuple(column.name for column in index.columns) for index in table.indexes if index.unique)
+        return expected
+
+    def _expected_checks(self, table: sqlalchemy.Table) -> set[str]:
+        return {
+            self._physical_check(constraint.sqltext)
+            for constraint in table.constraints
+            if isinstance(constraint, sqlalchemy.CheckConstraint)
+        }
+
+    @classmethod
+    def _physical_check(cls, value: object) -> str:
+        """Normalize non-semantic SQLite/DuckDB parenthesis and whitespace differences."""
+        return (cls._physical_sql(value) or "").replace("(", "").replace(")", "").replace(" ", "")
+
+    @classmethod
+    def _sqlite_check_clauses(cls, sql: str) -> list[str]:
+        """Extract top-level SQLite ``CHECK(...)`` expressions without keyword false positives."""
+        result: list[str] = []
+        index = 0
+        quote: str | None = None
+        while index < len(sql):
+            character = sql[index]
+            if quote is not None:
+                if character == quote:
+                    if quote in "'\"" and index + 1 < len(sql) and sql[index + 1] == quote:
+                        index += 2
+                        continue
+                    quote = None
+                index += 1
+                continue
+            if character in "'\"`":
+                quote = character
+                index += 1
+                continue
+            if character == "[":
+                quote = "]"
+                index += 1
+                continue
+            if character.isalpha() or character == "_":
+                start = index
+                index += 1
+                while index < len(sql) and (sql[index].isalnum() or sql[index] == "_"):
+                    index += 1
+                if sql[start:index].lower() != "check":
+                    continue
+                cursor = index
+                while cursor < len(sql) and sql[cursor].isspace():
+                    cursor += 1
+                if cursor >= len(sql) or sql[cursor] != "(":
+                    continue
+                depth, expression_start, cursor = 1, cursor + 1, cursor + 1
+                nested_quote: str | None = None
+                while cursor < len(sql) and depth:
+                    nested = sql[cursor]
+                    if nested_quote is not None:
+                        if nested == nested_quote:
+                            if nested_quote in "'\"" and cursor + 1 < len(sql) and sql[cursor + 1] == nested_quote:
+                                cursor += 2
+                                continue
+                            nested_quote = None
+                    elif nested in "'\"`":
+                        nested_quote = nested
+                    elif nested == "[":
+                        nested_quote = "]"
+                    elif nested == "(":
+                        depth += 1
+                    elif nested == ")":
+                        depth -= 1
+                    cursor += 1
+                if depth == 0:
+                    result.append(cls._physical_check(sql[expression_start : cursor - 1]))
+                    index = cursor
+                continue
+            index += 1
+        return result
+
+    def _validate_deferred_sqlite_table(self, name: str, table: sqlalchemy.Table) -> None:
+        assert self._connection is not None
+        rows = self._connection.execute(sqlalchemy.text(f'PRAGMA table_info("{name}")')).mappings().all()
+        if [str(row["name"]) for row in rows] != [column.name for column in table.columns]:
+            self._physical_failure(name, "column declaration")
+        for row, column in zip(rows, table.columns, strict=True):
+            expected_type = self._physical_sql(column.type.compile(dialect=self._connection.dialect))
+            if self._physical_sql(row["type"]) != expected_type:
+                self._physical_failure(name, f"type for {column.name!r}")
+            if bool(row["notnull"]) != (not column.nullable):
+                self._physical_failure(name, f"nullability for {column.name!r}")
+            expected_default = self._physical_sql(column.server_default.arg if column.server_default else None)
+            if self._physical_sql(row["dflt_value"]) != expected_default:
+                self._physical_failure(name, f"default for {column.name!r}")
+        expected_pk = [column.name for column in table.primary_key.columns]
+        actual_pk = [str(row["name"]) for row in sorted(rows, key=lambda row: int(row["pk"])) if row["pk"]]
+        if actual_pk != expected_pk:
+            self._physical_failure(name, "primary key")
+        indexes = self._connection.execute(sqlalchemy.text(f'PRAGMA index_list("{name}")')).mappings().all()
+        declared_indexes = {index.name: bool(index.unique) for index in table.indexes}
+        actual_indexes = {str(row["name"]): bool(row["unique"]) for row in indexes if str(row["origin"]) == "c"}
+        if actual_indexes != declared_indexes:
+            self._physical_failure(name, "indexes")
+        actual_unique = {
+            tuple(
+                str(row["name"])
+                for row in self._connection.execute(sqlalchemy.text(f'PRAGMA index_info("{index["name"]}")'))
+                .mappings()
+                .all()
+            )
+            for index in indexes
+            if bool(index["unique"])
+        }
+        if actual_unique != self._expected_sqlite_unique_columns(table):
+            self._physical_failure(name, "unique constraints")
+        create_sql = self._connection.execute(
+            sqlalchemy.text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :name"), {"name": name}
+        ).scalar_one()
+        if sorted(self._sqlite_check_clauses(str(create_sql))) != sorted(self._expected_checks(table)):
+            self._physical_failure(name, "check constraints")
+        if self._connection.execute(sqlalchemy.text(f'PRAGMA foreign_key_list("{name}")')).first() is not None:
+            self._physical_failure(name, "foreign keys are forbidden")
+
+    def _validate_deferred_duckdb_table(self, name: str, table: sqlalchemy.Table) -> None:
+        assert self._connection is not None
+        rows = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_catalog = current_database() AND table_schema = current_schema() "
+                    "AND table_name = :name ORDER BY ordinal_position"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        if [str(row["column_name"]) for row in rows] != [column.name for column in table.columns]:
+            self._physical_failure(name, "column declaration")
+        for row, column in zip(rows, table.columns, strict=True):
+            expected_type = self._physical_sql(column.type.compile(dialect=self._connection.dialect))
+            if self._physical_sql(row["data_type"]) != expected_type:
+                self._physical_failure(name, f"type for {column.name!r}")
+            if (str(row["is_nullable"]) == "YES") != column.nullable:
+                self._physical_failure(name, f"nullability for {column.name!r}")
+            expected_default = self._physical_sql(column.server_default.arg if column.server_default else None)
+            if self._physical_sql(row["column_default"]) != expected_default:
+                self._physical_failure(name, f"default for {column.name!r}")
+        constraints = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT constraint_type, constraint_text, constraint_column_names FROM duckdb_constraints() "
+                    "WHERE database_name = current_database() AND schema_name = current_schema() AND table_name = :name"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        by_type: dict[str, list[Any]] = {}
+        for constraint in constraints:
+            by_type.setdefault(str(constraint["constraint_type"]), []).append(constraint)
+        expected_pk = [column.name for column in table.primary_key.columns]
+        actual_pk = next((list(row["constraint_column_names"]) for row in by_type.get("PRIMARY KEY", ())), None)
+        if (actual_pk or []) != expected_pk:
+            self._physical_failure(name, "primary key")
+        actual_unique = {
+            tuple(str(column) for column in row["constraint_column_names"]) for row in by_type.get("UNIQUE", ())
+        }
+        if actual_unique != self._expected_unique_columns(table):
+            self._physical_failure(name, "unique constraints")
+        actual_checks = {self._physical_check(row["constraint_text"]) for row in by_type.get("CHECK", ())}
+        if actual_checks != self._expected_checks(table):
+            self._physical_failure(name, "check constraints")
+        if by_type.get("FOREIGN KEY"):
+            self._physical_failure(name, "foreign keys are forbidden")
+        indexes = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT index_name, is_unique FROM duckdb_indexes() "
+                    "WHERE database_name = current_database() AND schema_name = current_schema() AND table_name = :name"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        actual_indexes = {str(row["index_name"]): bool(row["is_unique"]) for row in indexes}
+        expected_indexes = {index.name: bool(index.unique) for index in table.indexes}
+        if actual_indexes != expected_indexes:
+            self._physical_failure(name, "indexes")
+        sequence = _sid_sequence(table)
+        if sequence is not None:
+            row = self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT start_value FROM duckdb_sequences() WHERE database_name = current_database() "
+                    "AND schema_name = current_schema() AND sequence_name = :name"
+                ),
+                {"name": sequence.name},
+            ).first()
+            if row is None or int(row[0]) != self._next_sid.get(name, 1):
+                self._physical_failure(name, f"sequence {sequence.name!r}")
 
     def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:
         """Abort (never commit) if any dispatched task did not come back encoded in a worker manifest."""
@@ -1263,17 +1871,14 @@ class BulkIngest:
             for row in rows:
                 value_map[_value_tuple(row)] = row[SID_COLUMN]
 
+    def _logical_graph(self, extra: Iterable[TableSchema] = ()) -> LogicalEdgeGraph:
+        """Return the schema-derived graph for this ingest's registered tables."""
+        schemas = tuple(self._parent_schema.values()) + tuple(extra)
+        return LogicalEdgeGraph.from_store(self._store, schemas)
+
     def _build_fk_columns(self) -> dict[str, list[tuple[str, str]]]:
-        """Map each registered table to its ``(column, referenced_table)`` sid foreign keys."""
-        result: dict[str, list[tuple[str, str]]] = {}
-        for table_name, table in self._store._metadata.tables.items():
-            columns: list[tuple[str, str]] = []
-            for column in table.columns:
-                for foreign_key in column.foreign_keys:
-                    columns.append((column.name, foreign_key.column.table.name))
-            if columns:
-                result[table_name] = columns
-        return result
+        """Compatibility name for the logical sid-column map used by remapping."""
+        return self._logical_graph().sid_columns()
 
     def _decide_index(self, name: str) -> None:
         """Before a pre-existing table's first append, drop its separable indexes if the strategy asks."""

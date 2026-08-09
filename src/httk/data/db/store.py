@@ -58,6 +58,7 @@ from httk.data.db.codecs import (
 from httk.data.db.engine import Database
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
+    BackendFacts,
     STORAGE_PROTOCOL_VERSION,
     EntryFamilyLayout,
     StorageLayout,
@@ -69,6 +70,8 @@ from httk.data.db.layout import (
     metadata_table_for,
     normalize_entry_records,
     read_store_metadata,
+    StoreUnderConstructionError,
+    backend_facts_for_dialect,
 )
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
@@ -135,6 +138,12 @@ class SqlStore:
     :raises httk.data.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
     """
 
+    # Subclasses which operate exclusively on new, offline stores may select a
+    # different default without changing every call site.  ``"auto"`` remains
+    # the normal public default and always falls back to the legacy protocol
+    # when a store is not physically empty.
+    bulk_ingest_finalize_default: Literal["auto", "parity", "deferred"] = "auto"
+
     def __init__(
         self,
         database: Database,
@@ -142,6 +151,7 @@ class SqlStore:
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
     ) -> None:
         self._database = database
+        self._backend_facts: BackendFacts | None = None
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
         self._managed_table_names: frozenset[str] = frozenset()
@@ -161,6 +171,12 @@ class SqlStore:
         """
         assert self._layout is not None
         return self._layout
+
+    @property
+    def backend_facts(self) -> BackendFacts:
+        """Return the dialect capabilities resolved when this store was opened."""
+        assert self._backend_facts is not None
+        return self._backend_facts
 
     @property
     def _instances(self) -> Any:
@@ -216,6 +232,7 @@ class SqlStore:
         connection: sqlalchemy.Connection,
         supplied: StorageLayout | None,
     ) -> None:
+        self._backend_facts = backend_facts_for_dialect(connection.dialect.name)
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         if METADATA_TABLE_NAME in names_before:
@@ -226,6 +243,8 @@ class SqlStore:
                     {"declaration": {"metadata": "malformed", "error": str(error)}}
                 ) from error
             assert stored is not None
+            if "ingest_state" in stored:
+                raise StoreUnderConstructionError("interrupted bulk ingest; the store must be dropped and re-ingested")
             self._open_marked_layout(connection, stored, supplied)
             return
 
@@ -272,10 +291,16 @@ class SqlStore:
         supplied: StorageLayout | None,
     ) -> None:
         required_keys = {"protocol", "entry_declaration"}
+        recognized_runtime_keys = {"ingest_state"}
+        allowed_keys = required_keys | recognized_runtime_keys
         diff: dict[str, object] = {}
-        if set(stored) != required_keys:
+        if set(stored) - allowed_keys or not required_keys <= set(stored):
             diff["declaration"] = {
-                "metadata_keys": {"expected": tuple(sorted(required_keys)), "actual": tuple(sorted(stored))}
+                "metadata_keys": {
+                    "expected": tuple(sorted(required_keys)),
+                    "recognized_runtime": tuple(sorted(recognized_runtime_keys)),
+                    "actual": tuple(sorted(stored)),
+                }
             }
         if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
             diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
@@ -385,6 +410,7 @@ class SqlStore:
         index_strategy: Literal["auto", "keep", "rebuild"] = "auto",
         on_progress: Callable[[int, int], None] | None = None,
         workers: int = 1,
+        finalize: Literal["auto", "parity", "deferred"] = "auto",
     ) -> "BulkIngest":
         """Return a context manager that appends a stream of objects into this store.
 
@@ -418,6 +444,10 @@ class SqlStore:
             unchanged semantics; ``>1`` encodes the stream in forked worker processes and merges their per-table
             shards set-wise. Parallel mode requires a physically empty target store (the offline-build use case) and,
             on DuckDB, the ``httk-data[parallel]`` extra (pyarrow); incremental appends stay on the serial path.
+        :param finalize: ``"parity"`` selects the historical in-database ingest; ``"deferred"`` stages a physically
+            empty ingest outside the store and finalizes it at context exit; ``"auto"`` selects deferred only for a
+            physically empty, supported serial ingest and otherwise selects parity (including ``workers>1``). A
+            subclass may override :attr:`bulk_ingest_finalize_default` for ``"auto"`` calls.
         :return: A bulk-ingest context manager bound to this store.
         """
         from httk.data.db.bulk import BulkIngest
@@ -429,6 +459,7 @@ class SqlStore:
             index_strategy=index_strategy,
             on_progress=on_progress,
             workers=workers,
+            finalize=finalize,
         )
 
     def ensure_tables(self, *classes: type) -> None:

@@ -24,4 +24,5 @@ Records are content-addressed (`content_id`) as well as locally numbered
 The full guide, {doc}`details/db`, covers declaring storable classes with the
 httk-core marker vocabulary, entry families and multi-record dispatch, the
 search DSL and stored properties, bulk ingestion (including
-`bulk_ingest(workers=N)`), OPTIMADE serving, and store-layout versioning.
+`bulk_ingest(workers=N)` and the crash-safe `finalize="deferred"` fresh-store
+profile), OPTIMADE serving, and store-layout versioning.

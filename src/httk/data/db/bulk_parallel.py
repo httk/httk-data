@@ -53,6 +53,7 @@ import pickle
 import queue as queue_mod
 import sqlite3
 import tempfile
+import csv
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -321,9 +322,97 @@ class _SqliteShardWriter:
         return {"db": self._path, "tables": sorted(self._created)}
 
 
+class _DuckdbStageWriter:
+    """Stream a serial stage through quote-all CSV and DuckDB ``COPY``.
+
+    A CSV field is paired with an explicit boolean null bitmap.  This avoids a
+    magic ``NULLSTR`` altogether: empty strings, arbitrary Unicode, and every
+    possible text value remain distinct from SQL ``NULL``.  CSV files are
+    written as the encoder flushes; only native bulk ``COPY`` and a set-wise
+    typed projection run at stage finish.
+    """
+
+    def __init__(self, store: SqlStore, worker_index: int, shard_dir: str) -> None:
+        self._store = store
+        self._path = os.path.join(shard_dir, f"w{worker_index}.duckdb")
+        self._dir = shard_dir
+        self._csv: dict[str, tuple[Any, Any, list[str]]] = {}
+
+    def write(self, table_name: str, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        writer, _file, columns = self._csv_for(table_name)
+        for row in rows:
+            encoded: list[object] = []
+            for name in columns:
+                value = row.get(name)
+                encoded.extend(("" if value is None else self._csv_value(value), value is None))
+            writer.writerow(encoded)
+
+    def finalize(self) -> dict[str, Any]:
+        for _writer, file, _columns in self._csv.values():
+            file.close()
+        engine = sqlalchemy.create_engine(f"duckdb:///{self._path}")
+        try:
+            with engine.begin() as connection:
+                for table_name, (_writer, _file, columns) in self._csv.items():
+                    source = self._store._table(table_name)
+                    raw = f"_httk_stage_raw_{table_name}"
+                    raw_columns = ", ".join(
+                        f'"v{index}" VARCHAR, "n{index}" BOOLEAN' for index, _name in enumerate(columns)
+                    )
+                    connection.execute(sqlalchemy.text(f'CREATE TABLE "{raw}" ({raw_columns})'))
+                    path = os.path.join(self._dir, f"{table_name}.csv").replace("'", "''")
+                    connection.execute(
+                        sqlalchemy.text(
+                            f"COPY \"{raw}\" FROM '{path}' (FORMAT CSV, HEADER TRUE, QUOTE '\"', ESCAPE '\"', "
+                            f"FORCE_NOT_NULL ({', '.join(repr(f'v{index}') for index in range(len(columns)))}))"
+                        )
+                    )
+                    stage = sqlalchemy.Table(
+                        table_name,
+                        sqlalchemy.MetaData(),
+                        *(sqlalchemy.Column(column.name, column.type) for column in source.columns),
+                    )
+                    connection.execute(sqlalchemy.schema.CreateTable(stage))
+                    select = ", ".join(
+                        f'CASE WHEN "n{index}" THEN NULL ELSE CAST("v{index}" AS {column.type.compile(dialect=engine.dialect)}) END'
+                        for index, column in enumerate(source.columns)
+                    )
+                    names = ", ".join(f'"{column.name}"' for column in source.columns)
+                    connection.execute(
+                        sqlalchemy.text(f'INSERT INTO "{table_name}" ({names}) SELECT {select} FROM "{raw}"')
+                    )
+                    connection.execute(sqlalchemy.text(f'DROP TABLE "{raw}"'))
+        finally:
+            engine.dispose()
+        return {"format": "duckdb", "db": self._path, "tables": sorted(self._csv)}
+
+    def _csv_for(self, table_name: str) -> tuple[Any, Any, list[str]]:
+        existing = self._csv.get(table_name)
+        if existing is not None:
+            return existing
+        path = os.path.join(self._dir, f"{table_name}.csv")
+        file = open(path, "w", newline="", encoding="utf-8")
+        columns = [column.name for column in self._store._table(table_name).columns]
+        writer = csv.writer(file, quoting=csv.QUOTE_ALL, lineterminator="\n")
+        writer.writerow([item for index in range(len(columns)) for item in (f"v{index}", f"n{index}")])
+        built = (writer, file, columns)
+        self._csv[table_name] = built
+        return built
+
+    @staticmethod
+    def _csv_value(value: Any) -> str:
+        if isinstance(value, bytes):
+            return "".join(f"\\x{byte:02x}" for byte in value)
+        return str(value)
+
+
 def _make_writer(store: SqlStore, worker_index: int, config: _WorkerConfig) -> Any:
     if config.backend == "duckdb":
         return _ParquetShardWriter(store, worker_index, config.shard_dir)
+    if config.backend == "duckdb-stage":
+        return _DuckdbStageWriter(store, worker_index, config.shard_dir)
     return _SqliteShardWriter(store, worker_index, config.shard_dir)
 
 
@@ -359,7 +448,7 @@ class _WorkerEncoder:
 
     # -- encoding
 
-    def save(self, token: int, obj: Any, as_record: type | None) -> None:
+    def save(self, token: int, obj: Any, as_record: type | None) -> int:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
         sid = self._encode(record_type, obj, projection, "")
@@ -381,6 +470,7 @@ class _WorkerEncoder:
         self._since_flush += 1
         if self._since_flush >= self._chunk_size:
             self._flush()
+        return sid
 
     def _encode(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
         active_key = (record_type, id(source))
@@ -762,8 +852,9 @@ class _Merger:
         assert ingest._connection is not None
         self._connection = ingest._connection
         self._manifests = manifests
-        self._fk_columns = ingest._build_fk_columns()
-        self._referrers = self._invert_fk_columns()
+        self._graph = ingest._logical_graph()
+        self._fk_columns = self._graph.sid_columns()
+        self._referrers = {name: list(self._graph.referrers(name)) for name in self._graph.tables}
         # (table, block_sid) -> keep_sid after cross-worker collapse.
         self._collapse: dict[tuple[str, int], int] = {}
         # (table, sid) -> compact_sid after final renumbering.
@@ -776,26 +867,33 @@ class _Merger:
             for table_name, content_id, field_name in manifest.nan_content:
                 self._nan_content.setdefault(table_name, {}).setdefault(content_id, set()).add(field_name)
 
-    def _invert_fk_columns(self) -> dict[str, list[tuple[str, str]]]:
-        """referenced table -> list of (referrer_table, referrer_column)."""
-        result: dict[str, list[tuple[str, str]]] = {}
-        for table_name, columns in self._fk_columns.items():
-            for column, referenced in columns:
-                result.setdefault(referenced, []).append((table_name, column))
-        return result
-
     def run(self) -> None:
         self._load_shards()
-        for table in self._store._metadata.sorted_tables:
+        for name in self._graph.dependency_order(self._store._metadata.tables):
+            table = self._store._metadata.tables[name]
             schema = self._ingest._parent_schema.get(table.name)
             if schema is None:
                 continue
             if schema.dedup == "content_id":
                 self._collapse_content(table, schema)
-            elif schema.dedup == "by_value":
-                self._collapse_by_value(table, schema)
+        # A collapse in one by-value table can make a normalized key in a
+        # mutually-referential table equal only on the next pass.  Iterate the
+        # full deterministic order to the graph-wide fixpoint before orphan
+        # sweeping (the former one-pass order under-collapsed A <-> B graphs).
+        by_value = [
+            (self._store._metadata.tables[name], self._ingest._parent_schema[name])
+            for name in self._graph.dependency_order(self._store._metadata.tables)
+            if name in self._ingest._parent_schema and self._ingest._parent_schema[name].dedup == "by_value"
+        ]
+        while True:
+            changed = False
+            for table, schema in by_value:
+                changed = self._collapse_by_value(table, schema) or changed
+            if not changed:
+                break
         self._sweep_orphans()
-        for table in self._store._metadata.sorted_tables:
+        for name in self._graph.dependency_order(self._store._metadata.tables):
+            table = self._store._metadata.tables[name]
             if SID_COLUMN in table.c:
                 self._compact(table)
         self._merge_dispatch()
@@ -888,7 +986,7 @@ class _Merger:
             self._verify_collision_metadata(table, schema)
         self._apply_collapse(table, schema, pairs)
 
-    def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> None:
+    def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> bool:
         value_columns = [column.name for column in table.columns if column.name != SID_COLUMN]
         while True:
             keep = (
@@ -907,14 +1005,22 @@ class _Merger:
             )
             pairs = [(int(row[0]), int(row[1])) for row in self._connection.execute(statement).all()]
             if not pairs:
-                return
+                return False
             self._apply_collapse(table, schema, pairs)
+            # _apply_collapse rewrites references and deletes all pairs in one
+            # operation, so a second local pass is only needed for rows made
+            # equal by the remap.
+            return True
 
     def _apply_collapse(self, table: sqlalchemy.Table, schema: TableSchema, pairs: list[tuple[int, int]]) -> None:
         name = table.name
         for old, keep in pairs:
             self._collapse[(name, old)] = keep
-        child_links = {(spec.child.table_name, f"{name}_{SID_COLUMN}") for spec in schema.fields if spec.child}
+        child_links = {
+            (edge.target_table, edge.target_column)
+            for edge in self._graph.ownership()
+            if edge.source_table == name and edge.target_column is not None
+        }
         map_table = self._make_map_table(pairs)
         try:
             for referrer_table, column in self._referrers.get(name, ()):
@@ -1093,16 +1199,17 @@ class _Merger:
         # (reference columns) or through its child rows (child-element columns).
         reference_edges: list[tuple[sqlalchemy.Table, str, str]] = []
         child_edges: list[tuple[sqlalchemy.Table, str, str, str]] = []
-        for table_name, schema in self._ingest._parent_schema.items():
-            table = store._table(table_name)
-            for spec in schema.fields:
-                if spec.role == "reference" and spec.target is not None:
-                    reference_edges.append((table, spec.columns[0].name, resolve_schema(spec.target).table_name))
-                elif spec.child is not None and spec.target is not None:
-                    child = store._table(spec.child.table_name)
-                    element_column = spec.child.element_columns[0].name
+        ownership_columns = {
+            edge.target_table: edge.target_column for edge in self._graph.ownership() if edge.target_column
+        }
+        for edge in self._graph.edges:
+            if edge.kind == "reference" and edge.source_column is not None:
+                reference_edges.append((store._table(edge.source_table), edge.source_column, edge.target_table))
+            elif edge.kind == "child_element" and edge.source_column is not None:
+                parent_column = ownership_columns.get(edge.source_table)
+                if parent_column is not None:
                     child_edges.append(
-                        (child, f"{table_name}_{SID_COLUMN}", element_column, resolve_schema(spec.target).table_name)
+                        (store._table(edge.source_table), parent_column, edge.source_column, edge.target_table)
                     )
         while True:
             before = self._connection.execute(
@@ -1156,15 +1263,16 @@ class _Merger:
 
     def _delete_unreached(self, reach: sqlalchemy.Table) -> None:
         store = self._store
+        ownership_by_parent: dict[str, list[tuple[str, str]]] = {}
+        for edge in self._graph.ownership():
+            if edge.target_column is not None:
+                ownership_by_parent.setdefault(edge.source_table, []).append((edge.target_table, edge.target_column))
         for table_name, schema in self._ingest._parent_schema.items():
             table = store._table(table_name)
             reached = sqlalchemy.select(reach.c[SID_COLUMN]).where(reach.c.tbl == table_name)
             self._connection.execute(sqlalchemy.delete(table).where(table.c[SID_COLUMN].not_in(reached)))
-            for spec in schema.fields:
-                if spec.child is None:
-                    continue
-                child = store._table(spec.child.table_name)
-                parent_column = f"{table_name}_{SID_COLUMN}"
+            for child_name, parent_column in ownership_by_parent.get(table_name, ()):
+                child = store._table(child_name)
                 surviving_parents = sqlalchemy.select(table.c[SID_COLUMN])
                 self._connection.execute(
                     sqlalchemy.delete(child).where(child.c[parent_column].not_in(surviving_parents))

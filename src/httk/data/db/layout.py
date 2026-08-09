@@ -1,8 +1,9 @@
 """Versioned physical layout for :class:`httk.data.db.store.SqlStore`."""
 
+import dataclasses
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Final
+from typing import Final, Literal
 
 import sqlalchemy
 
@@ -20,7 +21,9 @@ from httk.data.storage_layout import (
 
 __all__ = [
     "METADATA_TABLE_NAME",
+    "BackendFacts",
     "STORAGE_PROTOCOL_VERSION",
+    "StoreUnderConstructionError",
     "EntryFamilyLayout",
     "StorageLayout",
     "StorageLayoutUpgradeRequiredError",
@@ -31,10 +34,11 @@ __all__ = [
     "metadata_table_for",
     "normalize_entry_records",
     "read_store_metadata",
+    "backend_facts_for_dialect",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.1.0"
-# One bump covers this stamp-trust/DDL-on-write cycle's layout changes.
+STORAGE_PROTOCOL_VERSION: Final = "v2.2.0"
+# One bump covers the FK-free DDL and under-construction marker semantics.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"
@@ -43,6 +47,44 @@ METADATA_TABLE_NAME: Final = "_httk_store_metadata"
 _METADATA_PROTOCOL_KEY: Final = "protocol"
 _METADATA_DECLARATION_KEY: Final = "entry_declaration"
 _RESERVED_PREFIX: Final = "_httk_"
+
+
+class StoreUnderConstructionError(RuntimeError):
+    """A new open found an interrupted empty-store bulk ingest.
+
+    Crash window for new SQLite/DuckDB opens: before the marker commits the
+    old clean state remains accepted; after the marker and through ingest,
+    finalize, or before marker clear the store is rejected; after clear it is
+    accepted again.  The marker is intentionally not a resume protocol.
+    """
+
+
+@dataclasses.dataclass(frozen=True)
+class BackendFacts:
+    """Dialect capabilities used by the SQL storage protocol."""
+
+    transactional_ddl: bool
+    transactional_dml: bool
+    supports_sequences: bool
+    atomic_upsert: bool
+    serial_stage_format: Literal["sqlite", "duckdb-attach"]
+    parallel_shard_format: Literal["sqlite", "parquet"]
+    supports_deferred_finalize: bool
+    supports_degraded: bool
+
+
+_BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
+    "sqlite": BackendFacts(False, True, False, True, "sqlite", "sqlite", True, False),
+    "duckdb": BackendFacts(True, True, True, True, "duckdb-attach", "parquet", True, False),
+}
+
+
+def backend_facts_for_dialect(dialect_name: str) -> BackendFacts:
+    """Resolve the hardcoded protocol facts for one supported dialect."""
+    try:
+        return _BACKEND_FACTS[dialect_name]
+    except KeyError as error:
+        raise ValueError(f"SqlStore layout validation does not support dialect {dialect_name!r}") from error
 
 
 def normalize_entry_records(entry_records: Mapping[type, type | tuple[type, ...]]) -> StorageLayout:
@@ -104,9 +146,10 @@ def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, fro
         rows = connection.execute(
             sqlalchemy.text(
                 "SELECT table_name, lower(table_type) FROM information_schema.tables "
-                "WHERE table_schema = current_schema() "
+                "WHERE table_catalog = current_database() AND table_schema = current_schema() "
                 "UNION ALL "
-                "SELECT sequence_name, 'sequence' FROM duckdb_sequences() WHERE schema_name = current_schema()"
+                "SELECT sequence_name, 'sequence' FROM duckdb_sequences() "
+                "WHERE database_name = current_database() AND schema_name = current_schema()"
             )
         )
     else:

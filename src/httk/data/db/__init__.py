@@ -48,6 +48,7 @@ from .schema import SchemaError, register_schema_override, resolve_schema
 
 __all__ = [
     "STORAGE_PROTOCOL_VERSION",
+    "BackendFacts",  # pyright: ignore[reportUnsupportedDunderAll]
     "BulkIngest",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -64,6 +65,7 @@ __all__ = [
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoreUnderConstructionError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntrySource",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -78,6 +80,7 @@ __all__ = [
 
 _SQL_EXPORTS = {
     "STORAGE_PROTOCOL_VERSION": ".layout",
+    "BackendFacts": ".layout",
     "BulkIngest": ".bulk",
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
@@ -90,6 +93,7 @@ _SQL_EXPORTS = {
     "DuplicateEntryIdError": ".stored_federation",
     "StoredPropertySqlConfigurationError": ".stored_properties",
     "StorageLayoutUpgradeRequiredError": ".layout",
+    "StoreUnderConstructionError": ".layout",
     "optimade_filter_searcher": ".optimade",
     "stored_property_sql_plan": ".stored_properties",
     "StaleResultError": ".rows",

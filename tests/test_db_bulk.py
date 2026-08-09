@@ -349,6 +349,18 @@ def test_bulk_content_id_metadata_conflict_raises(store_factory):
     assert isinstance(again, int)
 
 
+def test_successful_empty_bulk_clears_under_construction_marker(store_factory):
+    """A successful empty-store ingest leaves only the required metadata keys."""
+    store = store_factory()
+    _require_bulk(store)
+    with store.bulk_ingest() as bulk:
+        bulk.save(Author("marker", 2026))
+    database = _database_of(store)
+    with database.engine.connect() as connection:
+        keys = set(connection.execute(sqlalchemy.text("SELECT key FROM _httk_store_metadata")).scalars())
+    assert keys == {"protocol", "entry_declaration"}
+
+
 def test_bulk_nested_metadata_conflict_raises(store_factory):
     """The in-memory metadata comparison descends into references like save()."""
     store = store_factory()

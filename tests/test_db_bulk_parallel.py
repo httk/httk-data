@@ -179,7 +179,9 @@ def test_parallel_matches_serial_mixed_stream(store_factory, workers):
         formula="NaCl", weight=1.25, reference=None
     )
     assert reopened.fetch(OptionalChildRoundTrip, bulk.resolved_sid(OptionalChildRoundTrip, tokens[11])).notes is None
-    assert reopened.fetch(OptionalChildRoundTrip, bulk.resolved_sid(OptionalChildRoundTrip, tokens[13])).notes == ["note"]
+    assert reopened.fetch(OptionalChildRoundTrip, bulk.resolved_sid(OptionalChildRoundTrip, tokens[13])).notes == [
+        "note"
+    ]
     assert reopened.fetch(Root, bulk.resolved_sid(Root, tokens[14])) == Root(
         "one", Leaf(1, "leaf metadata"), [Leaf(1, "leaf metadata"), Leaf(2)], _root().modified
     )
@@ -417,9 +419,10 @@ def test_parallel_worker_hard_death_aborts(store_factory):
     store = store_factory()
     _require_bulk(store)
     database = _database_of(store)
-    with pytest.raises(RuntimeError, match="exited unexpectedly|without reporting"), store.bulk_ingest(
-        workers=2
-    ) as bulk:
+    with (
+        pytest.raises(RuntimeError, match="exited unexpectedly|without reporting"),
+        store.bulk_ingest(workers=2) as bulk,
+    ):
         for i in range(5):
             bulk.save(Author(f"A{i}", 1900 + i))
         os.kill(bulk._controller._processes[0].pid, signal.SIGKILL)
@@ -578,9 +581,10 @@ def test_parallel_finish_aborts_on_dead_worker_with_full_queue(store_factory, mo
     store = store_factory()
     _require_bulk(store)
     database = _database_of(store)
-    with pytest.raises(RuntimeError, match="exited|without reporting|signal completion|abort"), store.bulk_ingest(
-        workers=2
-    ) as bulk:
+    with (
+        pytest.raises(RuntimeError, match="exited|without reporting|signal completion|abort"),
+        store.bulk_ingest(workers=2) as bulk,
+    ):
         for i in range(4):
             bulk.save(Author(f"A{i}", 1900 + i))
         controller = bulk._controller
@@ -597,8 +601,8 @@ def test_parallel_finish_aborts_on_dead_worker_with_full_queue(store_factory, mo
     assert not _has_application_rows(store, database)
 
 
-def test_parallel_sqlite_rejects_foreign_key_enforcement(tmp_path):
-    """A SQLite engine with PRAGMA foreign_keys ON refuses workers>1 (the in-place merge needs it off)."""
+def test_parallel_sqlite_works_with_foreign_key_enforcement_enabled(tmp_path):
+    """The FK-free physical schema makes parallel merge independent of PRAGMA foreign_keys."""
     from sqlalchemy import event
 
     database = Database.sqlite(tmp_path / "fk.sqlite")
@@ -609,8 +613,10 @@ def test_parallel_sqlite_rejects_foreign_key_enforcement(tmp_path):
 
     store = SqlStore(database, entry_records={})
     try:
-        with pytest.raises(RuntimeError, match="foreign-key enforcement"), store.bulk_ingest(workers=2):
-            pass
+        with store.bulk_ingest(workers=2) as bulk:
+            provisional = bulk.save(Author("A", 1900))
+        assert bulk.resolved_sid(Author, provisional) == 1
+        assert store.fetch(Author, 1) == Author("A", 1900)
     finally:
         database.dispose()
 

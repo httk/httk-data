@@ -15,18 +15,22 @@ from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
 from httk.data.db import (
+    BackendFacts,
     STORAGE_PROTOCOL_VERSION,
     Database,
     SqlStore,
+    StoreUnderConstructionError,
     StorageLayoutUpgradeRequiredError,
 )
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
+    actual_schema_objects,
     actual_table_names,
     declaration_json,
     expected_metadata,
     normalize_entry_records,
+    backend_facts_for_dialect,
 )
 from httk.data.db.mapping import entry_dispatch_table_name
 
@@ -162,7 +166,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":1}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.1.0"
+    assert STORAGE_PROTOCOL_VERSION == "v2.2.0"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -230,10 +234,82 @@ def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(data
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         # This is the prior persisted protocol, not an arbitrary malformed value.
-        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.0.3' WHERE key = 'protocol'"))
+        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.1.0' WHERE key = 'protocol'"))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(database)
-    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "v2.0.3"}
+    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "v2.1.0"}
+
+
+def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:
+    store = SqlStore(database, entry_records={})
+    assert isinstance(store.backend_facts, BackendFacts)
+    assert store.backend_facts.serial_stage_format == "sqlite"
+    assert store.backend_facts.parallel_shard_format == "sqlite"
+    assert store.backend_facts.supports_deferred_finalize
+    assert not store.backend_facts.supports_degraded
+    assert backend_facts_for_dialect("sqlite") == store.backend_facts
+    with pytest.raises(ValueError, match="does not support dialect"):
+        backend_facts_for_dialect("unknown")
+
+
+def test_duckdb_main_catalog_ignores_unrelated_attached_database(tmp_path: Path) -> None:
+    """An attached database is not part of this store's physical layout scan."""
+    pytest.importorskip("duckdb_engine")
+    database = Database.duckdb(tmp_path / "main.duckdb")
+    attached_path = tmp_path / "legitimate.duckdb"
+    attached = Database.duckdb(attached_path)
+    try:
+        with attached.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("CREATE TABLE empty_table (value INTEGER)"))
+        attached.dispose()
+        from sqlalchemy import event
+
+        @event.listens_for(database.engine, "connect")
+        def attach_unrelated(dbapi_connection, _connection_record):  # noqa: ANN001
+            dbapi_connection.execute(f"ATTACH '{attached_path}' AS legitimate")
+
+        store = SqlStore(database, entry_records={})
+        with database.engine.connect() as connection:
+            assert "empty_table" not in actual_schema_objects(connection)
+        with store.bulk_ingest(finalize="deferred") as bulk:
+            bulk.save(LayoutSingle("main"))
+        with database.engine.connect() as connection:
+            assert "legitimate" in set(
+                connection.execute(sqlalchemy.text("SELECT database_name FROM duckdb_databases()")).scalars()
+            )
+            assert connection.execute(sqlalchemy.text("SELECT count(*) FROM legitimate.empty_table")).scalar_one() == 0
+    finally:
+        database.dispose()
+
+
+def test_marker_rejects_read_and_write_opens(database: Database) -> None:
+    SqlStore(database, entry_records={})
+    with database.engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('ingest_state', 'bulk-ingest')")
+        )
+    for supplied in (None, {}):
+        with pytest.raises(StoreUnderConstructionError, match="dropped and re-ingested"):
+            SqlStore(database, entry_records=supplied) if supplied is not None else SqlStore(database)
+
+
+def test_marker_with_partial_application_table_is_still_rejected(database: Database) -> None:
+    SqlStore(database, entry_records={})
+    with database.engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('ingest_state', 'bulk-ingest')")
+        )
+        connection.execute(sqlalchemy.text("CREATE TABLE partial_ingest (sid INTEGER PRIMARY KEY)"))
+    with pytest.raises(StoreUnderConstructionError):
+        SqlStore(database)
+
+
+def test_unknown_metadata_key_is_rejected(database: Database) -> None:
+    SqlStore(database, entry_records={})
+    with database.engine.begin() as connection:
+        connection.execute(sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('mystery', 'value')"))
+    with pytest.raises(StorageLayoutUpgradeRequiredError):
+        SqlStore(database)
 
 
 def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: Database) -> None:

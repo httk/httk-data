@@ -189,7 +189,7 @@ def test_parent_table_columns_and_types():
     assert "coords" not in table.c and "symbols" not in table.c
     reference = table.c["reference_sid"]
     assert reference.nullable
-    assert {fk.target_fullname for fk in reference.foreign_keys} == {"author.sid"}
+    assert not reference.foreign_keys
 
 
 def test_content_id_column_only_under_content_id_policy():
@@ -220,7 +220,7 @@ def test_child_tables_have_parent_fk_index_and_element_columns():
     metadata = sqlalchemy_metadata([resolve_schema(Sample)])
     symbols = metadata.tables["sample_symbols"]
     assert not symbols.c["sample_sid"].nullable
-    assert {fk.target_fullname for fk in symbols.c["sample_sid"].foreign_keys} == {"sample.sid"}
+    assert not symbols.c["sample_sid"].foreign_keys
     assert not symbols.c["symbols_index"].nullable
     assert isinstance(symbols.c["symbols"].type, sqlalchemy.Text)
     assert {index.name for index in symbols.indexes} == {"ix_sample_symbols_sample_sid"}
@@ -229,7 +229,7 @@ def test_child_tables_have_parent_fk_index_and_element_columns():
         assert isinstance(coords.c[f"coords_{i}"].type, sqlalchemy.Float)
     assert isinstance(coords.c["coords_exact"].type, sqlalchemy.Text)
     authors = metadata.tables["sample_authors"]
-    assert {fk.target_fullname for fk in authors.c["authors_sid"].foreign_keys} == {"author.sid"}
+    assert not authors.c["authors_sid"].foreign_keys
 
 
 def test_table_for_is_idempotent_per_metadata():

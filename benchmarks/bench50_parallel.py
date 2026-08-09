@@ -128,7 +128,7 @@ def _expected_table_counts(stream: list[object]) -> dict[str, int]:
     return {name: len(keys) for name, keys in expected.items()}
 
 
-def _build(stream: list[object], workers: int, directory: Path, materials: int) -> dict[str, float]:
+def _build(stream: list[object], workers: int, directory: Path, materials: int, finalize: str) -> dict[str, object]:
     import sqlalchemy
 
     from httk.data.db import Database, SqlStore
@@ -139,11 +139,12 @@ def _build(stream: list[object], workers: int, directory: Path, materials: int) 
     try:
         store = SqlStore(database, entry_records={})
         started = time.perf_counter()
-        with store.bulk_ingest(workers=workers) as bulk:
+        with store.bulk_ingest(workers=workers, finalize=finalize) as bulk:
             for obj in stream:
                 bulk.save(obj)
             dispatched = time.perf_counter()
         finished = time.perf_counter()
+        finalize_steps = dict(bulk.finalize_timings)
         # Post-ingest verification: a silently lost task or a botched merge must
         # never flatter the timing. Every material and every expected
         # content-addressed descendant must be present exactly once.
@@ -176,6 +177,7 @@ def _build(stream: list[object], workers: int, directory: Path, materials: int) 
             "total": finished - started,
             "dispatch": dispatched - started,
             "finalize": finished - dispatched,
+            "steps": finalize_steps,
         }
     finally:
         database.dispose()
@@ -186,6 +188,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers", type=int, nargs="+", default=[1, 4, 12, 24])
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--finalize", choices=("auto", "parity", "deferred"), default="auto")
     parser.add_argument("--replicate", type=int, default=50, help="distinct copies of the base materials (50 ~= 9,000)")
     parser.add_argument(
         "--mode",
@@ -209,7 +212,9 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="bench50_") as directory:
         base = Path(directory)
-        header = f"{'workers':>8} {'repeat':>6} {'state':>6} {'total':>9} {'dispatch':>9} {'finalize':>9}"
+        header = (
+            f"{'workers':>8} {'repeat':>6} {'state':>6} {'profile':>9} {'total':>9} {'dispatch':>9} {'finalize':>9}"
+        )
         print(header)
         print("-" * len(header))
         best: dict[int, float] = {}
@@ -222,13 +227,17 @@ def main() -> int:
                 cold_stream = _load_stream(arguments.replicate, arguments.mode)
                 if len(cold_stream) - 1 != materials:
                     raise SystemExit("cold stream material count changed during benchmark")
-                timing = _build(cold_stream, workers, base, materials)
+                timing = _build(cold_stream, workers, base, materials, arguments.finalize)
                 totals.append(timing["total"])
                 mode = "serial" if workers == 1 else f"w={workers}"
                 print(
-                    f"{mode:>8} {repeat:>6} {'cold':>6} "
+                    f"{mode:>8} {repeat:>6} {'cold':>6} {arguments.finalize:>9} "
                     f"{timing['total']:>8.1f}s {timing['dispatch']:>8.1f}s {timing['finalize']:>8.1f}s"
                 )
+                steps = timing["steps"]
+                if steps:
+                    assert isinstance(steps, dict)
+                    print(" " * 8 + "steps " + " ".join(f"{name}={value:.3f}s" for name, value in steps.items()))
             best[workers] = min(totals)
         print()
         serial = best.get(1)
