@@ -130,6 +130,22 @@ _ROOT_COUNTER_POINTS = (
     "dirty-delete:crash_solo_values",
 )
 
+_CRASH_SMOKE_POINTS = frozenset(
+    {
+        "dirty-upsert:crash_leaf",
+        "parent-row-write:crash_root",
+        "counter-allocation:crash_solo",
+    }
+)
+
+
+def _tiered_crash_points(points: tuple[str, ...]) -> tuple[object, ...]:
+    """Keep three representative crash windows in CI and reserve the whole battery for the full tier."""
+    return tuple(
+        pytest.param(point, marks=pytest.mark.extended) if point not in _CRASH_SMOKE_POINTS else point
+        for point in points
+    )
+
 
 def _role(database: Database, table: str, sid: int) -> int:
     with database.engine.connect() as connection:
@@ -360,7 +376,7 @@ def _assert_no_crash_residue(database: Database) -> None:
         )
 
 
-@pytest.mark.parametrize("point", _CRASH_POINTS)
+@pytest.mark.parametrize("point", _tiered_crash_points(_CRASH_POINTS))
 def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, point: str) -> None:
     """Hard-stop after every permanentization write leaves only recoverable state."""
     path = tmp_path / f"crash-{point.replace(':', '-')}.sqlite"
@@ -417,7 +433,7 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
     reopened_database.dispose()
 
 
-@pytest.mark.parametrize("point", _ROOT_COUNTER_POINTS)
+@pytest.mark.parametrize("point", _tiered_crash_points(_ROOT_COUNTER_POINTS))
 def test_degraded_crash_battery_covers_root_counter_lifecycle(tmp_path: Path, point: str) -> None:
     """A root without dependencies exercises its own counter create/init path."""
     path = tmp_path / f"root-counter-{point.replace(':', '-')}.sqlite"
@@ -526,6 +542,7 @@ def test_degraded_content_metadata_conflict_does_not_promote() -> None:
         assert _role(database, "metadata_leaf", sid) == 0
 
 
+@pytest.mark.extended
 @pytest.mark.parametrize("point", ("content-dedup-select:role_leaf", "content-promotion-update:role_leaf"))
 def test_degraded_crash_battery_covers_content_promotion_window(tmp_path: Path, point: str) -> None:
     path = tmp_path / f"promotion-{point.replace(':', '-')}.sqlite"
@@ -547,6 +564,7 @@ def test_degraded_crash_battery_covers_content_promotion_window(tmp_path: Path, 
     reopened_database.dispose()
 
 
+@pytest.mark.extended
 def test_degraded_crash_battery_covers_dispatch_write(tmp_path: Path) -> None:
     path = tmp_path / "dispatch.sqlite"
     database = Database.sqlite(path, degraded=True)

@@ -14,23 +14,24 @@ import sqlalchemy
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
+from httk.data import storage_layout
 from httk.data.db import (
-    BackendFacts,
     STORAGE_PROTOCOL_VERSION,
+    BackendFacts,
     Database,
     SqlStore,
-    StoreUnderConstructionError,
     StorageLayoutUpgradeRequiredError,
+    StoreUnderConstructionError,
 )
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
     actual_schema_objects,
     actual_table_names,
+    backend_facts_for_dialect,
     declaration_json,
     expected_metadata,
     normalize_entry_records,
-    backend_facts_for_dialect,
 )
 from httk.data.db.mapping import entry_dispatch_table_name
 
@@ -119,6 +120,40 @@ def _tables(database: Database) -> set[str]:
 def test_family_store_rejects_record_without_registered_family() -> None:
     with pytest.raises(ValueError, match="no registered family"):
         normalize_entry_records({LayoutFamily: PrivateLayoutRecord})
+
+
+def test_registry_normalization_does_not_resolve_unrelated_lazy_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Declaration validation matches supplied classes without importing every registry plugin."""
+    family_ref = f"{__name__}:LayoutFamily"
+    record_ref = f"{__name__}:LayoutSingle"
+    monkeypatch.setattr(storage_layout, "known_entry_families", lambda: ["selected", "unrelated"])
+    monkeypatch.setattr(
+        storage_layout,
+        "entry_family_info",
+        lambda name: (family_ref if name == "selected" else "unloaded.optional:Family", None),
+    )
+    monkeypatch.setattr(storage_layout, "known_entry_records", lambda: ["selected-record", "unrelated-record"])
+    monkeypatch.setattr(
+        storage_layout,
+        "entry_record_info",
+        lambda name: (record_ref if name == "selected-record" else "unloaded.optional:Record", "selected", None),
+    )
+    monkeypatch.setattr(
+        storage_layout,
+        "resolve_entry_family",
+        lambda name: pytest.fail(f"unexpected lazy family resolution: {name}"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        storage_layout,
+        "resolve_entry_record",
+        lambda name: pytest.fail(f"unexpected lazy record resolution: {name}"),
+        raising=False,
+    )
+
+    layout = normalize_entry_records({LayoutFamily: LayoutSingle})
+
+    assert layout.declaration == {"selected": ("selected-record",)}
 
 
 def _multi_layout() -> tuple[StorageLayout, sqlalchemy.MetaData, sqlalchemy.Table]:

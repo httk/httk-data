@@ -53,6 +53,10 @@ from test_db_bulk import (
     make_sample,
 )
 
+# These modules fork their own worker processes; the loadgroup scheduler
+# keeps them on one xdist worker so their memory use never stacks.
+pytestmark = pytest.mark.xdist_group("bulk-heavy")
+
 CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 
 
@@ -139,10 +143,10 @@ def _has_application_rows(store, database) -> bool:
     return False
 
 
-def _big_duplicated_stream() -> list[object]:
+def _big_duplicated_stream(rounds: int = 180) -> list[object]:
     """A long stream with heavy cross-record duplication, orphans, and self-references."""
     stream: list[object] = []
-    for i in range(180):
+    for i in range(rounds):
         stream.append(Author(f"A{i % 17}", 1800 + i % 17))
         stream.append(make_sample(formula=f"F{i % 9}", spacegroup=200 + i % 9))
         stream.append(ContentParent(f"cp{i % 13}", NoneRec(f"evt{i % 13}")))  # content parent + none descendant
@@ -156,7 +160,7 @@ def _big_duplicated_stream() -> list[object]:
 # --------------------------------------------------------------------- tests
 
 
-@pytest.mark.parametrize("workers", [2, 4])
+@pytest.mark.parametrize("workers", [2, pytest.param(4, marks=pytest.mark.extended)])
 def test_parallel_matches_serial_mixed_stream(store_factory, workers):
     """The mixed object stream built in parallel equals the serial build (counts, ids, records, dispatch)."""
     serial = store_factory(entry_records=CALC_FAMILY)
@@ -189,15 +193,19 @@ def test_parallel_matches_serial_mixed_stream(store_factory, workers):
     assert reopened.fetch_entry(BulkCalcFamily, content_id(BulkCalcB("beta", "kind-b"))) == BulkCalcB("beta", "kind-b")
 
 
-def test_parallel_matches_serial_large_duplicated_stream(store_factory):
+@pytest.mark.parametrize(
+    ("rounds", "workers"),
+    [(12, 2), pytest.param(180, 6, marks=pytest.mark.extended)],
+)
+def test_parallel_matches_serial_large_duplicated_stream(store_factory, rounds, workers):
     """A long, heavily duplicated stream (cross-worker collapse + orphan sweep) matches the serial build."""
-    stream = _big_duplicated_stream()
+    stream = _big_duplicated_stream(rounds)
     serial = store_factory()
     _require_bulk(serial)
     parallel = store_factory()
     for obj in stream:
         serial.save(obj)
-    with parallel.bulk_ingest(workers=6, chunk_size=31) as bulk:
+    with parallel.bulk_ingest(workers=workers, chunk_size=31) as bulk:
         for obj in stream:
             bulk.save(obj)
     assert _physical_counts(_database_of(parallel)) == _physical_counts(_database_of(serial))

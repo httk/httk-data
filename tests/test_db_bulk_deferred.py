@@ -37,6 +37,10 @@ from test_db_bulk import (
     make_sample,
 )
 
+# These modules fork their own worker processes; the loadgroup scheduler
+# keeps them on one xdist worker so their memory use never stacks.
+pytestmark = pytest.mark.xdist_group("bulk-heavy")
+
 
 @dataclass(frozen=True)
 class CsvStageRecord:

@@ -7,6 +7,7 @@ layout validation belong to each storage backend.
 
 import dataclasses
 import json
+import sys
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
@@ -193,11 +194,7 @@ def _layout_from_declaration(value: str) -> StorageLayout:
 
 
 def _registered_family_name(family: type) -> str:
-    matches: list[str] = []
-    for name in known_entry_families():
-        entry_family_info(name)
-        if resolve_entry_family(name) is family:
-            matches.append(name)
+    matches = _registered_names_for(family, known_entry_families(), entry_family_info)
     if len(matches) != 1:
         found = ", ".join(matches) or "none"
         raise ValueError(f"entry family {family.__name__} must resolve to exactly one registered name (found {found})")
@@ -205,15 +202,41 @@ def _registered_family_name(family: type) -> str:
 
 
 def _registered_record_name(record: type) -> str:
-    matches: list[str] = []
-    for name in known_entry_records():
-        entry_record_info(name)
-        if resolve_entry_record(name) is record:
-            matches.append(name)
+    matches = _registered_names_for(record, known_entry_records(), entry_record_info)
     if len(matches) != 1:
         found = ", ".join(matches) or "none"
         raise ValueError(f"entry record {record.__name__} must resolve to exactly one registered name (found {found})")
     return matches[0]
+
+
+def _registered_names_for(record: type, names: list[str], info: object) -> list[str]:
+    """Return registry names for ``record`` without importing unrelated lazy entries.
+
+    A store declaration already has the concrete class in hand.  Resolving
+    every registry reference just to find its stable name turns that harmless
+    validation into a transitive import of every optional entry package.  Some
+    such packages are deliberately heavyweight; more importantly, repeated
+    store construction must not retain their import-time state.
+
+    Registry references conventionally name the class's defining module.  A
+    loaded alias remains supported by identity, while an unloaded unrelated
+    entry is never imported merely for declaration validation.
+    """
+    get_info = info
+    if not callable(get_info):  # pragma: no cover - defensive narrowing for the registry seam
+        raise TypeError("registry info lookup must be callable")
+    canonical = f"{record.__module__}:{record.__name__}"
+    matches: list[str] = []
+    for name in names:
+        reference = get_info(name)[0]
+        if reference == canonical:
+            matches.append(name)
+            continue
+        module_name, separator, attribute = reference.partition(":")
+        module = sys.modules.get(module_name) if separator else None
+        if module is not None and getattr(module, attribute, None) is record:
+            matches.append(name)
+    return matches
 
 
 def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:

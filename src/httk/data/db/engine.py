@@ -81,10 +81,16 @@ class Database:
         return cls(engine, degraded=degraded)
 
     @classmethod
-    def duckdb(cls, path: str | os.PathLike[str] | None = None) -> Self:
+    def duckdb(cls, path: str | os.PathLike[str] | None = None, *, memory_limit: str | None = None) -> Self:
         """Create a DuckDB database stored in ``path``, or in memory when ``path`` is None.
 
         :param path: The database file path, or ``None`` for an in-memory database.
+        :param memory_limit: An optional DuckDB ``memory_limit`` setting such as
+            ``"1GB"``. DuckDB's own default allows every instance up to about 80%
+            of system RAM, which multiplies dangerously across parallel test or
+            ingest processes; when this parameter is ``None`` the
+            ``HTTK_DUCKDB_MEMORY_LIMIT`` environment variable (if set) supplies
+            the cap instead, so process trees can be memory-guarded wholesale.
         :return: The configured database wrapper.
         :raises ImportError: If the ``duckdb_engine`` SQLAlchemy dialect is not installed;
             install the ``httk-data[duckdb]`` extra to use it.
@@ -98,7 +104,11 @@ class Database:
             ) from error
         _install_missing_pandas_sentinel()
         location = ":memory:" if path is None else os.fspath(path)
-        engine = sqlalchemy.create_engine(f"duckdb:///{location}")
+        limit = memory_limit if memory_limit is not None else os.environ.get("HTTK_DUCKDB_MEMORY_LIMIT")
+        options: dict[str, Any] = {}
+        if limit:
+            options["connect_args"] = {"config": {"memory_limit": limit}}
+        engine = sqlalchemy.create_engine(f"duckdb:///{location}", **options)
         # duckdb_engine derives from the psycopg2 dialect, which doubles
         # backslashes when rendering inline string literals (PostgreSQL's
         # non-standard-conforming-strings legacy). DuckDB always uses

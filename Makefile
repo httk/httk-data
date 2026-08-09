@@ -5,7 +5,7 @@ DIST_DIR ?= dist
 # between httk repositories (read by docs/conf.py via HTTK_DOCS_BASE_URL).
 DOCS_BASE_URL ?= https://docs.httk.org
 
-.PHONY: docs docs-live docs-clean docs-inventories docs-lock docs-lock-check clean dist-clean dist dist-check release-check format format-check typecheck typecheck_pyright lint test test_fastfail test-extended test-extended-fastfail audit
+.PHONY: docs docs-live docs-clean docs-inventories docs-lock docs-lock-check clean dist-clean dist dist-check release-check format format-check typecheck typecheck_pyright lint test test_fastfail test-extended test-extended-fastfail benchmarks audit
 
 docs: docs-clean
 	HTTK_DOCS_BASE_URL=$(DOCS_BASE_URL) $(PYTHON) -m sphinx -E -a -b html -W --keep-going docs docs/_build/html
@@ -65,21 +65,29 @@ typecheck_pyright:
 typecheck:
 	$(PYTHON) -m mypy
 
+MEMGUARD = $(PYTHON) tools/memguard.py --max-rss-gb $(or $(HTTK_TEST_MAX_RSS_GB),$(1)) --
+TEST_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),3072)
+EXTENDED_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),16384)
+
 test:
-	$(PYTHON) -m pytest
+	HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(TEST_DUCKDB_MEMORY_BUDGET_MB) $(call MEMGUARD,8) $(PYTHON) -m pytest
 
 test_fastfail:
-	$(PYTHON) -m pytest -q -x
+	HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(TEST_DUCKDB_MEMORY_BUDGET_MB) $(call MEMGUARD,8) $(PYTHON) -m pytest -q -x
 
 test-extended:
-	HTTK_TEST_PROFILE=extended $(PYTHON) -m pytest -q -m ""
+	HTTK_TEST_PROFILE=extended HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(EXTENDED_DUCKDB_MEMORY_BUDGET_MB) $(call MEMGUARD,24) $(PYTHON) -m pytest -q -m ""
 
 test-extended-fastfail:
-	HTTK_TEST_PROFILE=extended $(PYTHON) -m pytest -q -m "" -x
+	HTTK_TEST_PROFILE=extended HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(EXTENDED_DUCKDB_MEMORY_BUDGET_MB) $(call MEMGUARD,24) $(PYTHON) -m pytest -q -m "" -x
+
+benchmarks:
+	$(call MEMGUARD,24) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize parity
+	$(call MEMGUARD,24) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize deferred
 
 check: format-check typecheck typecheck_pyright test
 
-ci: format-check typecheck typecheck_pyright test-extended-fastfail
+ci: format-check typecheck typecheck_pyright test_fastfail
 
 dist: dist-clean
 	$(PYTHON) -m build --outdir $(DIST_DIR)

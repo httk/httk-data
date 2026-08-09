@@ -28,9 +28,15 @@ Reported per run:
 
 import argparse
 import dataclasses
+import os
 import sys
 import tempfile
 import time
+
+# Memory guard: DuckDB defaults its memory_limit to ~80% of system RAM per
+# instance, and the parallel modes fork many processes; cap the store and all
+# worker-inherited instances unless the caller sets an explicit value.
+os.environ.setdefault("HTTK_DUCKDB_MEMORY_LIMIT", "4GB")
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 

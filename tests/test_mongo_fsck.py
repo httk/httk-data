@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass
 from typing import ClassVar
 
+import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
@@ -136,7 +137,9 @@ def test_fsck_marks_reference_child_and_shared_dependency_graphs(mongo_test_data
         assert reopened.fetch(FsckReference, second) == FsckReference(shared, [])
         assert reopened.fetch(FsckChain, chain_sid) == chain
         leaf_collection = mongo_test_database.database[collection_name_for(resolve_schema(FsckLeaf))]
-        assert leaf_collection.count_documents({"content_id": {"$in": [content_id(shared), content_id(child_only)]}}) == 2
+        assert (
+            leaf_collection.count_documents({"content_id": {"$in": [content_id(shared), content_id(child_only)]}}) == 2
+        )
     finally:
         reopened_database.dispose()
 
@@ -213,7 +216,9 @@ def test_fsck_aborts_sweep_until_reopened_private_type_is_supplied(mongo_test_da
     try:
         blocked = reopened.fsck()
         assert leaves.find_one({"_id": orphan_sid}) is not None
-        assert any("fsck_private_root" in violation and "blocks fsck sweep" in violation for violation in blocked.violations)
+        assert any(
+            "fsck_private_root" in violation and "blocks fsck sweep" in violation for violation in blocked.violations
+        )
         assert any("sweep aborted" in violation and "known_types" in violation for violation in blocked.violations)
 
         proceeded = reopened.fsck(known_types=(FsckPrivateRoot,))
@@ -225,9 +230,9 @@ def test_fsck_aborts_sweep_until_reopened_private_type_is_supplied(mongo_test_da
         reopened_database.dispose()
 
 
-def test_fsck_randomized_graphs_retain_reachable_documents(mongo_test_database) -> None:
+@pytest.mark.parametrize("rounds", [6, pytest.param(24, marks=pytest.mark.extended)])
+def test_fsck_randomized_graphs_retain_reachable_documents(mongo_test_database, rounds: int) -> None:
     """Seeded normal/extended randomized graph coverage without a new dependency."""
-    rounds = 24 if os.environ.get("HTTK_TEST_PROFILE", "").lower() == "extended" else 6
     seed = 20260808
     rng = random.Random(seed)
     store = _store(mongo_test_database)
@@ -247,7 +252,9 @@ def test_fsck_randomized_graphs_retain_reachable_documents(mongo_test_database) 
             summary = store.fsck()
             assert summary.generation == round_number + 1, f"seed={seed}, round={round_number}"
             for leaf in live:
-                assert leaves.find_one({"content_id": content_id(leaf)}) is not None, f"seed={seed}, round={round_number}"
+                assert leaves.find_one({"content_id": content_id(leaf)}) is not None, (
+                    f"seed={seed}, round={round_number}"
+                )
             for leaf in orphan:
                 assert leaves.find_one({"content_id": content_id(leaf)}) is None, f"seed={seed}, round={round_number}"
             # A fresh store must hydrate the surviving graph rather than serving a cache hit.

@@ -210,15 +210,20 @@ def test_cursor_rejects_changed_schema(paging_store):
         changed_result.page(size=2, order_by=order, cursor=token)
 
 
-def test_deep_page_traversal_remains_seekable(store_factory):
+@pytest.mark.parametrize(
+    ("records", "steps"),
+    [(200, 20), pytest.param(2_000, 100, marks=pytest.mark.extended)],
+)
+def test_deep_page_traversal_remains_seekable(store_factory, records: int, steps: int):
     paging_store = store_factory()
-    for index in range(2_000):
+    for index in range(records):
         paging_store.save(PageRecord(index, index, f"r-{index}", ["common"]))
     result = results(paging_store)
     order = (PageOrder("bucket"),)
     page = result.page(size=7, order_by=order)
-    for _ in range(100):
+    for _ in range(steps):
         assert page.next is not None
         page = result.page(size=7, order_by=order, cursor=page.next)
         assert len(page.rows) == 7
-    assert labels(page) == [f"r-{index}" for index in range(700, 707)]
+    first = steps * 7
+    assert labels(page) == [f"r-{index}" for index in range(first, first + 7)]

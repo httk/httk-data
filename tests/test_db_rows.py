@@ -282,9 +282,10 @@ def test_iteration_has_no_child_query_until_field_access(database):
         sqlalchemy.event.remove(database.engine, "before_cursor_execute", count)
 
 
-def test_child_batches_once_per_chunk(database):
+@pytest.mark.parametrize("records", [502, pytest.param(1500, marks=pytest.mark.extended)])
+def test_child_batches_once_per_chunk(database, records: int):
     store = SqlStore(database, entry_records={})
-    for index in range(1500):
+    for index in range(records):
         store.save(BatchRecord(str(index), [str(index)]))
     statements: list[str] = []
 
@@ -298,7 +299,7 @@ def test_child_batches_once_per_chunk(database):
         variable = searcher.variable(BatchRecord)
         searcher.output(variable, "record")
         rows = list(searcher)
-        for index in (0, 1, 500, 501, 1000, 1499):
+        for index in (0, 1, 500, 501, records - 1):
             assert rows[index][0][0].values == [str(index)]
         assert len(statements) <= 8  # 1 outer + 3 parent + 3 child, with one slack statement
     finally:

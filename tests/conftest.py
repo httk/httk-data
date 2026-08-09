@@ -24,6 +24,21 @@ import uuid
 
 import pytest
 
+
+# DuckDB's default memory_limit is ~80% of system RAM PER INSTANCE; across
+# parallel pytest workers that multiplies into machine-wide OOM. Divide a fixed
+# suite-wide budget across the xdist workers (each worker process sees the
+# worker count in PYTEST_XDIST_WORKER_COUNT), clamped so a serial run still
+# gets full single-test performance. An explicitly exported
+# HTTK_DUCKDB_MEMORY_LIMIT always wins.
+def _duckdb_test_memory_limit() -> str:
+    budget_mb = int(os.environ.get("HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB", "4096"))
+    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1"))
+    return f"{max(512, min(4096, budget_mb // max(1, workers)))}MB"
+
+
+os.environ.setdefault("HTTK_DUCKDB_MEMORY_LIMIT", _duckdb_test_memory_limit())
+
 from httk.data.db import Database, SqlStore
 
 _PYTHONPATH = os.environ.get("PYTHONPATH")
@@ -33,35 +48,56 @@ if _PYTHONPATH:
     )
 
 
+@pytest.fixture(scope="session")
+def mongo_test_client():
+    """Reuse one live-client pool while each test still receives a new database.
+
+    A ``MongoClient`` owns topology-monitor and pool allocations. Closing one
+    after every parametrized test releases its sockets but not necessarily the
+    worker allocator's RSS high-water mark; the neutral behavior suite alone
+    used to create dozens. A session client is safe here because databases are
+    unique and are dropped after each test.
+    """
+    uri = os.environ.get("HTTK_TEST_MONGODB_URI")
+    if not uri:
+        pytest.skip("HTTK_TEST_MONGODB_URI is not set")
+    from pymongo import MongoClient
+
+    client = MongoClient(
+        uri,
+        w="majority",
+        journal=True,
+        readConcernLevel="majority",
+        serverSelectionTimeoutMS=1000,
+    )
+    try:
+        client.admin.command("ping")
+    except Exception as error:
+        client.close()
+        pytest.skip(f"MongoDB test server is unreachable: {error}")
+    try:
+        yield client
+    finally:
+        client.close()
+
+
 @pytest.fixture(params=["sqlite", "duckdb", "mongo"])
 def store_backend(request):
     """Select each backend supported by the neutral store behavior suite."""
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
     if request.param == "mongo":
-        uri = os.environ.get("HTTK_TEST_MONGODB_URI")
-        if not uri:
-            pytest.skip("HTTK_TEST_MONGODB_URI is not set")
-        from pymongo import MongoClient
-
-        try:
-            client = MongoClient(uri, serverSelectionTimeoutMS=1000)
-            client.admin.command("ping")
-        except Exception as error:
-            pytest.skip(f"MongoDB test server is unreachable: {error}")
-        finally:
-            try:
-                client.close()
-            except UnboundLocalError:
-                pass
-    yield request.param
+        yield request.param, request.getfixturevalue("mongo_test_client")
+        return
+    yield request.param, None
 
 
 class _StoreFactory:
     """Callable factory returning real stores plus a same-database reopen path."""
 
-    def __init__(self, backend, databases):
+    def __init__(self, backend, mongo_client, databases):
         self._backend = backend
+        self._mongo_client = mongo_client
         self._databases = databases
         self._stores = {}
 
@@ -78,8 +114,8 @@ class _StoreFactory:
             from httk.data.mongo import MongoDatabase, MongoStore
 
             name = f"httk_behavior_{uuid.uuid4().hex}"
-            uri = os.environ["HTTK_TEST_MONGODB_URI"]
-            database = MongoDatabase.connect(uri, database=name, transactions="never")
+            assert self._mongo_client is not None
+            database = MongoDatabase(self._mongo_client, name, transactions="never")
             declaration = entry_records if entry_records is not None else {}
             store = MongoStore(database, entry_records=declaration)
         self._databases.append(database)
@@ -97,9 +133,8 @@ class _StoreFactory:
         if self._backend == "mongo":
             from httk.data.mongo import MongoDatabase, MongoStore
 
-            mongo_database = MongoDatabase.connect(
-                os.environ["HTTK_TEST_MONGODB_URI"], database=database.database.name, transactions="never"
-            )
+            assert self._mongo_client is not None
+            mongo_database = MongoDatabase(self._mongo_client, database.database.name, transactions="never")
             self._databases.append(mongo_database)
             return MongoStore(mongo_database, entry_records=declaration)
         return SqlStore(database, entry_records=declaration)
@@ -108,8 +143,9 @@ class _StoreFactory:
 @pytest.fixture
 def store_factory(store_backend):
     """Build fresh stores on fresh in-memory databases and dispose them at teardown."""
+    backend, mongo_client = store_backend
     databases = []
-    factory = _StoreFactory(store_backend, databases)
+    factory = _StoreFactory(backend, mongo_client, databases)
 
     try:
         yield factory
@@ -117,25 +153,18 @@ def store_factory(store_backend):
         for database in databases:
             if factory._backend == "mongo":
                 database.client.drop_database(database.database.name)
-            database.dispose()
+            else:
+                database.dispose()
 
 
 @pytest.fixture
-def mongo_test_database():
+def mongo_test_database(mongo_test_client):
     """Yield a fresh live MongoDB database when the test URI is configured."""
-    uri = os.environ.get("HTTK_TEST_MONGODB_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_MONGODB_URI is not set")
     from httk.data.mongo import MongoDatabase
 
     name = f"httk_test_{uuid.uuid4().hex}"
-    try:
-        database = MongoDatabase.connect(uri, database=name)
-        database.database.command("ping")
-    except Exception as error:
-        pytest.skip(f"MongoDB test server is unreachable: {error}")
+    database = MongoDatabase(mongo_test_client, name)
     try:
         yield database
     finally:
         database.client.drop_database(name)
-        database.dispose()

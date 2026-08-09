@@ -80,7 +80,7 @@ namespaces = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-n 16 -m 'not extended'"
+addopts = "-n 4 --dist loadgroup -m 'not extended'"
 markers = [
   "extended: full-depth test case; selected only by the extended test profile",
 ]
