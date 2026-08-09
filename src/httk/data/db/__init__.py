@@ -17,7 +17,8 @@ These modules import cleanly without sqlalchemy. The SQL layer proper builds
 on them and requires the ``httk-data[db]`` extra (sqlalchemy):
 
 - :class:`~httk.data.db.engine.Database` — the engine wrapper naming where
-  data lives (``Database.sqlite(...)``, ``Database.duckdb(...)``);
+  data lives (``Database.sqlite(...)``, ``Database.duckdb(...)``, or the
+  Keeper-backed ``Database.clickhouse(...)``);
 - :class:`~httk.data.db.store.SqlStore` — save/fetch/dedup/transactions for
   storable instances, on top of the schema-to-table mapping in
   :mod:`httk.data.db.mapping`;

@@ -201,7 +201,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":1}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.3.0"
+    assert STORAGE_PROTOCOL_VERSION == "v2.4.0"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -265,7 +265,7 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
         assert actual_table_names(connection) == before
 
 
-@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0"])
+@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0"])
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     database: Database, old_protocol: str
 ) -> None:
@@ -306,7 +306,7 @@ def test_duckdb_main_catalog_ignores_unrelated_attached_database(tmp_path: Path)
         from sqlalchemy import event
 
         @event.listens_for(database.engine, "connect")
-        def attach_unrelated(dbapi_connection, _connection_record):  # noqa: ANN001
+        def attach_unrelated(dbapi_connection, _connection_record):
             dbapi_connection.execute(f"ATTACH '{attached_path}' AS legitimate")
 
         store = SqlStore(database, entry_records={})

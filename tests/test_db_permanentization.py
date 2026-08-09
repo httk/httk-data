@@ -1,15 +1,15 @@
 """P3 permanentization coverage: roles, lease/counters, and residue cleanup."""
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-import threading
 from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
-from sqlalchemy import event
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import IdentitySkip, StorageInfo
+from sqlalchemy import event
 
 from httk.data.db import Database, EntryMetadataConflictError, SqlStore, StorageLayoutUpgradeRequiredError
 from httk.data.db.mapping import entry_dispatch_table_name
@@ -217,6 +217,29 @@ def test_write_profile_validates_live_sqlite_connection_mode() -> None:
         transactional_engine.dispose()
 
 
+def test_sqlite_rejects_a_bulk_fenced_stamp() -> None:
+    with Database.sqlite() as database:
+        SqlStore(database, entry_records={})
+        with database.engine.begin() as connection:
+            connection.execute(
+                sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('write_profile', 'bulk-fenced')")
+            )
+        with pytest.raises(StorageLayoutUpgradeRequiredError):
+            SqlStore(database)
+
+
+def test_duckdb_rejects_a_bulk_fenced_stamp() -> None:
+    pytest.importorskip("duckdb_engine")
+    with Database.duckdb() as database:
+        SqlStore(database, entry_records={})
+        with database.engine.begin() as connection:
+            connection.execute(
+                sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('write_profile', 'bulk-fenced')")
+            )
+        with pytest.raises(StorageLayoutUpgradeRequiredError):
+            SqlStore(database)
+
+
 def test_disposed_database_refuses_late_lifecycle_registration_and_mutation(tmp_path: Path) -> None:
     path = tmp_path / "disposed.sqlite"
     database = Database.sqlite(path, degraded=True)
@@ -240,7 +263,7 @@ def test_pre_registration_dispose_cannot_strand_a_degraded_lease(
     database = Database.sqlite(path, degraded=True)
     original = database.add_dispose_callback
 
-    def dispose_after_registration(callback, *, generation=None):  # noqa: ANN001
+    def dispose_after_registration(callback, *, generation=None):
         registered = original(callback, generation=generation)
         database.dispose()
         return registered
@@ -403,7 +426,7 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
     sweeps: list[str] = []
     real_sweep = reopened._targeted_dirty_sweep
 
-    def observing_sweep(connection, table):  # noqa: ANN001
+    def observing_sweep(connection, table):
         sweeps.append(table.name)
         return real_sweep(connection, table)
 
@@ -481,7 +504,7 @@ def test_transactional_save_has_no_p3_round_trips_except_dedup_promotion() -> No
         store.ensure_tables(StatementRecord, RoleRoot)
         statements: list[str] = []
 
-        def record(_connection, _cursor, statement, _parameters, _context, _many):  # noqa: ANN001
+        def record(_connection, _cursor, statement, _parameters, _context, _many):
             statements.append(statement)
 
         event.listen(database.engine, "before_cursor_execute", record)
@@ -514,7 +537,7 @@ def test_transactional_bulk_save_issues_no_main_database_statement_per_record(fi
             store.ensure_tables(RoleRoot)
         statements: list[str] = []
 
-        def record(_connection, _cursor, statement, _parameters, _context, _many):  # noqa: ANN001
+        def record(_connection, _cursor, statement, _parameters, _context, _many):
             statements.append(statement)
 
         with store.bulk_ingest(finalize=finalize) as bulk:
@@ -601,7 +624,7 @@ def test_fsck_uses_physical_dispatch_presence_for_empty_and_missing_families() -
     "leaf_type, leaf, table",
     [(RoleLeaf, RoleLeaf("bulk-content"), "role_leaf"), (ValueLeaf, ValueLeaf("bulk-value"), "value_leaf")],
 )
-def test_populated_serial_bulk_promotes_existing_main(leaf_type, leaf, table: str) -> None:  # noqa: ANN001
+def test_populated_serial_bulk_promotes_existing_main(leaf_type, leaf, table: str) -> None:
     with Database.sqlite() as database:
         store = SqlStore(database, entry_records={})
         root = RoleRoot(leaf) if leaf_type is RoleLeaf else ValueRoot(leaf)
@@ -621,7 +644,7 @@ def test_fsck_is_immediate_read_only_when_requested_and_reaches_child_fixpoint(t
             connection.execute(sqlalchemy.text("DELETE FROM crash_root"))
         statements: list[str] = []
 
-        def record(_connection, _cursor, statement, _parameters, _context, _many):  # noqa: ANN001
+        def record(_connection, _cursor, statement, _parameters, _context, _many):
             statements.append(statement.upper())
 
         event.listen(database.engine, "before_cursor_execute", record)

@@ -35,6 +35,7 @@ import contextlib
 import datetime
 import json
 import threading
+import time
 import typing
 import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -174,7 +175,7 @@ class SqlStore:
         self._identity = IdentityCaches()
         self._local = threading.local()
         self._bulk_active = False
-        self._write_profile: Literal["transactional", "degraded"] = "degraded" if database.degraded else "transactional"
+        self._write_profile: Literal["transactional", "degraded", "bulk-fenced"] = database.write_profile
         self._lease_owner = uuid.uuid4().hex
         self._lease_value: str | None = None
         self._mutation_lock = threading.RLock()
@@ -207,7 +208,7 @@ class SqlStore:
         return self._backend_facts
 
     @property
-    def write_profile(self) -> Literal["transactional", "degraded"]:
+    def write_profile(self) -> Literal["transactional", "degraded", "bulk-fenced"]:
         """Return the persisted permanentization write profile."""
         return self._write_profile
 
@@ -270,25 +271,48 @@ class SqlStore:
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         if METADATA_TABLE_NAME in names_before:
-            try:
-                stored = read_store_metadata(connection)
-            except (ValueError, SQLAlchemyError) as error:
-                raise StorageLayoutUpgradeRequiredError(
-                    {"declaration": {"metadata": "malformed", "error": str(error)}}
-                ) from error
-            assert stored is not None
-            if "ingest_state" in stored:
-                raise StoreUnderConstructionError("interrupted bulk ingest; the store must be dropped and re-ingested")
-            self._open_marked_layout(connection, stored, supplied)
+            self._open_existing_layout_on_connection(connection, supplied)
             return
 
         if not objects_before:
             if supplied is None:
                 raise TypeError("entry_records is required when opening an uninitialized database")
             expected = expected_metadata(supplied)
-            expected.tables[METADATA_TABLE_NAME].create(connection, checkfirst=False)
-            self._initialization_ddl_journal.append(expected.tables[METADATA_TABLE_NAME])
-            self._stamp_layout(connection, supplied)
+            metadata_table = expected.tables[METADATA_TABLE_NAME]
+            if self.backend_facts.metadata_backend == "keepermap":
+                from httk.data.db.clickhouse import bootstrap_fence, keeper_database_uuid
+
+                metadata_table.info["httk_clickhouse_database_uuid"] = keeper_database_uuid(connection)
+                with bootstrap_fence(connection):
+                    fenced_objects = actual_schema_objects(connection)
+                    if METADATA_TABLE_NAME in fenced_objects:
+                        self._open_existing_layout_on_connection(connection, supplied, retry_metadata_visibility=True)
+                        return
+                    try:
+                        metadata_table.create(connection, checkfirst=False)
+                    except BaseException as error:
+                        try:
+                            after_create_error = actual_schema_objects(connection)
+                        except BaseException:
+                            raise RuntimeError(
+                                "ClickHouse bootstrap contention state recheck failed after metadata creation "
+                                "error; the database UUID fence refused concurrent initialization"
+                            ) from error
+                        if METADATA_TABLE_NAME in after_create_error:
+                            self._open_existing_layout_on_connection(
+                                connection, supplied, retry_metadata_visibility=True
+                            )
+                            return
+                        raise RuntimeError(
+                            "ClickHouse bootstrap contention during first metadata-table creation; "
+                            "the database UUID fence refused concurrent initialization"
+                        ) from error
+                    self._initialization_ddl_journal.append(metadata_table)
+                    self._stamp_layout(connection, supplied, fence_held=True)
+            else:
+                metadata_table.create(connection, checkfirst=False)
+                self._initialization_ddl_journal.append(metadata_table)
+                self._stamp_layout(connection, supplied)
             self._install_layout(supplied, expected, names_before | {METADATA_TABLE_NAME})
             return
 
@@ -318,8 +342,45 @@ class SqlStore:
             }
         )
 
+    def _open_existing_layout_on_connection(
+        self,
+        connection: sqlalchemy.Connection,
+        supplied: StorageLayout | None,
+        *,
+        retry_metadata_visibility: bool = False,
+    ) -> None:
+        """Validate and open an existing marked layout on this connection."""
+        if self.backend_facts.metadata_backend == "keepermap":
+            from httk.data.db.clickhouse import validate_metadata_table
+
+            validate_metadata_table(connection)
+        stored = None
+        read_error: ValueError | SQLAlchemyError | None = None
+        visible_metadata_keys = {"protocol", "entry_declaration"}
+        if self.backend_facts.metadata_backend == "keepermap":
+            visible_metadata_keys.add("write_profile")
+        for attempt in range(20 if retry_metadata_visibility else 1):
+            try:
+                stored = read_store_metadata(connection)
+                read_error = None
+            except (ValueError, SQLAlchemyError) as error:
+                read_error = error
+            if read_error is None and stored is not None and visible_metadata_keys <= set(stored):
+                break
+            if attempt + 1 < (20 if retry_metadata_visibility else 1):
+                time.sleep(0.05)
+        if read_error is not None:
+            raise StorageLayoutUpgradeRequiredError(
+                {"declaration": {"metadata": "malformed", "error": str(read_error)}}
+            ) from read_error
+        if stored is None:
+            raise StorageLayoutUpgradeRequiredError({"declaration": {"metadata": "missing"}})
+        if "ingest_state" in stored:
+            raise StoreUnderConstructionError("interrupted bulk ingest; the store must be dropped and re-ingested")
+        self._open_marked_layout(connection, stored, supplied)
+
     def _validate_write_profile_connection(
-        self, connection: sqlalchemy.Connection, profile: Literal["transactional", "degraded"]
+        self, connection: sqlalchemy.Connection, profile: Literal["transactional", "degraded", "bulk-fenced"]
     ) -> None:
         """Require the requested persisted profile to match the live connection.
 
@@ -341,6 +402,19 @@ class SqlStore:
                                     "dialect": connection.dialect.name,
                                     "autocommit": autocommit,
                                 },
+                            }
+                        }
+                    }
+                )
+            return
+        if profile == "bulk-fenced":
+            if connection.dialect.name != "clickhousedb":
+                raise StorageLayoutUpgradeRequiredError(
+                    {
+                        "declaration": {
+                            "write_profile": {
+                                "expected": "ClickHouse clickhousedb connection for bulk-fenced profile",
+                                "actual": connection.dialect.name,
                             }
                         }
                     }
@@ -378,14 +452,14 @@ class SqlStore:
         if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
             diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
         persisted_profile = stored.get("write_profile", "transactional")
-        if persisted_profile not in {"transactional", "degraded"}:
+        if persisted_profile not in {"transactional", "degraded", "bulk-fenced"}:
             diff["declaration"] = {"write_profile": {"actual": persisted_profile}}
         elif persisted_profile != self._write_profile:
             diff["declaration"] = {
                 "write_profile": {
                     "expected": self._write_profile,
                     "actual": persisted_profile,
-                    "message": "open a degraded store with Database.sqlite(..., degraded=True)",
+                    "message": "open the store with a Database selecting the persisted write profile",
                 }
             }
         persisted: StorageLayout | None = None
@@ -405,8 +479,8 @@ class SqlStore:
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None
-        assert persisted_profile in {"transactional", "degraded"}
-        self._write_profile = cast(Literal["transactional", "degraded"], persisted_profile)
+        assert persisted_profile in {"transactional", "degraded", "bulk-fenced"}
+        self._write_profile = cast(Literal["transactional", "degraded", "bulk-fenced"], persisted_profile)
         self._validate_write_profile_connection(connection, self._write_profile)
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
@@ -448,15 +522,24 @@ class SqlStore:
         self,
         connection: sqlalchemy.Connection,
         layout: StorageLayout,
+        *,
+        fence_held: bool = False,
     ) -> None:
         table = metadata_table_for(sqlalchemy.MetaData())
+        rows = {
+            "protocol": STORAGE_PROTOCOL_VERSION,
+            "entry_declaration": declaration_json(layout),
+        }
+        if self._write_profile != "transactional":
+            rows["write_profile"] = self._write_profile
+        if self.backend_facts.metadata_backend == "keepermap":
+            from httk.data.db.clickhouse import stamp_store_metadata
+
+            stamp_store_metadata(connection, table, rows, fence_held=fence_held)
+            return
         connection.execute(
             sqlalchemy.insert(table),
-            (
-                {"key": "protocol", "value": STORAGE_PROTOCOL_VERSION},
-                {"key": "entry_declaration", "value": declaration_json(layout)},
-                *(({"key": "write_profile", "value": "degraded"},) if self._write_profile == "degraded" else ()),
-            ),
+            tuple({"key": key, "value": value} for key, value in rows.items()),
         )
 
     def _install_layout(
@@ -497,6 +580,17 @@ class SqlStore:
                 "this SqlStore has an open bulk_ingest context; ordinary save/ensure_tables/transaction "
                 "operations are refused until it exits"
             )
+
+    def _check_mutation_policy(self, operation: str, *, empty_deferred_bulk: bool = False) -> None:
+        """Apply the single public mutation policy for backend capability gates."""
+        if self.backend_facts.supports_incremental_save:
+            return
+        if operation == "bulk_ingest" and empty_deferred_bulk:
+            return
+        raise RuntimeError(
+            f"{operation} is refused for the clickhousedb bulk-fenced profile in P1; "
+            "ClickHouse incremental mutations are not supported"
+        )
 
     def bulk_ingest(
         self,
@@ -565,6 +659,7 @@ class SqlStore:
         :return: None.
         :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
+        self._check_mutation_policy("ensure_tables")
         self._reject_during_bulk()
         with self._write_connection() as connection:
             self._create_tables_for_write(connection, classes)
@@ -578,6 +673,7 @@ class SqlStore:
 
     @contextlib.contextmanager
     def _transaction_scope(self) -> Iterator[None]:
+        self._check_mutation_policy("transaction")
         self._reject_during_bulk()
         stack = self._connection_stack()
         if stack:
@@ -859,6 +955,7 @@ class SqlStore:
         The compare-and-swap includes the complete observed value so a stale
         caller can never overwrite a newer owner.
         """
+        self._check_mutation_policy("steal_lease")
         if self._write_profile != "degraded":
             raise RuntimeError("steal_lease is available only for a degraded-profile store")
         with self._mutation_lock, self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
@@ -1054,6 +1151,7 @@ class SqlStore:
         :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
         :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
+        self._check_mutation_policy("save")
         self._reject_during_bulk()
         reject_cursor_proxy(obj)
         record_type = resolve_storage_record(obj, as_record=as_record)
@@ -1471,6 +1569,7 @@ class SqlStore:
         Only tables attributable to the persisted layout or ``known_types``
         are swept; unrelated application tables make collection refuse.
         """
+        self._check_mutation_policy("fsck")
         self._reject_during_bulk()
         from httk.data.db.fsck import run_fsck
 

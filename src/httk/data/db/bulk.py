@@ -107,7 +107,7 @@ from httk.core.storage import (
 )
 
 from httk.data.db.graph import LogicalEdgeGraph
-from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
+from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects, backend_facts_for_dialect
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
@@ -321,6 +321,12 @@ class BulkIngest:
                 physically_empty = self._physically_empty(probe, preexisting)
             self._preexisting = preexisting
             self._select_finalize_profile()
+            store._check_mutation_policy(
+                "bulk_ingest",
+                empty_deferred_bulk=self._deferred and physically_empty,
+            )
+            if store._database.engine.dialect.name == "clickhousedb" and self._deferred:
+                raise NotImplementedError("ClickHouse deferred bulk ingestion is implemented in P3")
             if self._deferred and preexisting:
                 raise RuntimeError(
                     'bulk_ingest(finalize="deferred") requires a physically empty store; use finalize="parity"'
@@ -642,7 +648,8 @@ class BulkIngest:
         objects = tuple(
             sorted(f"{name}:{','.join(sorted(kinds))}" for name, kinds in actual_schema_objects(connection).items())
         )
-        if connection.dialect.name == "sqlite":
+        facts = backend_facts_for_dialect(connection.dialect.name)
+        if facts.system_catalog == "sqlite":
             temporary = tuple(
                 f"{row[0]}:{row[1]}"
                 for row in connection.execute(
@@ -654,7 +661,7 @@ class BulkIngest:
             attached = tuple(
                 f"{row[1]}:{row[2]}" for row in connection.execute(sqlalchemy.text("PRAGMA database_list"))
             )
-        else:
+        elif facts.system_catalog == "duckdb":
             temporary = ()
             attached = tuple(
                 str(row[0])
@@ -662,6 +669,9 @@ class BulkIngest:
                     sqlalchemy.text("SELECT database_name FROM duckdb_databases() ORDER BY database_name")
                 )
             )
+        else:
+            temporary = ()
+            attached = ()
         return objects, temporary, attached
 
     def _clean_up_after_failure(self) -> None:

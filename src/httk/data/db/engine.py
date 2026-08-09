@@ -20,7 +20,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from fractions import Fraction
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 import sqlalchemy
 from sqlalchemy import event
@@ -38,23 +38,51 @@ _EXACT_FRACTION_FUNCTIONS_KEY = "httk_exact_fraction_functions_installed"
 class Database:
     """A relational database reachable through a wrapped SQLAlchemy engine.
 
-    Construct one with :meth:`sqlite` or :meth:`duckdb` (or, for other
-    SQLAlchemy-supported backends, by passing a preconfigured engine directly).
-    The instance is a context manager; leaving the ``with`` block disposes the
-    engine's connection pool.
+    Construct one with :meth:`sqlite`, :meth:`duckdb`, or :meth:`clickhouse` (or,
+    for other SQLAlchemy-supported backends, by passing a preconfigured engine
+    directly). The instance is a context manager; leaving the ``with`` block
+    disposes the engine's connection pool.
 
     :param engine: The configured SQLAlchemy engine to wrap.
     :param degraded: Open with autocommit isolation for degraded-mode access
         (recovery and inspection) instead of the default transactional isolation.
     """
 
-    def __init__(self, engine: sqlalchemy.Engine, *, degraded: bool = False) -> None:
+    def __init__(
+        self,
+        engine: sqlalchemy.Engine,
+        *,
+        degraded: bool = False,
+        write_profile: Literal["transactional", "degraded", "bulk-fenced"] | None = None,
+    ) -> None:
         self._engine = engine
         self._degraded = degraded
+        if write_profile is None:
+            write_profile = "degraded" if degraded else "transactional"
+            if engine.dialect.name == "clickhousedb":
+                write_profile = "bulk-fenced"
+        from httk.data.db.layout import WRITE_PROFILE_VOCABULARY, backend_facts_for_dialect
+
+        if write_profile not in WRITE_PROFILE_VOCABULARY:
+            raise ValueError(f"unknown storage write profile {write_profile!r}")
+        try:
+            facts = backend_facts_for_dialect(engine.dialect.name)
+        except ValueError:
+            facts = None
+        if facts is not None and write_profile not in facts.write_profiles:
+            raise ValueError(f"write profile {write_profile!r} is not supported by the {engine.dialect.name!r} backend")
+        if degraded and write_profile != "degraded":
+            raise ValueError("degraded=True requires the degraded write profile")
+        self._write_profile = write_profile
+        self._server_version: str | None = None
         self._dispose_callbacks: list[Callable[[], None]] = []
         self._dispose_lock = threading.RLock()
         self._disposed = False
         self._lifecycle_generation = 0
+        if engine.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import install_connection_guards
+
+            self._server_version = install_connection_guards(engine)
         _install_exact_fraction_functions(engine)
 
     @classmethod
@@ -121,10 +149,64 @@ class Database:
         engine.dialect._backslash_escapes = False  # type: ignore[attr-defined]
         return cls(engine)
 
+    @classmethod
+    def clickhouse(cls, url: str | sqlalchemy.URL, *, database: str | None = None) -> Self:
+        """Create a ClickHouse database from a ``clickhousedb://`` URL.
+
+        The URL uses the SQLAlchemy ``clickhouse-connect`` dialect, for example
+        ``clickhousedb://default:@host:8123/my_database``.  ``database``
+        replaces the URL path when supplied.  The constructor always merges
+        ``join_use_nulls=1`` into the URL query and selects the ``bulk-fenced``
+        storage profile before any :class:`~httk.data.db.store.SqlStore`
+        initialization occurs.
+
+        :raises ImportError: If ``clickhouse-connect`` is not installed; install
+            the ``httk-data[clickhouse]`` extra.
+        :raises RuntimeError: If Keeper is unavailable, the server is too old,
+            or ``join_use_nulls`` cannot be enforced.
+        """
+        try:
+            importlib.import_module("clickhouse_connect")
+            # Importing this module registers the clickhousedb SQLAlchemy URL.
+            importlib.import_module("clickhouse_connect.cc_sqlalchemy")
+        except ImportError as error:
+            raise ImportError(
+                "the ClickHouse backend needs clickhouse-connect; install the 'httk-data[clickhouse]' extra "
+                "to use Database.clickhouse()"
+            ) from error
+        from sqlalchemy.engine import make_url
+
+        clickhouse_url = make_url(url) if isinstance(url, str) else url
+        if clickhouse_url.drivername.split("+")[0] != "clickhousedb":
+            raise ValueError("Database.clickhouse() requires a clickhousedb:// SQLAlchemy URL")
+        if database is not None:
+            clickhouse_url = clickhouse_url.set(database=database)
+        clickhouse_url = clickhouse_url.update_query_dict({"join_use_nulls": "1"})
+        engine = sqlalchemy.create_engine(clickhouse_url)
+        try:
+            result = cls(engine, write_profile="bulk-fenced")
+            from httk.data.db.clickhouse import ensure_bootstrap_table
+
+            ensure_bootstrap_table(result.engine)
+            return result
+        except BaseException:
+            engine.dispose()
+            raise
+
     @property
     def degraded(self) -> bool:
         """Whether this wrapper deliberately uses the SQLite autocommit vehicle."""
         return self._degraded
+
+    @property
+    def write_profile(self) -> Literal["transactional", "degraded", "bulk-fenced"]:
+        """Return the profile selected before store initialization."""
+        return self._write_profile
+
+    @property
+    def server_version(self) -> str | None:
+        """Return the server version captured at the first ClickHouse connection."""
+        return self._server_version
 
     @property
     def lifecycle_generation(self) -> int:

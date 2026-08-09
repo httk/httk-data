@@ -22,6 +22,7 @@ from httk.data.storage_layout import (
 __all__ = [
     "METADATA_TABLE_NAME",
     "STORAGE_PROTOCOL_VERSION",
+    "WRITE_PROFILE_VOCABULARY",
     "BackendFacts",
     "EntryFamilyLayout",
     "StorageLayout",
@@ -37,9 +38,9 @@ __all__ = [
     "read_store_metadata",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.3.0"
-# One bump covers permanentization roles, write profile metadata, and the
-# degraded SQLite protocol in addition to the v2.2.0 layout semantics.
+STORAGE_PROTOCOL_VERSION: Final = "v2.4.0"
+# This bump adds the ClickHouse bulk-fenced profile and KeeperMap metadata
+# semantics to the permanentization layout.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"
@@ -48,6 +49,7 @@ METADATA_TABLE_NAME: Final = "_httk_store_metadata"
 _METADATA_PROTOCOL_KEY: Final = "protocol"
 _METADATA_DECLARATION_KEY: Final = "entry_declaration"
 _RESERVED_PREFIX: Final = "_httk_"
+WRITE_PROFILE_VOCABULARY: Final = frozenset({"transactional", "degraded", "bulk-fenced"})
 
 
 class StoreUnderConstructionError(RuntimeError):
@@ -68,15 +70,71 @@ class BackendFacts:
     transactional_dml: bool
     supports_sequences: bool
     atomic_upsert: bool
-    serial_stage_format: Literal["sqlite", "duckdb-attach"]
+    serial_stage_format: Literal["sqlite", "duckdb-attach", "parquet"]
     parallel_shard_format: Literal["sqlite", "parquet"]
     supports_deferred_finalize: bool
     supports_degraded: bool
+    write_profiles: tuple[str, ...]
+    metadata_backend: Literal["table", "keepermap"]
+    supports_incremental_save: bool
+    system_catalog: Literal["sqlite", "duckdb", "clickhouse"]
+    stage_load: Literal["attach", "duckdb-views", "client-stream"]
+    finalize_map_maintenance: Literal["update", "swap"]
+    supports_adhoc_indexes: bool
 
 
 _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
-    "sqlite": BackendFacts(False, True, False, True, "sqlite", "sqlite", True, True),
-    "duckdb": BackendFacts(True, True, True, True, "duckdb-attach", "parquet", True, False),
+    "sqlite": BackendFacts(
+        transactional_ddl=False,
+        transactional_dml=True,
+        supports_sequences=False,
+        atomic_upsert=True,
+        serial_stage_format="sqlite",
+        parallel_shard_format="sqlite",
+        supports_deferred_finalize=True,
+        supports_degraded=True,
+        write_profiles=("transactional", "degraded"),
+        metadata_backend="table",
+        supports_incremental_save=True,
+        system_catalog="sqlite",
+        stage_load="attach",
+        finalize_map_maintenance="update",
+        supports_adhoc_indexes=True,
+    ),
+    "duckdb": BackendFacts(
+        transactional_ddl=True,
+        transactional_dml=True,
+        supports_sequences=True,
+        atomic_upsert=True,
+        serial_stage_format="duckdb-attach",
+        parallel_shard_format="parquet",
+        supports_deferred_finalize=True,
+        supports_degraded=False,
+        write_profiles=("transactional",),
+        metadata_backend="table",
+        supports_incremental_save=True,
+        system_catalog="duckdb",
+        stage_load="duckdb-views",
+        finalize_map_maintenance="update",
+        supports_adhoc_indexes=True,
+    ),
+    "clickhousedb": BackendFacts(
+        transactional_ddl=False,
+        transactional_dml=False,
+        supports_sequences=False,
+        atomic_upsert=False,
+        serial_stage_format="parquet",
+        parallel_shard_format="parquet",
+        supports_deferred_finalize=True,
+        supports_degraded=False,
+        write_profiles=("bulk-fenced",),
+        metadata_backend="keepermap",
+        supports_incremental_save=False,
+        system_catalog="clickhouse",
+        stage_load="client-stream",
+        finalize_map_maintenance="swap",
+        supports_adhoc_indexes=False,
+    ),
 }
 
 
@@ -127,6 +185,7 @@ def metadata_table_for(metadata: sqlalchemy.MetaData) -> sqlalchemy.Table:
         metadata,
         sqlalchemy.Column("key", sqlalchemy.Text, primary_key=True, nullable=False),
         sqlalchemy.Column("value", sqlalchemy.Text, nullable=False),
+        info={"httk_metadata": True},
     )
 
 
@@ -137,13 +196,14 @@ def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, fro
     a PostgreSQL catalogue relation DuckDB does not expose, so the whole
     layout path intentionally uses the dialect catalogues directly.
     """
-    if connection.dialect.name == "sqlite":
+    facts = backend_facts_for_dialect(connection.dialect.name)
+    if facts.system_catalog == "sqlite":
         rows = connection.execute(
             sqlalchemy.text(
                 "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
             )
         )
-    elif connection.dialect.name == "duckdb":
+    elif facts.system_catalog == "duckdb":
         rows = connection.execute(
             sqlalchemy.text(
                 "SELECT table_name, lower(table_type) FROM information_schema.tables "
@@ -154,7 +214,9 @@ def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, fro
             )
         )
     else:
-        raise ValueError(f"SqlStore layout validation does not support dialect {connection.dialect.name!r}")
+        from httk.data.db.clickhouse import actual_schema_objects as clickhouse_schema_objects
+
+        return clickhouse_schema_objects(connection)
     result: dict[str, set[str]] = {}
     for name, kind in rows:
         result.setdefault(str(name), set()).add(str(kind).lower().replace("base ", ""))
