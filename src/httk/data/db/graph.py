@@ -57,8 +57,8 @@ class LogicalEdgeGraph:
             if schema.table_name in by_table:
                 continue
             by_table[schema.table_name] = schema
-            for target in schema.referenced_classes():
-                pending.append(resolve_schema(target))
+            for target_type in schema.referenced_classes():
+                pending.append(resolve_schema(target_type))
 
         edges: set[LogicalEdge] = set()
         tables: set[str] = set(by_table)
@@ -67,8 +67,8 @@ class LogicalEdgeGraph:
             for spec in schema.fields:
                 if spec.role == "reference":
                     assert spec.target is not None and spec.columns
-                    target = resolve_schema(spec.target).table_name
-                    edges.add(LogicalEdge("reference", parent, target, spec.columns[0].name))
+                    target_table = resolve_schema(spec.target).table_name
+                    edges.add(LogicalEdge("reference", parent, target_table, spec.columns[0].name))
                 if spec.child is None:
                     continue
                 child = spec.child.table_name
@@ -76,20 +76,20 @@ class LogicalEdgeGraph:
                 tables.add(child)
                 edges.add(LogicalEdge("ownership", parent, child, target_column=parent_column))
                 if spec.target is not None:
-                    target = resolve_schema(spec.target).table_name
+                    target_table = resolve_schema(spec.target).table_name
                     element_column = spec.child.element_columns[0].name
-                    edges.add(LogicalEdge("child_element", child, target, element_column))
+                    edges.add(LogicalEdge("child_element", child, target_table, element_column))
 
         for dispatch_name, backings in dispatches:
             tables.add(dispatch_name)
             for backing_name, schema in backings:
-                target = schema.table_name
-                tables.add(target)
+                target_table = schema.table_name
+                tables.add(target_table)
                 edges.add(
                     LogicalEdge(
                         "dispatch",
                         dispatch_name,
-                        target,
+                        target_table,
                         backing_dispatch_column_name(backing_name),
                     )
                 )
@@ -183,10 +183,10 @@ class LogicalEdgeGraph:
             component = min(ready, key=lambda index: min(components[index]))
             ready.remove(component)
             result.extend(sorted(components[component]))
-            for target in outgoing[component]:
-                indegree[target] -= 1
-                if indegree[target] == 0:
-                    ready.add(target)
+            for component_target in outgoing[component]:
+                indegree[component_target] -= 1
+                if indegree[component_target] == 0:
+                    ready.add(component_target)
         assert len(result) == len(nodes)
         return tuple(result)
 
@@ -219,10 +219,10 @@ class LogicalEdgeGraph:
             index = min(ready, key=lambda value: min(components[value]))
             ready.remove(index)
             ordered.append(components[index])
-            for target in outgoing[index]:
-                indegree[target] -= 1
-                if indegree[target] == 0:
-                    ready.add(target)
+            for component_target in outgoing[index]:
+                indegree[component_target] -= 1
+                if indegree[component_target] == 0:
+                    ready.add(component_target)
         assert len(ordered) == len(components)
         return tuple(ordered)
 

@@ -47,7 +47,7 @@ from .codecs import ValueCodec, register_value_codec
 from .schema import SchemaError, register_schema_override, resolve_schema
 
 __all__ = [
-    "STORAGE_PROTOCOL_VERSION",
+    "STORAGE_PROTOCOL_VERSION",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "BackendFacts",  # pyright: ignore[reportUnsupportedDunderAll]
     "BulkIngest",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
@@ -66,8 +66,8 @@ __all__ = [
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
-    "StoreUnderConstructionError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "StoreUnderConstructionError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntrySource",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredPropertySqlConfigurationError",  # pyright: ignore[reportUnsupportedDunderAll]

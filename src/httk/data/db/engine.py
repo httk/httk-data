@@ -16,10 +16,10 @@ import logging
 import os
 import sys
 import threading
+from collections.abc import Callable
 from contextlib import contextmanager
 from fractions import Fraction
 from types import TracebackType
-from collections.abc import Callable
 from typing import Any, Self
 
 import sqlalchemy
@@ -44,6 +44,8 @@ class Database:
     engine's connection pool.
 
     :param engine: The configured SQLAlchemy engine to wrap.
+    :param degraded: Open with autocommit isolation for degraded-mode access
+        (recovery and inspection) instead of the default transactional isolation.
     """
 
     def __init__(self, engine: sqlalchemy.Engine, *, degraded: bool = False) -> None:
@@ -65,6 +67,8 @@ class Database:
         use SQLAlchemy's default pooling.
 
         :param path: The database file path, or ``None`` for an in-memory database.
+        :param degraded: Open with autocommit isolation for degraded-mode access
+            (recovery and inspection) instead of the default transactional isolation.
         :return: The configured database wrapper.
         """
         if path is None:

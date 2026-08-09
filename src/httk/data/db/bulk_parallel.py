@@ -45,6 +45,7 @@ appends into a populated store remain the serial path's domain, where the
 per-record staging protocol and its metadata verification already live.
 """
 
+import csv
 import functools
 import importlib
 import math
@@ -53,7 +54,6 @@ import pickle
 import queue as queue_mod
 import sqlite3
 import tempfile
-import csv
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -394,7 +394,7 @@ class _DuckdbStageWriter:
         if existing is not None:
             return existing
         path = os.path.join(self._dir, f"{table_name}.csv")
-        file = open(path, "w", newline="", encoding="utf-8")
+        file = open(path, "w", newline="", encoding="utf-8")  # noqa: SIM115 — handle is cached in self._csv and closed by the shard lifecycle, not per call
         columns = [column.name for column in self._store._table(table_name).columns]
         writer = csv.writer(file, quoting=csv.QUOTE_ALL, lineterminator="\n")
         writer.writerow([item for index in range(len(columns)) for item in (f"v{index}", f"n{index}")])
@@ -1286,7 +1286,7 @@ class _Merger:
         for edge in self._graph.ownership():
             if edge.target_column is not None:
                 ownership_by_parent.setdefault(edge.source_table, []).append((edge.target_table, edge.target_column))
-        for table_name, schema in self._ingest._parent_schema.items():
+        for table_name in self._ingest._parent_schema:
             table = store._table(table_name)
             reached = sqlalchemy.select(reach.c[SID_COLUMN]).where(reach.c.tbl == table_name)
             self._connection.execute(sqlalchemy.delete(table).where(table.c[SID_COLUMN].not_in(reached)))

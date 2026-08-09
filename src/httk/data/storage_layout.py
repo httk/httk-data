@@ -10,7 +10,7 @@ import json
 import sys
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Final
+from typing import Final, cast
 
 from httk.core.register import (
     entry_family_info,
@@ -228,7 +228,7 @@ def _registered_names_for(record: type, names: list[str], info: object) -> list[
     canonical = f"{record.__module__}:{record.__name__}"
     matches: list[str] = []
     for name in names:
-        reference = get_info(name)[0]
+        reference = cast('tuple[str, ...]', get_info(name))[0]
         if reference == canonical:
             matches.append(name)
             continue

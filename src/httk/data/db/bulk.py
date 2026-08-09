@@ -96,7 +96,7 @@ import tempfile
 import time
 from collections.abc import Callable, Iterable, Mapping
 from types import TracebackType
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
 import sqlalchemy
 from httk.core.storage import (
@@ -196,6 +196,7 @@ class BulkIngest:
     :param index_strategy: How existing tables' separable indexes are handled during the append.
     :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
     :param workers: The number of worker processes; ``1`` (the default) is the serial path, ``>1`` encodes in parallel and merges shards.
+    :param finalize: The finalization profile: ``"auto"`` selects the deferred finalizer on a fresh supported store for serial ingestion and the parity merge otherwise; ``"parity"`` and ``"deferred"`` force the respective profile.
     """
 
     def __init__(
@@ -780,12 +781,12 @@ class BulkIngest:
                 self._serial_public_next[table_name] = public_sid + 1
                 self._serial_public_content[(table_name, key)] = public_sid
         elif schema.dedup == "by_value":
-            key = self._serial_by_value_key(record_type, obj)
-            public_sid = self._serial_public_value.get((table_name, key))
+            value_key = self._serial_by_value_key(record_type, obj)
+            public_sid = self._serial_public_value.get((table_name, value_key))
             if public_sid is None:
                 public_sid = self._serial_public_next.get(table_name, 1)
                 self._serial_public_next[table_name] = public_sid + 1
-                self._serial_public_value[(table_name, key)] = public_sid
+                self._serial_public_value[(table_name, value_key)] = public_sid
         self._serial_public_stage_sid.setdefault((table_name, public_sid), stage_sid)
         self._returned_sids.add((table_name, public_sid))
         self._records_total += 1
@@ -806,7 +807,8 @@ class BulkIngest:
         def reference_key(target: type, value: Any, _path: str) -> str:
             return content_id(value, as_record=target)
 
-        values = _encode_parent_row(schema, obj, projected, "", reference_key)
+        # This adapter intentionally returns content IDs as logical key values, not allocated sids.
+        values = _encode_parent_row(schema, obj, projected, "", cast(Callable[[type, Any, str], int], reference_key))
         return tuple(sorted(values.items()))
 
     def resolved_sid(self, record_type: type, sid: int) -> int:
@@ -1413,7 +1415,10 @@ class BulkIngest:
                 self._physical_failure(name, f"type for {column.name!r}")
             if bool(row["notnull"]) != (not column.nullable):
                 self._physical_failure(name, f"nullability for {column.name!r}")
-            expected_default = self._physical_sql(column.server_default.arg if column.server_default else None)
+            # The internal table builder supplies only DefaultClause-compatible defaults here.
+            expected_default = self._physical_sql(
+                cast(sqlalchemy.DefaultClause, column.server_default).arg if column.server_default else None
+            )
             if self._physical_sql(row["dflt_value"]) != expected_default:
                 self._physical_failure(name, f"default for {column.name!r}")
         expected_pk = [column.name for column in table.primary_key.columns]
@@ -1467,7 +1472,10 @@ class BulkIngest:
                 self._physical_failure(name, f"type for {column.name!r}")
             if (str(row["is_nullable"]) == "YES") != column.nullable:
                 self._physical_failure(name, f"nullability for {column.name!r}")
-            expected_default = self._physical_sql(column.server_default.arg if column.server_default else None)
+            # The internal table builder supplies only DefaultClause-compatible defaults here.
+            expected_default = self._physical_sql(
+                cast(sqlalchemy.DefaultClause, column.server_default).arg if column.server_default else None
+            )
             if self._physical_sql(row["column_default"]) != expected_default:
                 self._physical_failure(name, f"default for {column.name!r}")
         constraints = (
@@ -1515,14 +1523,14 @@ class BulkIngest:
             self._physical_failure(name, "indexes")
         sequence = _sid_sequence(table)
         if sequence is not None:
-            row = self._connection.execute(
+            sequence_row = self._connection.execute(
                 sqlalchemy.text(
                     "SELECT start_value FROM duckdb_sequences() WHERE database_name = current_database() "
                     "AND schema_name = current_schema() AND sequence_name = :name"
                 ),
                 {"name": sequence.name},
             ).first()
-            if row is None or int(row[0]) != self._next_sid.get(name, 1):
+            if sequence_row is None or int(sequence_row[0]) != self._next_sid.get(name, 1):
                 self._physical_failure(name, f"sequence {sequence.name!r}")
 
     def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:

@@ -61,20 +61,20 @@ from httk.data.db.engine import Database, connection_uses_autocommit
 from httk.data.db.graph import LogicalEdgeGraph
 from httk.data.db.layout import (
     METADATA_TABLE_NAME,
-    BackendFacts,
     STORAGE_PROTOCOL_VERSION,
+    BackendFacts,
     EntryFamilyLayout,
     StorageLayout,
     StorageLayoutUpgradeRequiredError,
+    StoreUnderConstructionError,
     actual_schema_objects,
     actual_table_names,
+    backend_facts_for_dialect,
     declaration_json,
     expected_metadata,
     metadata_table_for,
     normalize_entry_records,
     read_store_metadata,
-    StoreUnderConstructionError,
-    backend_facts_for_dialect,
 )
 from httk.data.db.mapping import (
     CONTENT_ID_COLUMN,
@@ -240,9 +240,8 @@ class SqlStore:
     def _initialize_layout(self, entry_records: Mapping[type, type | tuple[type, ...]] | None) -> None:
         supplied = normalize_entry_records(entry_records) if entry_records is not None else None
         try:
-            with self._degraded_lifecycle_guard():
-                with self._database.engine.begin() as connection:
-                    self._initialize_layout_on_connection(connection, supplied)
+            with self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
+                self._initialize_layout_on_connection(connection, supplied)
         except BaseException:
             created_tables = tuple(self._initialization_ddl_journal)
             self._initialization_ddl_journal.clear()
@@ -586,14 +585,13 @@ class SqlStore:
             return
         pending = self._pending_table_names()
         try:
-            with self._mutation_lock:
-                with self._database.engine.begin() as connection:
-                    self._ensure_degraded_lease(connection)
-                    stack.append(connection)
-                    try:
-                        yield
-                    finally:
-                        stack.pop()
+            with self._mutation_lock, self._database.engine.begin() as connection:
+                self._ensure_degraded_lease(connection)
+                stack.append(connection)
+                try:
+                    yield
+                finally:
+                    stack.pop()
             self._tables_present.update(pending)
         except BaseException:
             pending.clear()
@@ -618,29 +616,26 @@ class SqlStore:
     def _write_connection(self) -> Iterator[sqlalchemy.Connection]:
         current = self._current_connection()
         if current is not None:
-            with self._mutation_lock:
-                with self._degraded_lifecycle_guard():
-                    self._ensure_degraded_lease(current)
-                    started = self._begin_degraded_operation()
-                    try:
-                        yield current
-                    finally:
-                        self._end_degraded_operation(current, started)
+            with self._mutation_lock, self._degraded_lifecycle_guard():
+                self._ensure_degraded_lease(current)
+                started = self._begin_degraded_operation()
+                try:
+                    yield current
+                finally:
+                    self._end_degraded_operation(current, started)
             return
         pending = self._pending_table_names()
         try:
-            with self._mutation_lock:
-                with self._degraded_lifecycle_guard():
-                    with self._database.engine.begin() as connection:
-                        self._ensure_degraded_lease(connection)
-                        started = self._begin_degraded_operation()
-                        stack = self._connection_stack()
-                        stack.append(connection)
-                        try:
-                            yield connection
-                        finally:
-                            stack.pop()
-                            self._end_degraded_operation(connection, started)
+            with self._mutation_lock, self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
+                self._ensure_degraded_lease(connection)
+                started = self._begin_degraded_operation()
+                stack = self._connection_stack()
+                stack.append(connection)
+                try:
+                    yield connection
+                finally:
+                    stack.pop()
+                    self._end_degraded_operation(connection, started)
             self._tables_present.update(pending)
         except BaseException:
             pending.clear()
@@ -659,23 +654,22 @@ class SqlStore:
             with self._write_connection() as connection:
                 yield connection
             return
-        with self._mutation_lock:
-            with self._database.engine.connect() as connection:
-                # ``engine.begin()`` is deferred on SQLite.  fsck must block a
-                # concurrent writer before its first inspection, not merely at
-                # its first DELETE.
-                connection.exec_driver_sql("BEGIN IMMEDIATE")
-                stack = self._connection_stack()
-                stack.append(connection)
-                try:
-                    yield connection
-                except BaseException:
-                    connection.rollback()
-                    raise
-                else:
-                    connection.commit()
-                finally:
-                    stack.pop()
+        with self._mutation_lock, self._database.engine.connect() as connection:
+            # ``engine.begin()`` is deferred on SQLite.  fsck must block a
+            # concurrent writer before its first inspection, not merely at
+            # its first DELETE.
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            stack = self._connection_stack()
+            stack.append(connection)
+            try:
+                yield connection
+            except BaseException:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+            finally:
+                stack.pop()
 
     def _ensure_degraded_lease(self, connection: sqlalchemy.Connection) -> None:
         """Acquire once and verify on every degraded mutation operation.
@@ -842,9 +836,7 @@ class SqlStore:
             # child is itself sweepable.  Reference columns never participate,
             # so a nullable ``*_sid`` reference cannot be mistaken for
             # ownerless child residue.
-            if edge.source_table == table.name:
-                parent_name, candidate_name = edge.source_table, edge.target_table
-            elif edge.target_table == table.name:
+            if edge.source_table == table.name or edge.target_table == table.name:
                 parent_name, candidate_name = edge.source_table, edge.target_table
             else:
                 continue
@@ -869,31 +861,27 @@ class SqlStore:
         """
         if self._write_profile != "degraded":
             raise RuntimeError("steal_lease is available only for a degraded-profile store")
-        with self._mutation_lock:
-            with self._degraded_lifecycle_guard():
-                with self._database.engine.begin() as connection:
-                    table = metadata_table_for(sqlalchemy.MetaData())
-                    prior = connection.execute(
-                        sqlalchemy.select(table.c.value).where(table.c.key == "lease")
-                    ).scalar_one_or_none()
-                    if prior is None:
-                        self._ensure_degraded_lease(connection)
-                        return
-                    mine = json.dumps(
-                        {"owner": self._lease_owner, "acquired_at": datetime.datetime.now(datetime.UTC).isoformat()},
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
-                    changed = connection.execute(
-                        sqlalchemy.update(table)
-                        .where(table.c.key == "lease", table.c.value == prior)
-                        .values(value=mine)
-                    ).rowcount
-                    if changed != 1:
-                        raise RuntimeError(
-                            f"could not steal degraded SqlStore lease from {self._lease_description(str(prior))}; retry"
-                        )
-                    self._lease_value = mine
+        with self._mutation_lock, self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
+            table = metadata_table_for(sqlalchemy.MetaData())
+            prior = connection.execute(
+                sqlalchemy.select(table.c.value).where(table.c.key == "lease")
+            ).scalar_one_or_none()
+            if prior is None:
+                self._ensure_degraded_lease(connection)
+                return
+            mine = json.dumps(
+                {"owner": self._lease_owner, "acquired_at": datetime.datetime.now(datetime.UTC).isoformat()},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            changed = connection.execute(
+                sqlalchemy.update(table).where(table.c.key == "lease", table.c.value == prior).values(value=mine)
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError(
+                    f"could not steal degraded SqlStore lease from {self._lease_description(str(prior))}; retry"
+                )
+            self._lease_value = mine
 
     def _pending_table_names(self) -> set[str]:
         pending = getattr(self._local, "pending_tables", None)

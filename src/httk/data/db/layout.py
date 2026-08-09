@@ -21,20 +21,20 @@ from httk.data.storage_layout import (
 
 __all__ = [
     "METADATA_TABLE_NAME",
-    "BackendFacts",
     "STORAGE_PROTOCOL_VERSION",
-    "StoreUnderConstructionError",
+    "BackendFacts",
     "EntryFamilyLayout",
     "StorageLayout",
     "StorageLayoutUpgradeRequiredError",
+    "StoreUnderConstructionError",
     "actual_schema_objects",
     "actual_table_names",
+    "backend_facts_for_dialect",
     "declaration_json",
     "expected_metadata",
     "metadata_table_for",
     "normalize_entry_records",
     "read_store_metadata",
-    "backend_facts_for_dialect",
 ]
 
 STORAGE_PROTOCOL_VERSION: Final = "v2.3.0"

@@ -19,12 +19,12 @@ from httk.data.db.mapping import (
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
-from httk.data.db.schema import resolve_schema
+from httk.data.db.schema import TableSchema, resolve_schema
 
 if TYPE_CHECKING:
     from httk.data.db.store import SqlStore
 
-__all__ = ["FsckTableSummary", "FsckSummary", "run_fsck"]
+__all__ = ["FsckSummary", "FsckTableSummary", "run_fsck"]
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def run_fsck(
     if store._database.engine.dialect.name == "duckdb" and not exclusive:
         raise RuntimeError("DuckDB fsck requires exclusive=True and offline ownership from all writers")
     verification_only = store.write_profile == "degraded" and not repair and not collect_garbage
-    schemas: dict[str, object] = {}
+    schemas: dict[str, TableSchema] = {}
     pending = [
         *known_types,
         *store._known_record_types,
