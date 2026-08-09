@@ -60,7 +60,9 @@ class _CommandCounter(monitoring.CommandListener):
 
     def count(self, name: str, collection: str | None = None) -> int:
         """Return commands matching an optional collection name."""
-        return sum(command == name and (collection is None or target == collection) for command, target in self.commands)
+        return sum(
+            command == name and (collection is None or target == collection) for command, target in self.commands
+        )
 
 
 def _failpoint(client, command: dict, *, times: int) -> None:
@@ -175,8 +177,12 @@ def test_save_retries_transient_and_unknown_commit_result(mongo_test_database) -
         try:
             _failpoint(
                 mongo_test_database.client,
-                {"failCommands": ["insert"], "namespace": entry_namespace, "errorCode": 251,
-                 "errorLabels": ["TransientTransactionError"]},
+                {
+                    "failCommands": ["insert"],
+                    "namespace": entry_namespace,
+                    "errorCode": 251,
+                    "errorLabels": ["TransientTransactionError"],
+                },
                 times=1,
             )
             assert store.save(TxEntry("transient", [])) > 0
@@ -186,8 +192,11 @@ def test_save_retries_transient_and_unknown_commit_result(mongo_test_database) -
         try:
             _failpoint(
                 mongo_test_database.client,
-                {"failCommands": ["commitTransaction"], "errorCode": 91,
-                 "errorLabels": ["UnknownTransactionCommitResult"]},
+                {
+                    "failCommands": ["commitTransaction"],
+                    "errorCode": 91,
+                    "errorLabels": ["UnknownTransactionCommitResult"],
+                },
                 times=1,
             )
             assert store.save(TxEntry("commit", [])) > 0

@@ -1102,7 +1102,7 @@ class MongoStore:
             entries = embedded.get(spec.field, [])
             assert spec.child is not None
             if spec.shape is not None:
-                return FracVector.create(
+                return FracVector(
                     [
                         decode_fracvector_exact(item[f"{spec.field}_exact"], 1, spec.shape.cols).to_fractions()[0]
                         for item in entries

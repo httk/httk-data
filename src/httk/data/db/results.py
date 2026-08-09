@@ -185,7 +185,7 @@ class ResultColumn:
         if not rational:
             raise TypeError(f"column {self.name!r} is not rational-valued; surds and other codecs are unsupported")
         values = [value.to_fraction() if isinstance(value, FracScalar) else value for value in self]
-        return FracVector.create(values)
+        return FracVector(values)
 
 
 class SqlResultSet:

@@ -113,10 +113,10 @@ def make_sample(**overrides) -> Sample:
         payload=b"\x00\x01\xff",
         note=None,
         ratio=Fraction(1, 3),
-        scale=FracScalar(2, 7),
+        scale=FracScalar(2, denom=7),
         created=datetime.datetime(2026, 7, 24, 12, 30, 0),  # noqa: DTZ001
-        cell=FracVector.create([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
-        coords=FracVector.create(
+        cell=FracVector([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
+        coords=FracVector(
             [[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)], [Fraction(1, 3), Fraction(2, 3), 1]]
         ),
         symbols=["Ca", "Ti", "O"],

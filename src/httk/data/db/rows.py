@@ -152,7 +152,7 @@ class _Chunk:
                 decode_fracvector_exact(entry[columns[f"{spec.field}_exact"]], 1, spec.shape.cols).to_fractions()[0]
                 for entry in entries
             ]
-            return FracVector.create(rows)
+            return FracVector(rows)
         if spec.target is not None:
             target_sids = [int(entry[columns[spec.child.element_columns[0].name]]) for entry in entries]
             all_target_sids = [

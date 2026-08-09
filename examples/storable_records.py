@@ -125,8 +125,8 @@ PEROVSKITE = Measurement(
     formula="CaTiO3",
     spacegroup=221,
     energy=Fraction(-1, 3),
-    cell=FracVector.create([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
-    coords=FracVector.create([[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)]]),
+    cell=FracVector([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
+    coords=FracVector([[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)]]),
     symbols=["Ca", "Ti", "O"],
     author=ADA,
 )
@@ -135,8 +135,8 @@ ROCKSALT = Measurement(
     formula="NaCl",
     spacegroup=225,
     energy=Fraction(-5, 4),
-    cell=FracVector.create([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
-    coords=FracVector.create([[0, 0, 0]]),
+    cell=FracVector([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+    coords=FracVector([[0, 0, 0]]),
     symbols=["Na", "Cl"],
 )
 
@@ -201,8 +201,8 @@ def show_dedup(store: SqlStore, sid: int) -> None:
         formula="CaTiO3",
         spacegroup=221,
         energy=Fraction(-1, 3),
-        cell=FracVector.create([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
-        coords=FracVector.create([[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)]]),
+        cell=FracVector([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
+        coords=FracVector([[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)]]),
         symbols=["Ca", "Ti", "O"],
         author=Author("Lovelace", 1843),
         scratch="a different scratch value: not stored, so not part of the identity",

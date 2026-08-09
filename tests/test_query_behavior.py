@@ -11,9 +11,8 @@ from typing import ClassVar
 
 import pytest
 from httk.core.storage import StorageInfo, stored_property
-
-from test_db_searcher import ALL_FORMULAS, ALL_LABELS, LABELS, RECORDS, REF_A, REF_B, Rec, Reference, Tag
-from test_db_stored_properties import CalculationEntry, FIRST, SECOND, GenericCalculationFirst, GenericCalculationSecond
+from test_db_searcher import ALL_FORMULAS, ALL_LABELS, LABELS, RECORDS, REF_A, Rec, Reference, Tag
+from test_db_stored_properties import FIRST, SECOND, CalculationEntry, GenericCalculationFirst, GenericCalculationSecond
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +27,11 @@ def query_store(store_factory):
     store = store_factory()
     for record in RECORDS:
         store.save(record)
-    for tag in (Tag(RECORDS[0], "quality", "good"), Tag(RECORDS[0], "source", "exp"), Tag(RECORDS[2], "quality", "bad")):
+    for tag in (
+        Tag(RECORDS[0], "quality", "good"),
+        Tag(RECORDS[0], "source", "exp"),
+        Tag(RECORDS[2], "quality", "bad"),
+    ):
         store.save(tag)
     for label in LABELS:
         store.save(label)
@@ -274,7 +277,7 @@ def test_set_operations_and_negation_have_canonical_results(query_store):
     assert formulas(searcher) == {"NaCl", "MgO", "SrCaTiO"}
 
     searcher, v = rec_searcher(query_store)
-    searcher.add((v.symbols.has_any("Ca") & v.symbols.has_any("Ti")))
+    searcher.add(v.symbols.has_any("Ca") & v.symbols.has_any("Ti"))
     assert formulas(searcher) == {"CaTiO3", "SrCaTiO"}
 
 

@@ -261,15 +261,15 @@ def decode_surdscalar_exact(text: str) -> SurdScalar:
     :raises ZeroDivisionError: If a coefficient denominator is zero.
     """
     if text == "0":
-        return SurdScalar({}, ())
+        return SurdScalar.from_components({}, ())
     components: dict[int, FracVector] = {}
     for term in text.split(";"):
         radicand_text, _, coefficient_text = term.partition(":")
         if not coefficient_text:
             raise ValueError(f"invalid exact surd text {text!r}; expected {SURD_EXACT_FORMAT!r}")
         coefficient = decode_fraction_exact(coefficient_text)
-        components[int(radicand_text)] = FracVector(coefficient.numerator, coefficient.denominator)
-    return SurdScalar(components, ())
+        components[int(radicand_text)] = FracVector.from_noms_and_denom(coefficient.numerator, coefficient.denominator)
+    return SurdScalar.from_components(components, ())
 
 
 def _flat_fractions(value: FracVector) -> list[fractions.Fraction]:
@@ -301,7 +301,7 @@ def encode_fracvector_exact(value: FracVector) -> str:
     :param value: The rational tensor to encode.
     :return: The canonical exact tensor text.
     """
-    flat = _flat_fractions(FracVector.use(value))
+    flat = _flat_fractions(FracVector(value))
     denominator = math.lcm(*(element.denominator for element in flat)) if flat else 1
     numerators = ",".join(str(element.numerator * (denominator // element.denominator)) for element in flat)
     return f"{denominator};{numerators}"
@@ -330,7 +330,7 @@ def decode_fracvector_exact(text: str, rows: int, cols: int) -> FracVector:
     if len(numerators) != rows * cols:
         raise ValueError(f"exact tensor text {text!r} holds {len(numerators)} elements; expected {rows}x{cols}")
     noms = tuple(tuple(numerators[row * cols : (row + 1) * cols]) for row in range(rows))
-    return FracVector(noms, denominator)
+    return FracVector.from_noms_and_denom(noms, denominator)
 
 
 def encode_fracvector_floats(value: FracVector) -> tuple[float, ...]:
@@ -343,7 +343,7 @@ def encode_fracvector_floats(value: FracVector) -> tuple[float, ...]:
     :param value: The rational tensor to convert.
     :return: The row-major floating-point values.
     """
-    return tuple(float(element) for element in _flat_fractions(FracVector.use(value)))
+    return tuple(float(element) for element in _flat_fractions(FracVector(value)))
 
 
 # --------------------------------------------------------------------- built-in codecs
@@ -364,7 +364,7 @@ def _encode_fracscalar(value: Any) -> tuple[Any, ...]:
 
 def _decode_fracscalar(values: tuple[Any, ...]) -> Any:
     exact = decode_fraction_exact(values[1])
-    return FracScalar(exact.numerator, exact.denominator)
+    return FracScalar(exact)
 
 
 def _encode_surdscalar(value: Any) -> tuple[Any, ...]:

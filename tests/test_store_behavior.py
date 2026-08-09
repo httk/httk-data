@@ -10,9 +10,10 @@ belong in the backend-neutral query and paging suites.
 
 import datetime
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from typing import Annotated, ClassVar, Mapping
+from typing import Annotated, ClassVar
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -28,6 +29,7 @@ from httk.core.storage import (
     content_id,
     stored_property,
 )
+
 from httk.data.store_common import EntryMetadataConflictError
 
 
@@ -124,10 +126,10 @@ def make_sample(**overrides) -> Sample:
         payload=b"\x00\x01\xff",
         note=None,
         ratio=Fraction(1, 3),
-        scale=FracScalar(2, 7),
+        scale=FracScalar(2, denom=7),
         created=datetime.datetime(2026, 7, 24, 12, 30, 0),  # noqa: DTZ001
-        cell=FracVector.create([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
-        coords=FracVector.create(
+        cell=FracVector([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
+        coords=FracVector(
             [[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)], [Fraction(1, 3), Fraction(2, 3), 1]]
         ),
         symbols=["Ca", "Ti", "O"],
@@ -363,13 +365,13 @@ def test_float_round_trip_and_content_lookup_preserve_signed_zero(store_factory)
 
 def test_fixed_array_accepts_single_row_for_shape_1_n(store_factory):
     store = store_factory()
-    sid = store.save(RowVector(FracVector.create([Fraction(1, 3), 1, 0])))
-    assert store_factory.reopen(store).fetch(RowVector, sid).vec == FracVector.create([[Fraction(1, 3), 1, 0]])
+    sid = store.save(RowVector(FracVector([Fraction(1, 3), 1, 0])))
+    assert store_factory.reopen(store).fetch(RowVector, sid).vec == FracVector([[Fraction(1, 3), 1, 0]])
 
 
 def test_fixed_array_wrong_shape_raises_naming_field(store_factory):
     with pytest.raises(ValueError, match="cell"):
-        store_factory().save(make_sample(cell=FracVector.create([[1, 0], [0, 1]])))
+        store_factory().save(make_sample(cell=FracVector([[1, 0], [0, 1]])))
 
 
 def test_dedup_content_id_reuses_identity(store_factory):

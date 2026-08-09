@@ -185,10 +185,10 @@ def make_sample(**overrides) -> Sample:
         spacegroup=221,
         energy=-12.5,
         ratio=Fraction(1, 3),
-        scale=FracScalar(2, 7),
+        scale=FracScalar(2, denom=7),
         created=datetime.datetime(2026, 7, 24, 12, 30, 0),  # noqa: DTZ001
-        cell=FracVector.create([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
-        coords=FracVector.create(
+        cell=FracVector([[1, Fraction(1, 3), 0], [0, 1, 0], [0, 0, Fraction(2, 3)]]),
+        coords=FracVector(
             [[0, 0, 0], [Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)], [Fraction(1, 3), Fraction(2, 3), 1]]
         ),
         symbols=["Ca", "Ti", "O"],
@@ -337,10 +337,9 @@ def test_bulk_content_id_metadata_conflict_raises(store_factory):
     """A content-id hit with mismatched identity-excluded metadata raises like save()."""
     store = store_factory()
     _require_bulk(store)
-    with pytest.raises(EntryMetadataConflictError, match="modified"):
-        with store.bulk_ingest() as bulk:
-            bulk.save(_root("one"))
-            bulk.save(replace(_root("one"), modified=_root().modified + datetime.timedelta(seconds=1)))
+    with pytest.raises(EntryMetadataConflictError, match="modified"), store.bulk_ingest() as bulk:
+        bulk.save(_root("one"))
+        bulk.save(replace(_root("one"), modified=_root().modified + datetime.timedelta(seconds=1)))
     # The failed ingest left nothing behind, so a fresh ingest proceeds cleanly.
     with store.bulk_ingest() as bulk:
         bulk.save(_root("one"))
@@ -365,10 +364,9 @@ def test_bulk_nested_metadata_conflict_raises(store_factory):
     """The in-memory metadata comparison descends into references like save()."""
     store = store_factory()
     _require_bulk(store)
-    with pytest.raises(EntryMetadataConflictError, match="primary.note"):
-        with store.bulk_ingest() as bulk:
-            bulk.save(_root("one", note="leaf metadata"))
-            bulk.save(_root("one", note="changed"))
+    with pytest.raises(EntryMetadataConflictError, match="primary.note"), store.bulk_ingest() as bulk:
+        bulk.save(_root("one", note="leaf metadata"))
+        bulk.save(_root("one", note="changed"))
 
 
 def test_bulk_metadata_conflict_ignored_when_disabled(store_factory):
@@ -402,10 +400,9 @@ def test_bulk_dispatch_conflicting_backing_raises(store_factory, monkeypatch):
     # Force both backings to share a dispatch content id to provoke the conflict.
     shared = content_id(BulkCalcA("alpha", 1))
     monkeypatch.setattr("httk.data.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
-    with pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"):
-        with store.bulk_ingest() as bulk:
-            bulk.save(BulkCalcA("alpha", 1))
-            bulk.save(BulkCalcB("beta", "kind-b"))
+    with pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"), store.bulk_ingest() as bulk:
+        bulk.save(BulkCalcA("alpha", 1))
+        bulk.save(BulkCalcB("beta", "kind-b"))
 
 
 def test_bulk_context_owns_the_write_path(store_factory):
@@ -418,9 +415,8 @@ def test_bulk_context_owns_the_write_path(store_factory):
             store.save(Author("Grace", 1906))
         with pytest.raises(RuntimeError, match="bulk_ingest"):
             store.ensure_tables(Author)
-        with pytest.raises(RuntimeError, match="bulk_ingest"):
-            with store.transaction():
-                pass
+        with pytest.raises(RuntimeError, match="bulk_ingest"), store.transaction():
+            pass
     # The store is usable again after the context exits.
     sid = store.save(Author("Grace", 1906))
     assert store.fetch(Author, sid) == Author("Grace", 1906)
@@ -430,11 +426,10 @@ def test_bulk_failure_leaves_no_tables_or_rows(store_factory):
     """A validator raising mid-ingest drops every created table; a later save works."""
     store = store_factory()
     _require_bulk(store)
-    with pytest.raises(ValueError, match="validator rejected"):
-        with store.bulk_ingest() as bulk:
-            bulk.save(ValidatedRecord(1))
-            bulk.save(Author("Ada", 1852))
-            bulk.save(ValidatedRecord(-1))  # validator raises here
+    with pytest.raises(ValueError, match="validator rejected"), store.bulk_ingest() as bulk:
+        bulk.save(ValidatedRecord(1))
+        bulk.save(Author("Ada", 1852))
+        bulk.save(ValidatedRecord(-1))  # validator raises here
 
     with _database_of(store).engine.connect() as connection:
         from httk.data.db.layout import actual_table_names

@@ -87,9 +87,9 @@ def test_candidate_streams_are_id_only_and_verified(plan):
 def test_public_id_prefix_filters_sorts_and_candidate_streams(plan):
     prefix = "mongo:"
     first_id = prefix + content_id(FIRST)
-    assert [record.label for record in _records(plan.filter_searchers(f'id = "{first_id}"', public_id_prefix=prefix))] == [
-        "first"
-    ]
+    assert [
+        record.label for record in _records(plan.filter_searchers(f'id = "{first_id}"', public_id_prefix=prefix))
+    ] == ["first"]
     assert not _records(plan.filter_searchers(f'id = "other:{content_id(FIRST)}"', public_id_prefix=prefix))
 
     additional = replace(FIRST, label="another-first")
@@ -137,7 +137,9 @@ def test_evaluator_nullable_exact_distinct_and_exists_semantics():
 
 def test_optional_child_presence_and_response_serialization(plan):
     context = _MongoQueryContext(_EvaluatorRecord)
-    assert evaluate(context.equal(context.field("assemblies_present"), context.constant(False)), _EvaluatorRecord(0.0, []))
+    assert evaluate(
+        context.equal(context.field("assemblies_present"), context.constant(False)), _EvaluatorRecord(0.0, [])
+    )
     assert evaluate(
         context.equal(context.field("attached_present"), context.constant(True)), _EvaluatorRecord(0.0, [], attached=[])
     )
@@ -146,7 +148,7 @@ def test_optional_child_presence_and_response_serialization(plan):
     )
     assert evaluate(
         context.equal(context.field("exact_values_present"), context.constant(True)),
-        _EvaluatorRecord(0.0, [], exact_values=[FracScalar(1, 3)]),
+        _EvaluatorRecord(0.0, [], exact_values=[FracScalar(1, denom=3)]),
     )
 
     assert _response_json_value(_ResponseDataclass(Fraction(1, 3))) == {"value": 1 / 3}
@@ -162,10 +164,14 @@ def test_optional_child_presence_and_response_serialization(plan):
     with pytest.raises(MongoStoredPropertyConfigurationError, match="canonical text channel"):
         plan._sort_field(incompatible, variable, "immutable_id", "")
 
-    assert [record.label for record in _records(plan.filter_searchers('type = "calculations"', sort=(("type", False),)))] == [
+    assert [
+        record.label for record in _records(plan.filter_searchers('type = "calculations"', sort=(("type", False),)))
+    ] == [
         "first",
         "second",
     ]
     streams = plan.candidate_searchers(sort=(("type", True), ("immutable_id", False)))
     assert all(stream.sort_count == 2 for stream in streams)
-    assert all(result[0][2] == "calculations" and len(result[0]) == 4 for stream in streams for result in stream.searcher)
+    assert all(
+        result[0][2] == "calculations" and len(result[0]) == 4 for stream in streams for result in stream.searcher
+    )

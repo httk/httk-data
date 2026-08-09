@@ -216,7 +216,10 @@ def test_content_id_race_returns_one_sid(mongo_test_database):
             thread.join()
         assert not errors
         assert results[0] == results[1]
-        assert mongo_test_database.database[collection_name_for(resolve_schema(MongoRoleDependency))].count_documents({}) == 1
+        assert (
+            mongo_test_database.database[collection_name_for(resolve_schema(MongoRoleDependency))].count_documents({})
+            == 1
+        )
     finally:
         second_db.dispose()
 
@@ -238,9 +241,7 @@ def test_by_value_hit_compensation_depends_on_mode(mongo_test_database, transact
     owned_database = None
     if transactions == "never":
         name = f"httk_test_degraded_{id(mongo_test_database)}"
-        database = MongoDatabase.connect(
-            os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never"
-        )
+        database = MongoDatabase.connect(os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never")
         owned_database = database
     try:
         store = _store(database)
@@ -249,9 +250,10 @@ def test_by_value_hit_compensation_depends_on_mode(mongo_test_database, transact
         assert store.save(MongoRoleContainer("same", [first])) == store.save(MongoRoleContainer("same", [second]))
         dependency_collection = database.database[collection_name_for(resolve_schema(MongoRoleDependency))]
         expected = 1 if transactions == "auto" else 2
-        assert dependency_collection.count_documents(
-            {"content_id": {"$in": [content_id(first), content_id(second)]}}
-        ) == expected
+        assert (
+            dependency_collection.count_documents({"content_id": {"$in": [content_id(first), content_id(second)]}})
+            == expected
+        )
     finally:
         if owned_database is not None:
             owned_database.client.drop_database(owned_database.database.name)
@@ -262,5 +264,7 @@ def test_record_document_shape(mongo_test_database):
     store = _store(mongo_test_database)
     record = MongoRoleDependency("shape")
     sid = store.save(record)
-    document = mongo_test_database.database[collection_name_for(resolve_schema(MongoRoleDependency))].find_one({"_id": sid})
+    document = mongo_test_database.database[collection_name_for(resolve_schema(MongoRoleDependency))].find_one(
+        {"_id": sid}
+    )
     assert set(document) == {"_id", "content_id", "_httk_role", "f"}

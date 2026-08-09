@@ -92,7 +92,7 @@ def test_fraction_exact_text_always_has_a_denominator():
 
 def test_fracscalar_round_trip():
     codec = codec_named("fracscalar")
-    value = FracScalar.create("-7/3")
+    value = FracScalar("-7/3")
     encoded = codec.encode(value)
     assert encoded[1] == "-7/3"
     decoded = codec.decode(encoded)
@@ -109,7 +109,7 @@ def test_float_companion_approximates():
 
 def test_surdscalar_round_trip():
     codec = codec_named("surdscalar")
-    value = SurdVector.sqrt_of(8) + FracVector(1, 2)  # 1/2 + 2*sqrt(2), a SurdScalar
+    value = SurdVector.sqrt_of(8) + FracVector(1, denom=2)  # 1/2 + 2*sqrt(2), a SurdScalar
     encoded = codec.encode(value)
     assert encoded[1] == "1:1/2;2:2/1"
     assert encoded[0] == pytest.approx(0.5 + 2 * 2**0.5)
@@ -117,7 +117,7 @@ def test_surdscalar_round_trip():
     assert isinstance(decoded, SurdScalar)
     assert decoded == value
 
-    zero = SurdScalar({}, ())
+    zero = SurdScalar.from_components({}, ())
     assert encode_surdscalar_exact(zero) == "0"
     assert decode_surdscalar_exact("0") == zero
     negative = SurdVector.sqrt_of(Fraction(1, 2)) - Fraction(5, 7)
@@ -140,7 +140,7 @@ def test_datetime_round_trips_through_iso_text():
 
 
 def test_fracvector_exact_text_round_trips_3x3():
-    vector = FracVector.create([[1, "1/2", "-3/7"], ["22/7", 0, "1/3"], [-4, "5/6", 2]])
+    vector = FracVector([[1, "1/2", "-3/7"], ["22/7", 0, "1/3"], [-4, "5/6", 2]])
     text = encode_fracvector_exact(vector)
     decoded = decode_fracvector_exact(text, 3, 3)
     assert decoded == vector
@@ -148,7 +148,7 @@ def test_fracvector_exact_text_round_trips_3x3():
 
 
 def test_fracvector_exact_text_round_trips_1xn():
-    vector = FracVector.create([["-1/3", "2/5", 7, "1/1000000007"]])
+    vector = FracVector([["-1/3", "2/5", 7, "1/1000000007"]])
     text = encode_fracvector_exact(vector)
     decoded = decode_fracvector_exact(text, 1, 4)
     assert decoded == vector
@@ -156,8 +156,8 @@ def test_fracvector_exact_text_round_trips_1xn():
 
 def test_fracvector_exact_text_is_canonical():
     # The same value with a non-minimal internal denominator encodes identically.
-    plain = FracVector.create([[1, 2], [3, 4]])
-    inflated = FracVector(((6, 12), (18, 24)), 6)
+    plain = FracVector([[1, 2], [3, 4]])
+    inflated = FracVector.from_noms_and_denom(((6, 12), (18, 24)), 6)
     assert encode_fracvector_exact(plain) == encode_fracvector_exact(inflated)
     assert encode_fracvector_exact(plain) == "1;1,2,3,4"
 
@@ -170,7 +170,7 @@ def test_fracvector_exact_text_rejects_shape_mismatch():
 
 
 def test_fracvector_float_companions():
-    vector = FracVector.create([["1/2", "-1/4"]])
+    vector = FracVector([["1/2", "-1/4"]])
     assert encode_fracvector_floats(vector) == (0.5, -0.25)
 
 

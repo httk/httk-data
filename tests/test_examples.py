@@ -44,9 +44,7 @@ def discover_examples() -> list[Path]:
     if not EXAMPLES_DIR.is_dir():
         return []
     return sorted(
-        path
-        for path in EXAMPLES_DIR.rglob("*.py")
-        if path.name != "__init__.py" and "__pycache__" not in path.parts
+        path for path in EXAMPLES_DIR.rglob("*.py") if path.name != "__init__.py" and "__pycache__" not in path.parts
     )
 
 

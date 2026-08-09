@@ -21,12 +21,7 @@ from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
-
 from httk.core.storage import IdentitySkip, StorageInfo, content_id
-from httk.data.db import Database, SqlStore
-from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
-from httk.data.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
-
 from test_db_bulk import (
     Author,
     BulkCalcA,
@@ -43,7 +38,6 @@ from test_db_bulk import (
     Root,
     Sample,
     ValidatedRecord,
-    _app_tables,
     _database_of,
     _physical_counts,
     _require_bulk,
@@ -56,6 +50,9 @@ from test_db_bulk import (
 # These modules fork their own worker processes; the loadgroup scheduler
 # keeps them on one xdist worker so their memory use never stacks.
 pytestmark = pytest.mark.xdist_group("bulk-heavy")
+from httk.data.db import Database, SqlStore
+from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
+from httk.data.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
 
 CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 
@@ -583,7 +580,7 @@ def test_parallel_equal_fraction_metadata_deduplicates(store_factory):
 
 def test_parallel_finish_aborts_on_dead_worker_with_full_queue(store_factory, monkeypatch):
     """A worker killed with a saturated queue cannot deadlock the stop-sentinel send; the ingest aborts."""
-    import httk.data.db.bulk_parallel as bulk_parallel
+    from httk.data.db import bulk_parallel
 
     monkeypatch.setattr(bulk_parallel, "_QUEUE_MAXSIZE", 2)
     store = store_factory()
@@ -616,7 +613,7 @@ def test_parallel_sqlite_works_with_foreign_key_enforcement_enabled(tmp_path):
     database = Database.sqlite(tmp_path / "fk.sqlite")
 
     @event.listens_for(database.engine, "connect")
-    def _enable_foreign_keys(dbapi_connection, _record):  # noqa: ANN001
+    def _enable_foreign_keys(dbapi_connection, _record):
         dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
     store = SqlStore(database, entry_records={})
@@ -633,7 +630,7 @@ def test_parallel_healthy_manifest_survives_full_queue_health_poll(store_factory
     """A worker that reported and exited during sentinel delivery keeps its manifest (not discarded nor read as a crash)."""
     import time
 
-    import httk.data.db.bulk_parallel as bulk_parallel
+    from httk.data.db import bulk_parallel
 
     store = store_factory()
     _require_bulk(store)

@@ -36,7 +36,7 @@ def _article(title: str = "On Perovskites", author: Author | None = None) -> Art
         title=title,
         ratio=Fraction(-13, 3),
         when=datetime.datetime(2026, 7, 24, 12, 0),
-        cell=FracVector.create([[1, "1/2"], [0, "2/3"]]),
+        cell=FracVector([[1, "1/2"], [0, "2/3"]]),
         symbols=["Ca", "Ti", "O"],
         author=author if author is not None else Author("Goldschmidt", 1926),
     )
@@ -58,7 +58,7 @@ def test_any_stored_field_change_changes_the_id():
     variants = [
         Article(base.title, Fraction(-13, 4), base.when, base.cell, base.symbols, base.author),
         Article(base.title, base.ratio, datetime.datetime(2026, 7, 25), base.cell, base.symbols, base.author),
-        Article(base.title, base.ratio, base.when, FracVector.create([[1, 0], [0, 1]]), base.symbols, base.author),
+        Article(base.title, base.ratio, base.when, FracVector([[1, 0], [0, 1]]), base.symbols, base.author),
         Article(base.title, base.ratio, base.when, base.cell, ["Ca", "O", "Ti"], base.author),
         Article(base.title, base.ratio, base.when, base.cell, base.symbols, None),
     ]
@@ -86,7 +86,7 @@ def test_derived_and_skipped_values_do_not_affect_the_id():
         title="On Perovskites",
         ratio=Fraction(-13, 3),
         when=datetime.datetime(2026, 7, 24, 12, 0),
-        cell=FracVector.create([[1, "1/2"], [0, "2/3"]]),
+        cell=FracVector([[1, "1/2"], [0, "2/3"]]),
         symbols=["Ca", "Ti", "O"],
         author=Author("Goldschmidt", 1926),
         scratch="anything",

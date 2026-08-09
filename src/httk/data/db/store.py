@@ -1776,7 +1776,7 @@ class SqlStore:
         ).mappings()
         decoded = [self._metadata_child_element(spec, cast(Mapping[str, Any], row)) for row in rows]
         if spec.shape is not None:
-            value: Any = FracVector.create(decoded)
+            value: Any = FracVector(decoded)
         elif typing.get_origin(spec.python_type) is tuple:
             value = tuple(decoded)
         else:
@@ -1942,12 +1942,12 @@ class SqlStore:
 
 def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any) -> FracVector:
     """Normalize a fixed-shape field value to a ``(rows, cols)`` FracVector, validating its shape."""
-    tensor = FracVector.use(value)
+    tensor = FracVector(value)
     dim = tensor.dim
     if dim == (shape.rows, shape.cols):
         return tensor
     if shape.rows == 1 and dim == (shape.cols,):
-        return FracVector((tensor.noms,), tensor.denom)
+        return FracVector.from_noms_and_denom((tensor.noms,), tensor.denom)
     raise ValueError(
         f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape ({shape.rows}, {shape.cols}), got {dim}"
     )
@@ -1957,7 +1957,7 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
     """The rows of a variable-rows (``Shape(0, c)``) field value, each as a ``(c,)`` FracVector."""
     if value is None:
         return []
-    tensor = FracVector.use(value)
+    tensor = FracVector(value)
     dim = tensor.dim
     if dim == () or dim == (0,):
         return []
@@ -1967,7 +1967,7 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
             f"got shape {dim}"
         )
     rows = cast(tuple[tuple[int, ...], ...], tensor.noms)  # dim was validated two-dimensional above
-    return [FracVector(noms_row, tensor.denom) for noms_row in rows]
+    return [FracVector.from_noms_and_denom(noms_row, tensor.denom) for noms_row in rows]
 
 
 def _field_path(path: str, field: str) -> str:

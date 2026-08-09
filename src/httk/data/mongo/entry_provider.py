@@ -342,7 +342,7 @@ def _json_value(schema: TableSchema, spec: FieldSpec, value: Any) -> Any:
         return _as_fixed_tensor(schema, spec, spec.shape, value).to_floats()
     assert spec.role == "child"
     if spec.shape is not None:
-        tensor = FracVector.use(value)
+        tensor = FracVector(value)
         return [] if tensor.dim in {(), (0,)} else tensor.to_floats()
     if spec.codec_name is not None:
         codec = codec_named(spec.codec_name)

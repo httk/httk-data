@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy
-from httk.core.storage import IdentitySkip, StorageInfo, StorageProjectionCycleError, content_id, stored_property
+from httk.core.storage import IdentitySkip, StorageInfo, stored_property
 
 from httk.data.db import Database, EntryMetadataConflictError, SqlStore
 

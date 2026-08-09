@@ -27,11 +27,11 @@ class RecordTooLargeError(ValueError):
 
 
 def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any) -> FracVector:
-    tensor = FracVector.use(value)
+    tensor = FracVector(value)
     if tensor.dim == (shape.rows, shape.cols):
         return tensor
     if shape.rows == 1 and tensor.dim == (shape.cols,):
-        return FracVector((tensor.noms,), tensor.denom)
+        return FracVector.from_noms_and_denom((tensor.noms,), tensor.denom)
     raise ValueError(
         f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape "
         f"({shape.rows}, {shape.cols}), got {tensor.dim}"
@@ -41,7 +41,7 @@ def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: 
 def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any) -> list[FracVector]:
     if value is None:
         return []
-    tensor = FracVector.use(value)
+    tensor = FracVector(value)
     if tensor.dim in {(), (0,)}:
         return []
     if len(tensor.dim) != 2 or tensor.dim[1] != shape.cols:
@@ -50,7 +50,7 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
             f"got shape {tensor.dim}"
         )
     rows = typing.cast(tuple[tuple[int, ...], ...], tensor.noms)
-    return [FracVector(row, tensor.denom) for row in rows]
+    return [FracVector.from_noms_and_denom(row, tensor.denom) for row in rows]
 
 
 def _value(record_type: type, source: Any, projected: Mapping[str, object], spec: FieldSpec) -> Any:
@@ -168,7 +168,7 @@ def _decode_child(spec: FieldSpec, value: Any, resolve_reference: Callable[[type
             decode_fracvector_exact(element[f"{spec.field}_exact"], 1, spec.shape.cols).to_fractions()[0]
             for element in value
         ]
-        return FracVector.create(rows)
+        return FracVector(rows)
     if spec.target is not None:
         elements = [
             resolve_reference(spec.target, int(element[spec.child.element_columns[0].name])) for element in value
