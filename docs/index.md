@@ -23,6 +23,9 @@ dataclasses over SQLite or DuckDB (via the `httk-data[db]` /
 - **API reference**: {doc}`reference/index`
 - **Runnable examples**: {doc}`examples/index`
 - **Examples notebook**: {doc}`notebooks/examples`
+
+The topic pages above are short and practical; the ones with a full guide link
+onward to it in the **Details** section of the sidebar.
 ````
 
 ## Install
@@ -63,4 +66,13 @@ migrating_from_v1
 reference/index
 examples/index
 notebooks/examples
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Details
+
+details/db
+details/mongo
+details/migrating_from_v1
 ```
