@@ -1,0 +1,13 @@
+<clickhouse>
+    <users>
+        <default>
+            <password></password>
+            <networks><ip>127.0.0.1</ip></networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </default>
+    </users>
+    <profiles><default></default></profiles>
+    <quotas><default></default></quotas>
+</clickhouse>

@@ -2,12 +2,12 @@
 
 import datetime
 import math
-import os
 import uuid
 from contextlib import contextmanager
 
 import pytest
 import sqlalchemy
+from conftest import clickhouse_test_uri
 from sqlalchemy import text
 from test_db_bulk import Author, ByValParent, _stream, _table_stats
 from test_db_bulk_deferred import (
@@ -71,10 +71,7 @@ def _clickhouse_bulk_database(uri):
 
 @pytest.fixture
 def clickhouse_bulk_database():
-    uri = os.environ.get("HTTK_TEST_CLICKHOUSE_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_CLICKHOUSE_URI is not set")
-    with _clickhouse_bulk_database(uri) as database:
+    with _clickhouse_bulk_database(clickhouse_test_uri()) as database:
         yield database
 
 

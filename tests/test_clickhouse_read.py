@@ -1,11 +1,11 @@
 """P4 ClickHouse read-only surface over one bulk-populated fixture."""
 
-import os
 from dataclasses import dataclass
 from fractions import Fraction
 
 import pytest
 import sqlalchemy
+from conftest import clickhouse_test_uri
 from test_clickhouse_bulk import _clickhouse_bulk_database
 from test_db_stored_properties import (
     FIRST,
@@ -46,10 +46,7 @@ READ_ROWS = (
 @pytest.fixture(scope="module")
 def clickhouse_read_store():
     """Build once with ``bulk_ingest``; all tests below are read-only."""
-    uri = os.environ.get("HTTK_TEST_CLICKHOUSE_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_CLICKHOUSE_URI is not set")
-    with _clickhouse_bulk_database(uri) as database:
+    with _clickhouse_bulk_database(clickhouse_test_uri()) as database:
         store = SqlStore(
             database,
             entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},

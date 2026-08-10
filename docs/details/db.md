@@ -189,6 +189,9 @@ a new root.
 
 ### ClickHouse bulk-fenced writes
 
+For local/CI server setup and the required `_httk_bootstrap` KeeperMap DDL,
+see the [ClickHouse testing guide](../clickhouse-testing.md).
+
 ClickHouse uses KeeperMap metadata and the persisted `bulk-fenced` profile.
 Reads do not acquire a lease. A bulk writer acquires a fresh, never-reused
 token with a strict insert, verifies that exact value during the P2 bulk-entry
@@ -205,6 +208,7 @@ value with a ClickHouse client:
 
 ```sql
 SELECT key, value FROM _httk_store_metadata WHERE key = 'lease';
+SET keeper_map_strict_mode = 1;
 DELETE FROM _httk_store_metadata
 WHERE key = 'lease' AND value = '<observed lease JSON>';
 ```
@@ -213,8 +217,16 @@ Never clear `ingest_state` merely because its lease was removed. Its presence
 means the store may contain partial or inconsistent physical state, so the
 default remedy is `DROP DATABASE`, recreate the bootstrap table, and re-ingest.
 Only after a verified cleanup/rebuild has restored the declared empty-store
-invariant may an operator clear the exact observed marker value. Do not delete
-values belonging to a live writer or use broad key-only deletes.
+invariant may an operator clear the exact observed marker value. Use the same
+strict setting:
+
+```sql
+SET keeper_map_strict_mode = 1;
+DELETE FROM _httk_store_metadata
+WHERE key = 'ingest_state' AND value = '<observed marker JSON>';
+```
+
+Do not delete values belonging to a live writer or use broad key-only deletes.
 
 ## Bulk ingestion
 

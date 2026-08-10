@@ -25,6 +25,16 @@ import uuid
 import pytest
 
 
+def clickhouse_test_uri() -> str:
+    """Return the configured ClickHouse URI or skip with the setup pointer."""
+    uri = os.environ.get("HTTK_TEST_CLICKHOUSE_URI")
+    if not uri:
+        pytest.skip(
+            "HTTK_TEST_CLICKHOUSE_URI is not set; run `make clickhouse-dev-server` and see tests/clickhouse/README.md"
+        )
+    return uri
+
+
 # DuckDB's default memory_limit is ~80% of system RAM PER INSTANCE; across
 # parallel pytest workers that multiplies into machine-wide OOM. Divide a fixed
 # suite-wide budget across the xdist workers (each worker process sees the

@@ -106,3 +106,79 @@ jobs:
       - name: Stop MongoDB
         if: always()
         run: docker rm --force httk-mongodb
+
+  test-clickhouse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python-version || '3.12' }}
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            constraints/clickhouse-p5.txt
+
+      - name: Start ClickHouse 26.8 with embedded Keeper
+        run: |
+          docker run --detach --name httk-clickhouse --network host \
+            --memory=7g --memory-swap=7g \
+            --volume "$GITHUB_WORKSPACE/tests/clickhouse/config.d/httk.xml:/etc/clickhouse-server/config.d/httk.xml:ro" \
+            clickhouse/clickhouse-server:26.8.1.1028
+
+      - name: Wait for ClickHouse native, Keeper, and bootstrap readiness
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if docker exec httk-clickhouse clickhouse-client --host 127.0.0.1 --port 29000 \
+                --query 'SELECT 1' >/dev/null 2>&1 && \
+              docker exec httk-clickhouse clickhouse-client --host 127.0.0.1 --port 29000 \
+                --query "SELECT count() FROM system.zookeeper WHERE path = '/'" >/dev/null 2>&1; then
+              if docker exec httk-clickhouse clickhouse-client --host 127.0.0.1 --port 29000 \
+                  --query 'CREATE DATABASE IF NOT EXISTS httk_p5' >/dev/null 2>&1; then
+                ready=true
+                for database in default httk_p5; do
+                  if ! docker exec httk-clickhouse clickhouse-client --host 127.0.0.1 --port 29000 \
+                      --database "$database" --query 'EXISTS TABLE _httk_bootstrap' | grep -q '^1$'; then
+                    docker exec httk-clickhouse clickhouse-client --host 127.0.0.1 --port 29000 \
+                      --database "$database" --query "CREATE TABLE _httk_bootstrap (key String, value String) ENGINE=KeeperMap('/_httk_bootstrap') PRIMARY KEY key" \
+                      >/dev/null 2>&1 || ready=false
+                  fi
+                done
+                if [ "${ready:-false}" = true ]; then exit 0; fi
+              fi
+            fi
+            sleep 1
+          done
+          docker logs httk-clickhouse
+          exit 1
+
+      - name: Export ClickHouse test URI
+        run: echo 'HTTK_TEST_CLICKHOUSE_URI=clickhousedb://default:@127.0.0.1:28123/httk_p5' >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pip install -c constraints/clickhouse-p5.txt -e ".[dev,clickhouse,parallel]"
+
+      - name: Run the default test profile
+        env:
+          HTTK_TEST_MAX_RSS_GB: "9"
+        run: timeout --foreground 900 python -m httk.core.memguard --max-rss-gb "$HTTK_TEST_MAX_RSS_GB" -- python -m pytest tests/ -q
+
+      - name: Run the extended test profile
+        env:
+          HTTK_TEST_PROFILE: extended
+          HTTK_TEST_MAX_RSS_GB: "9"
+        run: timeout --foreground 1200 python -m httk.core.memguard --max-rss-gb "$HTTK_TEST_MAX_RSS_GB" -- python -m pytest tests/ -q -m ""
+
+      - name: Dump ClickHouse logs on failure
+        if: failure()
+        run: |
+          docker logs httk-clickhouse || true
+          docker exec httk-clickhouse sh -c 'for log in /var/log/clickhouse-server/server.log /var/log/clickhouse-server/error.log; do test -f "$log" && { echo "--- $log"; tail -200 "$log"; }; done' || true
+
+      - name: Stop ClickHouse
+        if: always()
+        run: docker rm --force httk-clickhouse

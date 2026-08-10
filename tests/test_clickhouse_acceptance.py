@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 from clickhouse_read_support import clickhouse_database
+from conftest import clickhouse_test_uri
 from test_clickhouse_read import READ_ROWS, ReadRecord
 from test_db_entry_provider import ADA, BOOK_1, BOOK_2, BOOLE, CARA, Book, Writer
 from test_db_paging import ROWS
@@ -30,9 +31,7 @@ LITERAL_LABEL = Label("slash\\quote'_%")
 
 @pytest.fixture(scope="module")
 def clickhouse_corpus():
-    uri = __import__("os").environ.get("HTTK_TEST_CLICKHOUSE_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_CLICKHOUSE_URI is not set")
+    clickhouse_test_uri()
     records = (
         *RECORDS,
         *TAGS,

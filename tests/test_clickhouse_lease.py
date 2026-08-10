@@ -1,12 +1,12 @@
 """P2 ClickHouse KeeperMap lease, marker, and crash-residue coverage."""
 
 import json
-import os
 import threading
 import uuid
 
 import pytest
 import sqlalchemy
+from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
 from httk.data.db import Database, SqlStore
@@ -27,9 +27,7 @@ class _P2InjectedCrash(BaseException):
 
 @pytest.fixture
 def clickhouse_p2_database():
-    uri = os.environ.get("HTTK_TEST_CLICKHOUSE_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_CLICKHOUSE_URI is not set")
+    uri = clickhouse_test_uri()
     source_url = sqlalchemy.engine.make_url(uri)
     database_name = f"httk_p2_lease_{uuid.uuid4().hex}"
     admin = sqlalchemy.create_engine(source_url.set(database="default"))
@@ -102,7 +100,7 @@ def test_clickhouse_lease_is_acquired_on_first_write_and_reads_do_not_touch_it(
     with clickhouse_p2_database.engine.begin() as connection:
         store._ensure_degraded_lease(connection)
     before = _metadata(clickhouse_p2_database)
-    source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+    source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
     fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
     try:
         reopened = SqlStore(fresh_database)
@@ -202,7 +200,7 @@ def test_clickhouse_bulk_boundary_leaves_lease_and_marker_for_crash_recovery(
     try:
         values = _metadata(clickhouse_p2_database)
         assert json.loads(values["lease"])["token"] == json.loads(values["ingest_state"])["token"]
-        source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+        source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
         fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
         try:
             with pytest.raises(StoreUnderConstructionError):
@@ -251,7 +249,7 @@ def test_clickhouse_crash_after_lease_before_marker_keeps_lease_until_dispose(
     values = _metadata(clickhouse_p2_database)
     assert "lease" in values
     assert "ingest_state" not in values
-    source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+    source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
     fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
     try:
         fresh_store = SqlStore(fresh_database)
@@ -294,7 +292,7 @@ def test_clickhouse_marker_residue_rejects_fresh_open_after_marker_write(
     with clickhouse_p2_database.engine.begin() as connection:
         lease = acquire_lease(connection, store._lease_owner)
         marker = write_ingest_marker(connection, lease)
-    source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+    source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
     fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
     try:
         with pytest.raises(StoreUnderConstructionError):
@@ -323,7 +321,7 @@ def test_clickhouse_interrupted_marker_clear_leaves_fail_closed_residue(
         pass
     values = _metadata(clickhouse_p2_database)
     assert "ingest_state" in values
-    source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+    source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
     fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
     try:
         with pytest.raises(StoreUnderConstructionError, match="dropped and re-ingested"):

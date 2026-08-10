@@ -809,7 +809,7 @@ def _manual_lease_recovery(key: str, value: str | None) -> str:
     escaped = value.replace("'", "''")
     return (
         "manual recovery (lease): after verifying the writer is dead, issue "
-        f"DELETE FROM _httk_store_metadata WHERE key = '{key}' AND value = '{escaped}'"
+        f"SET keeper_map_strict_mode = 1; DELETE FROM _httk_store_metadata WHERE key = '{key}' AND value = '{escaped}'"
     )
 
 
@@ -863,6 +863,11 @@ def _strict_insert(
     )
 
 
+def _strict_delete(table: sqlalchemy.Table, *conditions: Any) -> sqlalchemy.Delete:
+    """Build a value-conditioned KeeperMap delete with atomic strict semantics."""
+    return sqlalchemy.delete(table).where(*conditions).execution_options(settings={"keeper_map_strict_mode": 1})
+
+
 def acquire_lease(connection: sqlalchemy.Connection, owner: str) -> str:
     """Strictly acquire the store lease and return its complete JSON value."""
     token = uuid.uuid4().hex
@@ -914,7 +919,7 @@ def release_lease(connection: sqlalchemy.Connection, lease_value: str | None) ->
     if lease_value is None:
         return
     table = _metadata_table()
-    connection.execute(sqlalchemy.delete(table).where(table.c.key == _LEASE_KEY, table.c.value == lease_value))
+    connection.execute(_strict_delete(table, table.c.key == _LEASE_KEY, table.c.value == lease_value))
 
 
 def write_ingest_marker(connection: sqlalchemy.Connection, lease_value: str) -> str:
@@ -957,7 +962,7 @@ def clear_ingest_marker(connection: sqlalchemy.Connection, marker_value: str | N
     if marker_value is None:
         return
     table = _metadata_table()
-    connection.execute(sqlalchemy.delete(table).where(table.c.key == _INGEST_STATE_KEY, table.c.value == marker_value))
+    connection.execute(_strict_delete(table, table.c.key == _INGEST_STATE_KEY, table.c.value == marker_value))
 
 
 def _expected_bootstrap_engine() -> str:
@@ -1023,20 +1028,18 @@ def bootstrap_fence(connection: sqlalchemy.Connection) -> Iterator[tuple[str, st
         cleanup_error: BaseException | None = None
         if held == token:
             try:
-                connection.execute(
-                    sqlalchemy.delete(bootstrap).where(bootstrap.c.key == key, bootstrap.c.value == token)
-                )
+                connection.execute(_strict_delete(bootstrap, bootstrap.c.key == key, bootstrap.c.value == token))
             except BaseException as cleanup:
                 cleanup_error = cleanup
         if held == token:
             recovery = (
                 "the fresh token landed despite the failed INSERT; exact-value cleanup was attempted; "
-                f"manual recovery is DELETE FROM _httk_bootstrap WHERE key = '{key}' AND value = '{token}'"
+                f"manual recovery is SET keeper_map_strict_mode = 1; DELETE FROM _httk_bootstrap WHERE key = '{key}' AND value = '{token}'"
             )
         elif held is not None:
             recovery = (
                 f"manual recovery: after verifying the writer is dead, "
-                f"DELETE FROM _httk_bootstrap WHERE key = '{key}' AND value = '{held}'"
+                f"SET keeper_map_strict_mode = 1; DELETE FROM _httk_bootstrap WHERE key = '{key}' AND value = '{held}'"
             )
         else:
             recovery = "manual recovery: inspect _httk_bootstrap for a stale UUID-keyed row"
@@ -1053,7 +1056,7 @@ def bootstrap_fence(connection: sqlalchemy.Connection) -> Iterator[tuple[str, st
         yield key, token
     finally:
         try:
-            connection.execute(sqlalchemy.delete(bootstrap).where(bootstrap.c.key == key, bootstrap.c.value == token))
+            connection.execute(_strict_delete(bootstrap, bootstrap.c.key == key, bootstrap.c.value == token))
         except BaseException as error:
             raise RuntimeError(
                 f"ClickHouse Keeper bootstrap lock could not be released; {_BOOTSTRAP_LOCK_MESSAGE}; "

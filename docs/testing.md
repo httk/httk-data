@@ -11,6 +11,12 @@ the `python -m httk.core.memguard` process-group guard supplied by
 *httk-core*; `HTTK_TEST_MAX_RSS_GB` can override its limit when diagnosing a
 failure.
 
+ClickHouse is an opt-in test arm.  The exact server/client memory arithmetic,
+the 7 GiB server allowance, the 4.5 GB allocator cap, setup, required
+KeeperMap bootstrap DDL, and recovery procedures are in the [ClickHouse
+testing guide](clickhouse-testing.md).  Start it with `make
+clickhouse-dev-server` and stop it with `make clickhouse-stop`.
+
 Performance investigations are separate from correctness testing. `make
 benchmarks` runs the opt-in harnesses in `benchmarks/`; benchmark code is not
 collected by pytest and is never invoked by `test`, `check`, or `ci`.

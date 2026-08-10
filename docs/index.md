@@ -64,6 +64,7 @@ mongo
 federation
 migrating_from_v1
 testing
+clickhouse-testing
 reference/index
 examples/index
 notebooks/examples

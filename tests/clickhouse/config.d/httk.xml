@@ -1,0 +1,45 @@
+<clickhouse>
+    <!--
+        Deployment values for the httk ClickHouse arm.
+
+        These are packaged-server filesystem defaults.  The local Makefile
+        helper rewrites them into its ignored .clickhouse-dev tree; containers
+        may keep the /var/lib and /var/log paths.  The actual process RSS guard
+        is 7 GiB; max_server_memory_usage is the 4.5 GB ClickHouse allocator
+        cap and is not a substitute for that guard.
+    -->
+    <path replace="replace">/var/lib/clickhouse/</path>
+    <tmp_path replace="replace">/var/lib/clickhouse/tmp/</tmp_path>
+    <user_files_path replace="replace">/var/lib/clickhouse/user_files/</user_files_path>
+    <listen_host replace="replace">127.0.0.1</listen_host>
+    <tcp_port replace="replace">29000</tcp_port>
+    <http_port replace="replace">28123</http_port>
+    <max_server_memory_usage replace="replace">4500000000</max_server_memory_usage>
+    <mark_cache_size replace="replace">268435456</mark_cache_size>
+    <uncompressed_cache_size replace="replace">134217728</uncompressed_cache_size>
+    <logger replace="replace">
+        <level>warning</level>
+        <log>/var/log/clickhouse-server/server.log</log>
+        <errorlog>/var/log/clickhouse-server/error.log</errorlog>
+    </logger>
+    <keeper_server replace="replace">
+        <tcp_port>29181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse/keeper/log/</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/keeper/snapshots/</snapshot_storage_path>
+        <raft_configuration>
+            <server>
+                <id>1</id>
+                <hostname>127.0.0.1</hostname>
+                <port>29234</port>
+            </server>
+        </raft_configuration>
+    </keeper_server>
+    <zookeeper replace="replace">
+        <node>
+            <host>127.0.0.1</host>
+            <port>29181</port>
+        </node>
+    </zookeeper>
+    <keeper_map_path_prefix replace="replace">/httk</keeper_map_path_prefix>
+</clickhouse>

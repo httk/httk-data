@@ -1,6 +1,5 @@
 """P1 ClickHouse engine, layout, DDL, and mutation-policy coverage."""
 
-import os
 import threading
 import uuid
 from contextlib import contextmanager
@@ -8,9 +7,11 @@ from dataclasses import dataclass
 
 import pytest
 import sqlalchemy
+from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
 from httk.data.db import Database, SqlStore
+from httk.data.db import clickhouse as clickhouse_adapter
 from httk.data.db.clickhouse import (
     actual_columns,
     bootstrap_fence,
@@ -26,6 +27,24 @@ from httk.data.db.schema import resolve_schema
 from httk.data.db.store import StorageLayoutUpgradeRequiredError
 
 
+class _RecordingConnection:
+    def __init__(self) -> None:
+        self.statements = []
+
+    def execute(self, statement):
+        self.statements.append(statement)
+
+
+def test_clickhouse_value_conditioned_deletes_use_keeper_strict_mode() -> None:
+    connection = _RecordingConnection()
+    clickhouse_adapter.release_lease(connection, "lease-token")
+    clickhouse_adapter.clear_ingest_marker(connection, "marker-token")
+
+    assert len(connection.statements) == 2
+    for statement in connection.statements:
+        assert statement.get_execution_options()["settings"] == {"keeper_map_strict_mode": 1}
+
+
 @dataclass(frozen=True)
 class ClickHouseProbe:
     integer: int
@@ -38,10 +57,7 @@ class ClickHouseProbe:
 
 @pytest.fixture
 def clickhouse_database():
-    uri = os.environ.get("HTTK_TEST_CLICKHOUSE_URI")
-    if not uri:
-        pytest.skip("HTTK_TEST_CLICKHOUSE_URI is not set")
-    source_url = sqlalchemy.engine.make_url(uri)
+    source_url = sqlalchemy.engine.make_url(clickhouse_test_uri())
     database_name = f"httk_p1_{uuid.uuid4().hex}"
     admin = sqlalchemy.create_engine(source_url.set(database="default"))
     with admin.begin() as connection:
@@ -437,17 +453,29 @@ def test_clickhouse_stale_release_cannot_delete_replacement_token(clickhouse_dat
             .values(key=key, value="old-token")
             .execution_options(settings={"keeper_map_strict_mode": 1})
         )
-        connection.execute(sqlalchemy.delete(bootstrap).where(bootstrap.c.key == key, bootstrap.c.value == "old-token"))
+        connection.execute(
+            sqlalchemy.delete(bootstrap)
+            .where(bootstrap.c.key == key, bootstrap.c.value == "old-token")
+            .execution_options(settings={"keeper_map_strict_mode": 1})
+        )
         connection.execute(
             sqlalchemy.insert(bootstrap)
             .values(key=key, value="new-token")
             .execution_options(settings={"keeper_map_strict_mode": 1})
         )
-        connection.execute(sqlalchemy.delete(bootstrap).where(bootstrap.c.key == key, bootstrap.c.value == "old-token"))
+        connection.execute(
+            sqlalchemy.delete(bootstrap)
+            .where(bootstrap.c.key == key, bootstrap.c.value == "old-token")
+            .execution_options(settings={"keeper_map_strict_mode": 1})
+        )
         assert connection.execute(
             text("SELECT value FROM _httk_bootstrap WHERE key = :key"), {"key": key}
         ).scalar_one() == ("new-token")
-        connection.execute(sqlalchemy.delete(bootstrap).where(bootstrap.c.key == key, bootstrap.c.value == "new-token"))
+        connection.execute(
+            sqlalchemy.delete(bootstrap)
+            .where(bootstrap.c.key == key, bootstrap.c.value == "new-token")
+            .execution_options(settings={"keeper_map_strict_mode": 1})
+        )
 
 
 def test_clickhouse_bootstrap_contention_and_exact_release(clickhouse_database: Database) -> None:
@@ -489,9 +517,9 @@ def test_clickhouse_stale_bootstrap_residue_has_manual_recovery(clickhouse_datab
     finally:
         with clickhouse_database.engine.begin() as connection:
             connection.execute(
-                sqlalchemy.delete(bootstrap).where(
-                    bootstrap.c.key == database_uuid, bootstrap.c.value == "hard-crash-token"
-                )
+                sqlalchemy.delete(bootstrap)
+                .where(bootstrap.c.key == database_uuid, bootstrap.c.value == "hard-crash-token")
+                .execution_options(settings={"keeper_map_strict_mode": 1})
             )
 
 
