@@ -1,0 +1,122 @@
+httk.store.db.bulk_parallel
+===========================
+
+.. py:module:: httk.store.db.bulk_parallel
+
+.. autoapi-nested-parse::
+
+   Parallel encode + shard-merge backend for :class:`~httk.store.db.bulk.BulkIngest`.
+
+   This module implements the ``workers > 1`` mode of
+   :meth:`~httk.store.db.store.SqlStore.bulk_ingest`. The serial ``workers = 1``
+   path in :mod:`httk.store.db.bulk` is untouched; :class:`~httk.store.db.bulk.BulkIngest`
+   delegates to the helpers here only when more than one worker is requested.
+
+   The design has three moving parts:
+
+   - **Workers** (``_worker_main``): forked processes that run the *pure* encoders
+     (``_encode_parent_row`` / ``_encode_child_rows`` from
+     :mod:`httk.store.db.store`) with a per-worker
+     :class:`~httk.store.store_common.SaveProjection`. Each worker owns a disjoint
+     sid block (``(worker_index + 1) << 26``) so its rows never collide with
+     another worker's before the merge. A worker deduplicates *content-addressed
+     records that carry no identity-excluded metadata* and *all by_value records*
+     within its own stream (bounding shard size); records that carry a metadata
+     plan are emitted per occurrence so the merge can verify every collision.
+     Workers never touch the database — they only write shard files.
+
+   - **Shards** (``_ParquetShardWriter``, ``_SqliteShardWriter``): per-worker,
+     per-table row files. DuckDB stores each flush as a pyarrow Parquet file
+     (``pyarrow`` imported lazily; its absence raises the documented ``parallel``
+     extra hint); SQLite stores one shard database per worker written with native
+     ``executemany``. Shards live in a ``tempfile.TemporaryDirectory`` next to the
+     target database file when it is file-backed, else the tempfile default, and
+     are always removed.
+
+   - **Merge** (:func:`merge`): the main process, inside the ingest's spanning
+     transaction, loads every shard into the freshly created (index-less) record
+     tables under the workers' block sids, then collapses cross-worker duplicates
+     set-wise (content-id and by_value) in foreign-key dependency order. Because
+     referenced tables collapse before their referrers, two rows sharing a content
+     id then differ only in their identity-excluded (``IdentitySkip``) columns, so
+     each collision's metadata is verified with a single grouped scan per table
+     rather than by reconstructing every duplicate record (the dominant cost at
+     real-build scale); nested and ``descend`` conflicts surface at the target
+     table where the skip metadata lives. The merge then sweeps rows orphaned by a
+     collapsed duplicate's subtree and remaps the surviving block sids to a compact
+     ``1..N`` range, rewriting every foreign-key column through the same map.
+
+   ``workers > 1`` targets the offline *build* of a store: it requires a
+   physically empty target (no application table already holds rows). Incremental
+   appends into a populated store remain the serial path's domain, where the
+   per-record staging protocol and its metadata verification already live.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.bulk_parallel.ParallelController
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.db.bulk_parallel.merge
+
+
+Module Contents
+---------------
+
+.. py:class:: ParallelController(store, *, workers, chunk_size, backend, track_sids = True, spill_deferred_auxiliary = False)
+
+   Own the worker pool, task dispatch, and shard directory for one parallel ingest.
+
+   Each worker has its own task queue; ``dispatch`` routes token ``k`` to worker
+   ``k % workers`` (deterministic round-robin), so the record order the caller
+   saves fully determines which worker encodes each record. A shared result
+   queue carries each worker's manifest (or exception) back.
+
+
+   .. py:method:: start()
+
+
+   .. py:method:: dispatch(token, obj, as_record)
+
+      Pickle the task synchronously and enqueue it on its worker (routed by token).
+
+
+
+   .. py:method:: finish()
+
+      Signal completion, collect every worker's manifest, and re-raise the first error.
+
+      A worker that exits without reporting (a crash or an external kill) is
+      detected by its exit code and aborts the ingest, so a lost task can never
+      reach the merge. Both the stop-sentinel sends and the result waits are
+      bounded and interleaved with health checks, so a worker that dies with a
+      full queue cannot deadlock the main process.
+
+
+
+   .. py:method:: close()
+
+      Terminate any live workers and remove the shard directory (idempotent).
+
+
+
+.. py:function:: merge(ingest, manifests)
+
+   Load every worker shard, collapse cross-worker duplicates, and compact the sids.
+
+   Runs in the main process inside the ingest's spanning transaction.
+
+   :param ingest: The owning bulk-ingest context (its connection and store).
+   :param manifests: One manifest per finished worker.
+   :return: None.
+
+

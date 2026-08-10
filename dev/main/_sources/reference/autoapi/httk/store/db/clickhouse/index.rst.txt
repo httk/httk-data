@@ -1,0 +1,183 @@
+httk.store.db.clickhouse
+========================
+
+.. py:module:: httk.store.db.clickhouse
+
+.. autoapi-nested-parse::
+
+   ClickHouse-specific SQLAlchemy decoration and KeeperMap primitives.
+
+   The rest of :mod:`httk.store.db` deliberately deals in generic SQLAlchemy
+   objects.  This module is the adapter boundary for ClickHouse's physical types,
+   MergeTree sorting keys, system catalogue, and KeeperMap metadata protocol.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.db.clickhouse.ClickHouseUnsupportedQueryError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.db.clickhouse.null_safe_difference
+   httk.store.db.clickhouse.null_order_rank
+   httk.store.db.clickhouse.load_parquet_stages
+   httk.store.db.clickhouse.swap_finalizer_map
+   httk.store.db.clickhouse.validate_bulk_tables
+   httk.store.db.clickhouse.verify_bulk_integrity
+   httk.store.db.clickhouse.keeper_metadata_path
+   httk.store.db.clickhouse.keeper_database_uuid
+   httk.store.db.clickhouse.decorate_table
+   httk.store.db.clickhouse.verify_clickhouse_connection
+   httk.store.db.clickhouse.install_connection_guards
+   httk.store.db.clickhouse.acquire_lease
+   httk.store.db.clickhouse.verify_lease
+   httk.store.db.clickhouse.release_lease
+   httk.store.db.clickhouse.write_ingest_marker
+   httk.store.db.clickhouse.clear_ingest_marker
+   httk.store.db.clickhouse.ensure_bootstrap_table
+   httk.store.db.clickhouse.bootstrap_fence
+   httk.store.db.clickhouse.stamp_store_metadata
+   httk.store.db.clickhouse.validate_metadata_table
+   httk.store.db.clickhouse.actual_schema_objects
+   httk.store.db.clickhouse.actual_columns
+
+
+Module Contents
+---------------
+
+.. py:exception:: ClickHouseUnsupportedQueryError
+
+   Bases: :py:obj:`httk.store.query.UnsupportedQueryError`
+
+
+   A ClickHouse query is outside the shipped correlated-query profile.
+
+
+.. py:function:: null_safe_difference(left, right)
+
+   The ClickHouse S9 comparator (true precisely when values differ).
+
+
+.. py:function:: null_order_rank(column, nulls, *, dialect_name)
+
+   Return a deterministic NULL/NaN rank for one result-order expression.
+
+
+.. py:function:: load_parquet_stages(store, manifests)
+
+   Create and stream every Parquet shard into local ClickHouse stage tables.
+
+   Every shard is verified by its before/after row count.  This makes a
+   transport retry or a response lost after send observable before the next
+   shard is admitted.
+
+
+.. py:function:: swap_finalizer_map(finalizer, table, candidate)
+
+   Atomically replace a finalizer map and update its bookkeeping.
+
+   ClickHouse has no transactional UPDATE protocol for this use.  The
+   candidate is checked for the same stage key cardinality, renamed over the
+   old name in one RENAME statement, and the retired relation is dropped.
+   Keeping the public map name stable means every already-constructed query
+   continues to address the current map.
+
+
+.. py:function:: validate_bulk_tables(connection, tables)
+
+   Validate ClickHouse's non-enforcing physical and logical constraints.
+
+
+.. py:function:: verify_bulk_integrity(connection, tables)
+
+   Run the SQLAlchemy-metadata-derived logical constraints ClickHouse cannot enforce.
+
+
+.. py:function:: keeper_metadata_path(database_uuid)
+
+   Return the KeeperMap path scoped by the ClickHouse database UUID.
+
+
+.. py:function:: keeper_database_uuid(connection)
+
+   Return the stable UUID assigned to the current ClickHouse database.
+
+
+.. py:function:: decorate_table(table, *, database = 'default', database_uuid = None)
+
+   Return a decorated private clone; the source table is never modified.
+
+
+.. py:function:: verify_clickhouse_connection(connection)
+
+   Verify version and the NULL-producing outer-join setting on one connection.
+
+
+.. py:function:: install_connection_guards(engine)
+
+   Install pool checkout verification and return the first server version.
+
+
+.. py:function:: acquire_lease(connection, owner)
+
+   Strictly acquire the store lease and return its complete JSON value.
+
+
+.. py:function:: verify_lease(connection, lease_value)
+
+   Verify that the current KeeperMap lease still contains ``lease_value``.
+
+
+.. py:function:: release_lease(connection, lease_value)
+
+   Idempotently delete only the exact lease value owned by this writer.
+
+
+.. py:function:: write_ingest_marker(connection, lease_value)
+
+   Strictly insert the token-carrying bulk-ingest marker.
+
+
+.. py:function:: clear_ingest_marker(connection, marker_value)
+
+   Idempotently clear only the exact marker value from this ingest.
+
+
+.. py:function:: ensure_bootstrap_table(engine)
+
+   Require and validate the deployment-created KeeperMap bootstrap table.
+
+
+.. py:function:: bootstrap_fence(connection)
+
+   Hold the strict UUID-keyed bootstrap fence across one complete operation.
+
+
+.. py:function:: stamp_store_metadata(connection, metadata_table, rows, *, fence_held = False)
+
+   Strictly stamp metadata, acquiring the bootstrap fence unless already held.
+
+
+.. py:function:: validate_metadata_table(connection)
+
+   Validate the physical KeeperMap metadata table before any metadata read.
+
+
+.. py:function:: actual_schema_objects(connection)
+
+   Read the current database's application objects from ClickHouse's catalogue.
+
+
+.. py:function:: actual_columns(connection, table_name)
+
+   Return a ClickHouse system.columns name/type mapping for one table.
+
+

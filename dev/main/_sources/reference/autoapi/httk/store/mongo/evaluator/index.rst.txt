@@ -1,0 +1,159 @@
+httk.store.mongo.evaluator
+==========================
+
+.. py:module:: httk.store.mongo.evaluator
+
+.. autoapi-nested-parse::
+
+   Exact three-valued evaluation for Mongo stored-property predicates.
+
+   The Mongo query path deliberately evaluates this small, frozen AST over
+   hydrated records.  That is important for child records: document storage keeps
+   their content-addressed SID links, while ``MongoStore.fetch`` gives the
+   evaluator their exact Python values.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.evaluator.MongoScope
+   httk.store.mongo.evaluator.MongoValue
+   httk.store.mongo.evaluator.MongoPredicate
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.evaluator.evaluate
+   httk.store.mongo.evaluator.canonical_predicate
+
+
+Module Contents
+---------------
+
+.. py:class:: MongoScope
+
+   A root, child, reference, or filtered record-object scope.
+
+
+   .. py:attribute:: identifier
+      :type:  int
+
+
+   .. py:attribute:: schema
+      :type:  httk.store.db.schema.TableSchema
+
+
+   .. py:attribute:: parent
+      :type:  MongoScope | None
+      :value: None
+
+
+
+   .. py:attribute:: relationship
+      :type:  httk.store.db.schema.FieldSpec | None
+      :value: None
+
+
+
+   .. py:attribute:: filter_predicate
+      :type:  MongoPredicate | None
+      :value: None
+
+
+
+   .. py:attribute:: scalar_child
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: context
+      :type:  Any
+      :value: None
+
+
+
+   .. py:method:: field(name)
+
+      Select a scalar field from this scope.
+
+
+
+   .. py:method:: scope(name)
+
+      Follow one child or reference relationship from this scope.
+
+
+
+.. py:class:: MongoValue
+
+   A field, aggregate, null, or literal value in the neutral AST.
+
+
+   .. py:attribute:: kind
+      :type:  Literal['field', 'present', 'constant', 'null', 'count', 'distinct_count']
+
+
+   .. py:attribute:: scope
+      :type:  MongoScope | None
+      :value: None
+
+
+
+   .. py:attribute:: field
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: spec
+      :type:  httk.store.db.schema.FieldSpec | None
+      :value: None
+
+
+
+   .. py:attribute:: literal
+      :type:  object
+
+
+   .. py:attribute:: value
+      :type:  MongoValue | None
+      :value: None
+
+
+
+.. py:class:: MongoPredicate
+
+   A frozen three-valued predicate in the neutral stored-property AST.
+
+
+   .. py:attribute:: kind
+      :type:  Literal['constant', 'compare', 'is_null', 'exists', 'and', 'or', 'not', 'when_known', 'scaled']
+
+
+   .. py:attribute:: operands
+      :type:  tuple[object, Ellipsis]
+      :value: ()
+
+
+
+.. py:function:: evaluate(predicate, record)
+
+   Evaluate ``predicate`` exactly over a hydrated backing object.
+
+   :param predicate: Frozen predicate produced by ``_MongoQueryContext``.
+   :param record: Hydrated backing record for the candidate SID.
+   :return: ``True``, ``False``, or ``None`` for SQL UNKNOWN.
+
+
+.. py:function:: canonical_predicate(predicate)
+
+   Return canonical JSON used as the verifier identity and cursor input.
+
+

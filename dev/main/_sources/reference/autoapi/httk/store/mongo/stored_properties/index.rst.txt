@@ -1,0 +1,96 @@
+httk.store.mongo.stored_properties
+==================================
+
+.. py:module:: httk.store.mongo.stored_properties
+
+.. autoapi-nested-parse::
+
+   Stored-property plans and exact query contexts for MongoDB.
+
+   The context builds the frozen neutral AST in :mod:`httk.store.mongo.evaluator`.
+   MongoDB supplies a conservative candidate stream and the existing verified
+   iterator evaluates that AST over hydrated backing records.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.mongo.stored_properties.MongoStoredPropertyConfigurationError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.stored_properties.MongoStoredPropertyCandidateStream
+   httk.store.mongo.stored_properties.MongoStoredPropertyPlan
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.stored_properties.stored_property_mongo_plan
+
+
+Module Contents
+---------------
+
+.. py:exception:: MongoStoredPropertyConfigurationError
+
+   Bases: :py:obj:`ValueError`
+
+
+   A Mongo entry family cannot realize its stored-property declaration.
+
+
+.. py:class:: MongoStoredPropertyCandidateStream
+
+   An ID-only Mongo candidate stream for a configured concrete backing.
+
+
+   .. py:attribute:: backing
+      :type:  type
+
+
+   .. py:attribute:: backing_name
+      :type:  str
+
+
+   .. py:attribute:: searcher
+      :type:  Any
+
+
+   .. py:attribute:: sort_count
+      :type:  int
+
+
+.. py:class:: MongoStoredPropertyPlan(store, family, layout, entry_type, definition, backings)
+
+   Stored-property responses and verified Mongo candidate plans for one family.
+
+
+   .. py:property:: backings
+      :type: tuple[type, Ellipsis]
+
+
+
+   .. py:method:: records()
+
+
+   .. py:method:: filter_searchers(filter_string, *, sort = (), public_id_prefix = '')
+
+
+   .. py:method:: candidate_searchers(filter_string = None, *, sort = (), public_id_prefix = '')
+
+
+   .. py:method:: response_row(backing, record, *, public_id = None)
+
+
+.. py:function:: stored_property_mongo_plan(store, family)
+

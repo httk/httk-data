@@ -1,0 +1,186 @@
+httk.store.mongo.leases
+=======================
+
+.. py:module:: httk.store.mongo.leases
+
+.. autoapi-nested-parse::
+
+   Cross-process writer and fsck leases for :mod:`httk.store.mongo`.
+
+   The lease protocol deliberately uses MongoDB's server clock.  A writer first
+   inserts itself and only then looks for the fsck singleton; fsck does the
+   opposite half of that handshake by installing the singleton before draining
+   fresh writers.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.mongo.leases.StoreLockedError
+   httk.store.mongo.leases.LeaseLostError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.leases.LeaseTiming
+   httk.store.mongo.leases.Lease
+   httk.store.mongo.leases.WriterLease
+   httk.store.mongo.leases.FsckLease
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.leases.acquire_writer
+   httk.store.mongo.leases.acquire_fsck
+   httk.store.mongo.leases.clear_stale_lock
+
+
+Module Contents
+---------------
+
+.. py:exception:: StoreLockedError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   An fsck lease or a live writer prevents the requested operation.
+
+
+.. py:exception:: LeaseLostError
+
+   Bases: :py:obj:`StoreLockedError`
+
+
+   A lease owner tried to refresh after its lease was displaced.
+
+
+.. py:class:: LeaseTiming
+
+   Server-clock lease timings.
+
+   :param refresh_interval: Maximum normal interval between heartbeats.
+   :param stale_multiplier: Number of refresh intervals before a writer is stale.
+   :param poll_initial: Initial fsck writer-drain sleep.
+   :param poll_max: Maximum fsck writer-drain sleep.
+
+
+   .. py:attribute:: refresh_interval
+      :type:  float
+      :value: 2.0
+
+
+
+   .. py:attribute:: stale_multiplier
+      :type:  int
+      :value: 4
+
+
+
+   .. py:attribute:: poll_initial
+      :type:  float
+      :value: 0.02
+
+
+
+   .. py:attribute:: poll_max
+      :type:  float
+      :value: 0.25
+
+
+
+   .. py:property:: stale_after
+      :type: float
+
+
+      Return the age after which a writer heartbeat is stale.
+
+
+.. py:class:: Lease
+
+   Shared lease state and heartbeat operations for writer and fsck leases.
+
+
+   .. py:attribute:: database
+      :type:  Any
+
+
+   .. py:attribute:: identifier
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: timing
+      :type:  LeaseTiming
+
+
+   .. py:method:: refresh_heartbeat(*, force = False)
+
+      Refresh this lease using MongoDB's ``$$NOW`` server timestamp.
+
+
+
+   .. py:method:: release()
+
+      Remove this process's lease document.
+
+
+
+.. py:class:: WriterLease
+
+   Bases: :py:obj:`Lease`
+
+
+   A writer registration plus the generation seen during acquisition.
+
+
+   .. py:attribute:: generation
+      :type:  int
+      :value: 0
+
+
+
+.. py:class:: FsckLease
+
+   Bases: :py:obj:`Lease`
+
+
+   The singleton fsck exclusion lease.
+
+
+.. py:function:: acquire_writer(database, *, timing = DEFAULT_TIMING)
+
+   Insert a writer lease, then check fsck and observe the layout generation.
+
+   The ordering is the writer half of the insert-then-check handshake.  A
+   stale fsck lease intentionally still blocks writers: clearing it is an
+   explicit administrative assertion that its owner is dead.
+
+
+.. py:function:: acquire_fsck(database, *, force = False, timing = DEFAULT_TIMING)
+
+   Install the fsck singleton and drain fresh writer registrations.
+
+   ``force`` may replace a pre-existing fsck lease and may proceed past stale
+   writer residue.  It is an administrative assertion that those owners are
+   dead; using it against a still-running owner can corrupt the store.
+
+
+.. py:function:: clear_stale_lock(database, *, timing = DEFAULT_TIMING)
+
+   Clear a stale fsck lock after an administrator verified its owner died.
+
+   This has no fencing: clearing a merely slow fsck can corrupt the store.
+
+

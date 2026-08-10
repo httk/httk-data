@@ -1,0 +1,163 @@
+httk.store.db.engine
+====================
+
+.. py:module:: httk.store.db.engine
+
+.. autoapi-nested-parse::
+
+   Database engine lifecycle: :class:`Database` wraps a SQLAlchemy engine behind an httk-facing API.
+
+   A :class:`Database` names *where* data lives — an SQLite file, an in-memory
+   SQLite database, a DuckDB file — and owns the connection pool that reaches it.
+   It deliberately exposes no SQL surface of its own: the store layer
+   (:class:`~httk.store.db.store.SqlStore`) asks it for connections internally, and
+   user code only constructs one (usually via :meth:`Database.sqlite` or
+   :meth:`Database.duckdb`) and passes it on. There is no global engine registry
+   and no interpreter-exit hook; dispose of a database explicitly with
+   :meth:`Database.dispose` or use it as a context manager.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.engine.Database
+
+
+Module Contents
+---------------
+
+.. py:class:: Database(engine, *, degraded = False, write_profile = None)
+
+   A relational database reachable through a wrapped SQLAlchemy engine.
+
+   Construct one with :meth:`sqlite`, :meth:`duckdb`, or :meth:`clickhouse` (or,
+   for other SQLAlchemy-supported backends, by passing a preconfigured engine
+   directly). The instance is a context manager; leaving the ``with`` block
+   disposes the engine's connection pool.
+
+   :param engine: The configured SQLAlchemy engine to wrap.
+   :param degraded: Open with autocommit isolation for degraded-mode access
+       (recovery and inspection) instead of the default transactional isolation.
+
+
+   .. py:method:: sqlite(path = None, *, degraded = False)
+      :classmethod:
+
+
+      Create an SQLite database stored in ``path``, or in memory when ``path`` is None.
+
+      The in-memory variant is configured (via a static connection pool with a
+      shared, thread-unrestricted connection) so that every connection drawn
+      from the engine sees the one and same database; file-backed databases
+      use SQLAlchemy's default pooling.
+
+      :param path: The database file path, or ``None`` for an in-memory database.
+      :param degraded: Open with autocommit isolation for degraded-mode access
+          (recovery and inspection) instead of the default transactional isolation.
+      :return: The configured database wrapper.
+
+
+
+   .. py:method:: duckdb(path = None, *, memory_limit = None)
+      :classmethod:
+
+
+      Create a DuckDB database stored in ``path``, or in memory when ``path`` is None.
+
+      :param path: The database file path, or ``None`` for an in-memory database.
+      :param memory_limit: An optional DuckDB ``memory_limit`` setting such as
+          ``"1GB"``. DuckDB's own default allows every instance up to about 80%
+          of system RAM, which multiplies dangerously across parallel test or
+          ingest processes; when this parameter is ``None`` the
+          ``HTTK_DUCKDB_MEMORY_LIMIT`` environment variable (if set) supplies
+          the cap instead, so process trees can be memory-guarded wholesale.
+      :return: The configured database wrapper.
+      :raises ImportError: If the ``duckdb_engine`` SQLAlchemy dialect is not installed;
+          install the ``httk-store[duckdb]`` extra to use it.
+
+
+
+   .. py:method:: clickhouse(url, *, database = None)
+      :classmethod:
+
+
+      Create a ClickHouse database from a ``clickhousedb://`` URL.
+
+      The URL uses the SQLAlchemy ``clickhouse-connect`` dialect, for example
+      ``clickhousedb://default:@host:8123/my_database``.  ``database``
+      replaces the URL path when supplied.  The constructor always merges
+      ``join_use_nulls=1`` into the URL query and selects the ``bulk-fenced``
+      storage profile before any :class:`~httk.store.db.store.SqlStore`
+      initialization occurs.
+
+      :raises ImportError: If ``clickhouse-connect`` is not installed; install
+          the ``httk-store[clickhouse]`` extra.
+      :raises RuntimeError: If Keeper is unavailable, the server is too old,
+          or ``join_use_nulls`` cannot be enforced.
+
+
+
+   .. py:property:: degraded
+      :type: bool
+
+
+      Whether this wrapper deliberately uses the SQLite autocommit vehicle.
+
+
+   .. py:property:: write_profile
+      :type: Literal['transactional', 'degraded', 'bulk-fenced']
+
+
+      Return the profile selected before store initialization.
+
+
+   .. py:property:: server_version
+      :type: str | None
+
+
+      Return the server version captured at the first ClickHouse connection.
+
+
+   .. py:property:: lifecycle_generation
+      :type: int
+
+
+      Return the active lifecycle generation for guarded storage callbacks.
+
+
+   .. py:method:: add_dispose_callback(callback, *, generation = None)
+
+      Register a best-effort callback for the active lifecycle generation.
+
+      A disposed wrapper deliberately rejects late registration: accepting a
+      callback after :meth:`dispose` snapshots its callback list can strand a
+      store-owned lease on a newly recreated pool.
+
+
+
+   .. py:method:: lifecycle_guard(generation, *, holder = None)
+
+      Prevent disposal while one named store mutation uses ``generation``.
+
+
+
+   .. py:property:: engine
+      :type: sqlalchemy.Engine
+
+
+      Return the underlying SQLAlchemy engine for the storage layer.
+
+      :return: The wrapped SQLAlchemy engine.
+
+
+   .. py:method:: dispose()
+
+      Dispose the current connection pool; later use creates a new pool.
+
+      :return: None.
+
+
+

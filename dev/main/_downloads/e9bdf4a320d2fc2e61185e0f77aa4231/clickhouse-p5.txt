@@ -1,0 +1,13 @@
+# G0-probed ClickHouse client stack.  Keep this file exact for CI; the
+# pyproject.toml extra remains a flexible developer range.
+clickhouse-connect==1.6.0
+SQLAlchemy==2.0.48
+pyarrow==25.0.0
+
+# Transitive versions captured by the G0 probe environment.
+backports.zstd==1.6.0
+certifi==2026.2.25
+greenlet==3.3.2
+lz4==4.4.5
+typing_extensions==4.15.0
+urllib3==2.6.3

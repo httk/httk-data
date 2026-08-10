@@ -1,0 +1,145 @@
+httk.store.db.graph
+===================
+
+.. py:module:: httk.store.db.graph
+
+.. autoapi-nested-parse::
+
+   Logical storage edges derived from the resolved schema declarations.
+
+   The SQL schema deliberately has more than one relationship shape.  Keeping
+   those relationships here makes the bulk algorithms independent of whether a
+   backend happens to expose physical foreign-key constraints.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.store.db.graph.EdgeKind
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.graph.LogicalEdge
+   httk.store.db.graph.LogicalEdgeGraph
+
+
+Module Contents
+---------------
+
+.. py:data:: EdgeKind
+
+.. py:class:: LogicalEdge
+
+   One typed relationship in the logical storage graph.
+
+   ``source_table`` and ``target_table`` describe the traversal direction.
+   ``source_column`` is the forward sid column for reference, child-element,
+   and dispatch edges.  Ownership is traversed from parent to child, so its
+   parent sid column is carried as ``target_column`` on the child table.
+
+
+   .. py:attribute:: kind
+      :type:  EdgeKind
+
+
+   .. py:attribute:: source_table
+      :type:  str
+
+
+   .. py:attribute:: target_table
+      :type:  str
+
+
+   .. py:attribute:: source_column
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: target_column
+      :type:  str | None
+      :value: None
+
+
+
+.. py:class:: LogicalEdgeGraph
+
+   Deterministic typed edges for a set of resolved table declarations.
+
+
+   .. py:attribute:: edges
+      :type:  tuple[LogicalEdge, Ellipsis]
+
+
+   .. py:attribute:: tables
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:method:: from_schemas(schemas, dispatches = ())
+      :classmethod:
+
+
+      Build edges from parent schemas, recursively including their targets.
+
+
+
+   .. py:method:: from_store(store, schemas)
+      :classmethod:
+
+
+      Build a graph using the store's configured entry-family dispatches.
+
+
+
+   .. py:method:: sid_columns()
+
+      Return ``table -> (sid_column, referenced_table)`` mappings.
+
+      This is the compatibility view used by remapping and reachability
+      code; it includes the parent column of ownership edges as well as the
+      forward columns of the other edge kinds.
+
+
+
+   .. py:method:: referrers(target_table)
+
+      Return all ``(referrer_table, sid_column)`` pairs for a target.
+
+
+
+   .. py:method:: ownership()
+
+      Return parent-to-child ownership edges in deterministic order.
+
+
+
+   .. py:method:: dependency_order(table_names = None)
+
+      Return a deterministic dependency order, including cyclic schemas.
+
+      Reference and child-element dependencies are condensed into strongly
+      connected components.  The physical load order places referenced rows
+      before referrers, parents before owned child rows, and backing rows
+      before dispatch rows.  Both component selection and members use the
+      lexicographically smallest available table name as their tiebreaker.
+
+
+
+   .. py:method:: reachability_scc_order()
+
+      Return SCCs in forward logical-reachability order.
+
+      Unlike :meth:`dependency_order`, this follows a reference from its
+      source to its target and ownership from parent to child.  Consumers
+      propagating root reachability can therefore complete acyclic SCCs in
+      one wave, reserving iteration for genuine cycles.
+
+
+

@@ -1,0 +1,138 @@
+httk.store.storage_layout
+=========================
+
+.. py:module:: httk.store.storage_layout
+
+.. autoapi-nested-parse::
+
+   Backend-neutral store declaration machinery shared by storage backends.
+
+   This module owns the logical entry-family declaration, its canonical JSON
+   encoding, and trust-on-reopen validation.  Physical names and backend-specific
+   layout validation belong to each storage backend.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.store.storage_layout.DECLARATION_PROTOCOL_VERSION
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.storage_layout.StorageLayoutUpgradeRequiredError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.storage_layout.EntryFamilyLayout
+   httk.store.storage_layout.StorageLayout
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.storage_layout.normalize_entry_records
+   httk.store.storage_layout.declaration_json
+
+
+Module Contents
+---------------
+
+.. py:data:: DECLARATION_PROTOCOL_VERSION
+   :type:  Final
+   :value: 'v2.1.0'
+
+
+   The current backend-neutral declaration protocol.
+
+.. py:exception:: StorageLayoutUpgradeRequiredError(diff)
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A database does not exactly implement the current persisted store layout.
+
+   ``diff`` is immutable and JSON-shaped.  Its top-level keys are stable
+   categories (currently ``protocol``, ``declaration`` and ``schema``), so a
+   caller can present a precise upgrade diagnostic without parsing
+   the human-readable exception message.
+
+
+   .. py:attribute:: diff
+      :type:  collections.abc.Mapping[str, object]
+
+
+.. py:class:: EntryFamilyLayout
+
+   One immutable configured entry family and its concrete records.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: family
+      :type:  type
+
+
+   .. py:attribute:: record_names
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: records
+      :type:  tuple[type, Ellipsis]
+
+
+.. py:class:: StorageLayout
+
+   The immutable normalized entry declaration of an initialized store.
+
+
+   .. py:attribute:: protocol_version
+      :type:  str
+
+
+   .. py:attribute:: families
+      :type:  tuple[EntryFamilyLayout, Ellipsis]
+
+
+   .. py:property:: entry_records
+      :type: collections.abc.Mapping[type, tuple[type, Ellipsis]]
+
+
+      Configured family classes mapped to their ordered concrete record classes.
+
+
+   .. py:property:: declaration
+      :type: collections.abc.Mapping[str, tuple[str, Ellipsis]]
+
+
+      Configured stable family names mapped to their ordered stable record names.
+
+
+.. py:function:: normalize_entry_records(entry_records)
+
+   Validate an explicit class declaration and replace it with stable registry names.
+
+   Registry aliases are rejected rather than selected arbitrarily: a
+   persistent declaration must have exactly one stable spelling for every
+   supplied class.
+
+
+.. py:function:: declaration_json(layout)
+
+   Serialize a normalized declaration in its exact deterministic persisted form.
+
+

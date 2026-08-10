@@ -1,0 +1,83 @@
+httk.store.db.fsck
+==================
+
+.. py:module:: httk.store.db.fsck
+
+.. autoapi-nested-parse::
+
+   Integrity repair and dependency collection for SQL permanentization stores.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.fsck.FsckTableSummary
+   httk.store.db.fsck.FsckSummary
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.db.fsck.run_fsck
+
+
+Module Contents
+---------------
+
+.. py:class:: FsckTableSummary
+
+   Counters for one physical record, child, or dispatch table.
+
+
+   .. py:attribute:: examined
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: repaired
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: conflicts
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: deleted
+      :type:  int
+      :value: 0
+
+
+
+.. py:class:: FsckSummary
+
+   Immutable SQL fsck report, modeled after Mongo's public summary.
+
+
+   .. py:attribute:: tables
+      :type:  collections.abc.Mapping[str, FsckTableSummary]
+
+
+   .. py:attribute:: violations
+      :type:  tuple[str, Ellipsis]
+
+
+.. py:function:: run_fsck(store, *, repair = True, collect_garbage = True, repair_conflicts = False, known_types = (), exclusive = False)
+
+   Repair dispatches, sweep incomplete residue, and report logical dangling references.
+
+   DuckDB does not serialize a read-then-delete fsck against concurrent
+   writers.  Callers must therefore pass ``exclusive=True`` there, explicitly
+   acknowledging that they have taken the database offline from all writers.
+   SQLite transactional stores instead issue ``BEGIN IMMEDIATE`` themselves.
+
+

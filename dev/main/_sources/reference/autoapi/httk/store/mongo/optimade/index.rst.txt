@@ -1,0 +1,43 @@
+httk.store.mongo.optimade
+=========================
+
+.. py:module:: httk.store.mongo.optimade
+
+.. autoapi-nested-parse::
+
+   Serve OPTIMADE filters over stored dataclasses through MongoDB.
+
+   The property and filter translation layers are backend-neutral. This module
+   only supplies Mongo-specific field handlers for stored properties and for
+   relationship ids, plus the semi-join that resolves dotted relationship
+   filters through a nested Mongo searcher.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.optimade.optimade_filter_searcher
+
+
+Module Contents
+---------------
+
+.. py:function:: optimade_filter_searcher(store, cls, filter_string, *, prefix = '_httk_', definition = None, extra_handlers = None, related_classes = None)
+
+   Build a Mongo searcher over ``cls`` from an OPTIMADE filter.
+
+   :param store: The Mongo store containing the rows to query.
+   :param cls: The storable class whose rows are searched.
+   :param filter_string: An OPTIMADE filter string or parsed filter tree.
+   :param prefix: The registered prefix used for served property names.
+   :param definition: An optional definition supplying additional property types.
+   :param extra_handlers: Optional handlers for ids, types, or extra properties.
+   :param related_classes: Related entry types and their storable classes.
+   :return: A Mongo searcher yielding matching stored instances.
+   :raises ~httk.store.query.optimade_filters.FilterTranslationError: If the filter cannot be translated.
+   :raises ValueError: If a related class does not match exactly one relationship field.
+
+

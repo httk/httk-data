@@ -1,0 +1,1037 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>httk.store.query.protocols - httk-store dev:main documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/selector.css?v=626bada3" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     Development documentation (dev:main) — content may differ from any release. 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">httk-store dev:main documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  
+  <span class="sidebar-brand-text">httk-store dev:main documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../data.html">Data management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../db.html">Database storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../mongo.html">MongoDB storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../federation.html">Federated stores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../migrating_from_v1.html">Migrating from httk v1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../testing.html">Test tiers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../clickhouse-testing.html">ClickHouse testing</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/index.html">Reference</a><input aria-label="Toggle navigation of Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/index.html">httk.store</a><input aria-label="Toggle navigation of httk.store" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/index.html">httk.store.db</a><input aria-label="Toggle navigation of httk.store.db" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk/index.html">httk.store.db.bulk</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk_deferred/index.html">httk.store.db.bulk_deferred</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk_parallel/index.html">httk.store.db.bulk_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/clickhouse/index.html">httk.store.db.clickhouse</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/codecs/index.html">httk.store.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/engine/index.html">httk.store.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/entry_provider/index.html">httk.store.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/fsck/index.html">httk.store.db.fsck</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/graph/index.html">httk.store.db.graph</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/layout/index.html">httk.store.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/mapping/index.html">httk.store.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/optimade/index.html">httk.store.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/paging/index.html">httk.store.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/results/index.html">httk.store.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/rows/index.html">httk.store.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/schema/index.html">httk.store.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/searcher/index.html">httk.store.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/store/index.html">httk.store.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/stored_federation/index.html">httk.store.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/stored_properties/index.html">httk.store.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/entry_providers/index.html">httk.store.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/federated_store/index.html">httk.store.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/index.html">httk.store.mongo</a><input aria-label="Toggle navigation of httk.store.mongo" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/database/index.html">httk.store.mongo.database</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/documents/index.html">httk.store.mongo.documents</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/entry_provider/index.html">httk.store.mongo.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/evaluator/index.html">httk.store.mongo.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/fsck/index.html">httk.store.mongo.fsck</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/leases/index.html">httk.store.mongo.leases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/mapping/index.html">httk.store.mongo.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/optimade/index.html">httk.store.mongo.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/results/index.html">httk.store.mongo.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/searcher/index.html">httk.store.mongo.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/store/index.html">httk.store.mongo.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/stored_properties/index.html">httk.store.mongo.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/index.html">httk.store.query</a><input aria-label="Toggle navigation of httk.store.query" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/optimade_filters/index.html">httk.store.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/paging_tokens/index.html">httk.store.query.paging_tokens</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/portable/index.html">httk.store.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/protocols/index.html">httk.store.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/served_specs/index.html">httk.store.served_specs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/storage_layout/index.html">httk.store.storage_layout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/store_common/index.html">httk.store.store_common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/validation/index.html">httk.store.validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../examples/index.html">Examples</a><input aria-label="Toggle navigation of Examples" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/example.html">Serving records and validating them against their OPTIMADE definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/optimade_filters.html">Querying stored dataclasses with OPTIMADE filter strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/searching.html">Querying a store with the search DSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/serve_as_optimade.html">Serving a database as an OPTIMADE API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../examples/storable_records.html">Storing frozen dataclasses in a database, exactly</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../notebooks/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Details</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../details/db.html">Database storage in detail</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../details/mongo.html">MongoDB storage in detail</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../details/migrating_from_v1.html">Migrating from httk v1 in detail</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../reference/autoapi/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/index.html">httk.store</a><input aria-label="Toggle navigation of httk.store" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/index.html">httk.store.db</a><input aria-label="Toggle navigation of httk.store.db" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk/index.html">httk.store.db.bulk</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk_deferred/index.html">httk.store.db.bulk_deferred</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/bulk_parallel/index.html">httk.store.db.bulk_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/clickhouse/index.html">httk.store.db.clickhouse</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/codecs/index.html">httk.store.db.codecs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/engine/index.html">httk.store.db.engine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/entry_provider/index.html">httk.store.db.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/fsck/index.html">httk.store.db.fsck</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/graph/index.html">httk.store.db.graph</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/layout/index.html">httk.store.db.layout</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/mapping/index.html">httk.store.db.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/optimade/index.html">httk.store.db.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/paging/index.html">httk.store.db.paging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/results/index.html">httk.store.db.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/rows/index.html">httk.store.db.rows</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/schema/index.html">httk.store.db.schema</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/searcher/index.html">httk.store.db.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/store/index.html">httk.store.db.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/stored_federation/index.html">httk.store.db.stored_federation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/db/stored_properties/index.html">httk.store.db.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/entry_providers/index.html">httk.store.entry_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/federated_store/index.html">httk.store.federated_store</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/index.html">httk.store.mongo</a><input aria-label="Toggle navigation of httk.store.mongo" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/database/index.html">httk.store.mongo.database</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/documents/index.html">httk.store.mongo.documents</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/entry_provider/index.html">httk.store.mongo.entry_provider</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/evaluator/index.html">httk.store.mongo.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/fsck/index.html">httk.store.mongo.fsck</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/leases/index.html">httk.store.mongo.leases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/mapping/index.html">httk.store.mongo.mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/optimade/index.html">httk.store.mongo.optimade</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/results/index.html">httk.store.mongo.results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/searcher/index.html">httk.store.mongo.searcher</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/store/index.html">httk.store.mongo.store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/mongo/stored_properties/index.html">httk.store.mongo.stored_properties</a></li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/index.html">httk.store.query</a><input aria-label="Toggle navigation of httk.store.query" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/optimade_filters/index.html">httk.store.query.optimade_filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/paging_tokens/index.html">httk.store.query.paging_tokens</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/portable/index.html">httk.store.query.portable</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/autoapi/httk/store/query/protocols/index.html">httk.store.query.protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/served_specs/index.html">httk.store.served_specs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/storage_layout/index.html">httk.store.storage_layout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/store_common/index.html">httk.store.store_common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/autoapi/httk/store/validation/index.html">httk.store.validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/autoapi/httk/registry/entries/store/index.html">httk.registry.entries.store</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for httk.store.query.protocols</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Typed protocols for the store/searcher query contract.</span>
+
+<span class="sd">These protocols define the backend-agnostic query interface shared by httk</span>
+<span class="sd">data stores: the database layer in httk-store implements them over SQL, and</span>
+<span class="sd">serving modules (such as *httk-serve*, whose in-memory store also conforms)</span>
+<span class="sd">program against them. They mirror the query interface of the httk v1 database</span>
+<span class="sd">layer (``httk.db`` ``FilteredCollection`` searchers), so lightweight fakes can</span>
+<span class="sd">stand in for a real store in tests.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">NamedTuple</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">Self</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;ID_FIELD&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ContinuationToken&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CountUnavailableError&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;MultipleResultsError&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;NoResultError&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PageOrder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PageableResultSetLike&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PaginationCursorError&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ResultPage&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ResultRow&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ResultRowLike&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ResultSetLike&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SearchExpression&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SearchField&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SearchResult&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SearchVariable&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Searcher&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Store&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;UnsupportedQueryError&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<div class="viewcode-block" id="ID_FIELD">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ID_FIELD">[docs]</a>
+<span class="n">ID_FIELD</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__id&quot;</span></div>
+
+<span class="sd">&quot;&quot;&quot;The backend field name used for the served entry identifier.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="UnsupportedQueryError">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.UnsupportedQueryError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">UnsupportedQueryError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report that a valid query operation is outside a store&#39;s supported profile.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="CountUnavailableError">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.CountUnavailableError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CountUnavailableError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report that a store cannot provide an exact query count.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="NoResultError">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.NoResultError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NoResultError</span><span class="p">(</span><span class="ne">LookupError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report that a result-set ``one()`` operation found no matching result.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="MultipleResultsError">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.MultipleResultsError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MultipleResultsError</span><span class="p">(</span><span class="ne">LookupError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report that a result-set ``one()`` operation found multiple results.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="PaginationCursorError">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PaginationCursorError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PaginationCursorError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report that a continuation cursor is malformed, expired, or belongs to another result plan.&quot;&quot;&quot;</span></div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="PageOrder">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageOrder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PageOrder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Order a continuation page by one named scalar result projection.</span>
+
+<span class="sd">    ``name`` identifies the name supplied to ``results()`` (or</span>
+<span class="sd">    :meth:`Searcher.output`), never a backend column object.  The result-set</span>
+<span class="sd">    implementation validates that it is a root scalar projection before it</span>
+<span class="sd">    generates SQL.</span>
+
+<span class="sd">    :param name: The declared scalar output name used for ordering.</span>
+<span class="sd">    :param descending: Whether to order this field in descending order.</span>
+<span class="sd">    :param nulls: Whether null values sort first or last.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PageOrder.name">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageOrder.name">[docs]</a>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="PageOrder.descending">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageOrder.descending">[docs]</a>
+    <span class="n">descending</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="PageOrder.nulls">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageOrder.nulls">[docs]</a>
+    <span class="n">nulls</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;first&quot;</span><span class="p">,</span> <span class="s2">&quot;last&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;last&quot;</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;PageOrder.name must be a non-empty string&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">descending</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;PageOrder.descending must be bool&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nulls</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;first&quot;</span><span class="p">,</span> <span class="s2">&quot;last&quot;</span><span class="p">}:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;PageOrder.nulls must be &#39;first&#39; or &#39;last&#39;&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ContinuationToken">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ContinuationToken">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ContinuationToken</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Carry an opaque URL-safe continuation value.</span>
+
+<span class="sd">    It is a ``str`` subclass so normal JSON serializers preserve it as a</span>
+<span class="sd">    scalar value.  Applications should pass a token returned by a page back</span>
+<span class="sd">    unchanged; data backends validate its version, structure, and result-plan</span>
+<span class="sd">    fingerprint before using any decoded value as a bound parameter.</span>
+
+<span class="sd">    :param value: The opaque continuation value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ContinuationToken requires str, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="ResultPage">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultPage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultPage</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represent an immutable continuation-page result.</span>
+
+<span class="sd">    ``rows`` is always a tuple.  Returned rows are ordinary persistent result</span>
+<span class="sd">    rows, not the expiring proxies produced by ``SqlResultSet.cursor()``.</span>
+<span class="sd">    ``total`` is populated only when the caller explicitly asks for it.</span>
+
+<span class="sd">    :param rows: The persistent rows returned by the page.</span>
+<span class="sd">    :param next: The token for the next page, if one exists.</span>
+<span class="sd">    :param previous: The token for the previous page, if one exists.</span>
+<span class="sd">    :param total: The exact result count when requested, otherwise ``None``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ResultPage.rows">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultPage.rows">[docs]</a>
+    <span class="n">rows</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="s2">&quot;ResultRowLike&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ResultPage.next">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultPage.next">[docs]</a>
+    <span class="nb">next</span><span class="p">:</span> <span class="n">ContinuationToken</span> <span class="o">|</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ResultPage.previous">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultPage.previous">[docs]</a>
+    <span class="n">previous</span><span class="p">:</span> <span class="n">ContinuationToken</span> <span class="o">|</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ResultPage.total">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultPage.total">[docs]</a>
+    <span class="n">total</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;rows&quot;</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rows</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">total</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">total</span> <span class="o">&lt;</span> <span class="mi">0</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;ResultPage.total must be a non-negative integer or None&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="PageableResultSetLike">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageableResultSetLike">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PageableResultSetLike</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Expose optional continuation-page capability on a frozen result set.</span>
+
+<span class="sd">    This deliberately extends neither :class:`ResultSetLike` nor</span>
+<span class="sd">    :class:`Searcher`: stores that do not support seek pagination remain fully</span>
+<span class="sd">    conforming to the required portable contracts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PageableResultSetLike.page">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.PageableResultSetLike.page">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">page</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">order_by</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">PageOrder</span><span class="p">],</span>
+        <span class="n">cursor</span><span class="p">:</span> <span class="n">ContinuationToken</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_total</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResultPage</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return one ordered continuation page.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ResultRow">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultRow">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultRow</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represent one named result row by position, name, or attribute.</span>
+
+<span class="sd">    :param values: The row values in declaration order.</span>
+<span class="sd">    :param names: The corresponding output names.</span>
+<span class="sd">    :param resolver: An optional lazy value resolver.</span>
+<span class="sd">    :param guard: An optional callback that rejects access to expired values.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_guard&quot;</span><span class="p">,</span> <span class="s2">&quot;_names&quot;</span><span class="p">,</span> <span class="s2">&quot;_resolver&quot;</span><span class="p">,</span> <span class="s2">&quot;_values&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">values</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">names</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">resolver</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">guard</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_values</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_names</span> <span class="o">=</span> <span class="n">names</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span> <span class="o">=</span> <span class="n">resolver</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="o">=</span> <span class="n">guard</span>
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ResultRow.names">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultRow.names">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the declared output names.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_names</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ResultRow.values">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultRow.values">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">values</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the row values in declaration order.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">)))</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span><span class="p">()</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">[</span><span class="n">index</span><span class="p">])</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+        <span class="n">activate</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_activate&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">activate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">activate</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;result row indices must be integers or strings, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">ResultRow</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">values</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;ResultRow(</span><span class="si">{</span><span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span><span class="si">!r}</span><span class="s2">)&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__copy__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ResultRow&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;expired cursor rows cannot be copied&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_names</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memo</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;ResultRow&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;expired cursor rows cannot be copied&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_names</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__reduce_ex__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;expired cursor rows cannot be pickled&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_names</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolver</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guard</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ResultRowLike">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultRowLike">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultRowLike</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Require named access to one result row.&quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ResultRowLike.names">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultRowLike.names">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the row&#39;s declared output names.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a row value by index or output name.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+
+<div class="viewcode-block" id="ResultSetLike">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultSetLike">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultSetLike</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Require the common operations of a materialized result set.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">ResultRowLike</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Iterate over result rows.&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the exact number of rows.&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+<div class="viewcode-block" id="ResultSetLike.first">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultSetLike.first">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">first</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResultRowLike</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the first row, or ``None`` when no row matches.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="ResultSetLike.one">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultSetLike.one">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">one</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResultRowLike</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the only row, or raise when the count is not one.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="ResultSetLike.scalars">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.ResultSetLike.scalars">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">scalars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Iterate over one named scalar output.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+</div>
+
+
+    <span class="c1"># column() is an optional backend capability; SQL stores expose it.</span>
+
+
+<div class="viewcode-block" id="SearchExpression">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchExpression">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SearchExpression</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Require composable backend search expressions.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__and__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;SearchExpression&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SearchExpression&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Conjoin this expression with ``other``.&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;SearchExpression&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SearchExpression&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Disjoin this expression with ``other``.&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__invert__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SearchExpression&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Negate this expression.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+
+<div class="viewcode-block" id="SearchField">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SearchField</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Expose a queryable field of a search variable.</span>
+
+<span class="sd">    In addition to the methods below, fields support the rich comparison</span>
+<span class="sd">    operators (``==``, ``!=``, ``&lt;``, ``&lt;=``, ``&gt;``, ``&gt;=``), returning</span>
+<span class="sd">    :class:`SearchExpression`. The handlers invoke those via</span>
+<span class="sd">    ``getattr(field, &#39;__eq__&#39;)(value)`` since the comparison dunders cannot be</span>
+<span class="sd">    typed as expression-returning.</span>
+
+<span class="sd">    The three string-matching methods take **literal** text: no wildcard or</span>
+<span class="sd">    pattern syntax whatsoever crosses this contract, so ``%`` and ``_`` (and</span>
+<span class="sd">    any other metacharacter) match themselves. A backend is therefore free to</span>
+<span class="sd">    implement them with SQL ``LIKE`` over an escaped pattern, with a regular</span>
+<span class="sd">    expression, or with a full-text index — the choice is invisible here.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SearchField.has">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.has">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a list field containing ``value``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.has_any">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.has_any">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a list field containing any of ``values``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.has_only">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.has_only">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_only</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a list field containing no values outside ``values``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.is_in">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.is_in">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a root scalar field whose value is one of ``values``.</span>
+
+<span class="sd">        ``None`` is an explicit member: it matches a null field value, and its</span>
+<span class="sd">        negation excludes nulls rather than inheriting SQL&#39;s three-valued</span>
+<span class="sd">        ``NOT IN (..., NULL)`` behavior.</span>
+
+<span class="sd">        Backends define the corresponding semantics for child or set fields;</span>
+<span class="sd">        for example, a backend may use the existing ``has_only``-style</span>
+<span class="sd">        all-values reading for a child field.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.contains">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.contains">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">contains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values containing ``text`` as a literal substring.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.startswith">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.startswith">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">startswith</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values beginning with the literal ``prefix``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchField.endswith">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchField.endswith">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">endswith</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match values ending with the literal ``suffix``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SearchField&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The field ``name`` of the record this field refers to.</span>
+
+<span class="sd">        A field may hold a *reference* to another stored record, and attribute</span>
+<span class="sd">        access chains into that record&#39;s own fields — ``variable.ref.doi`` —</span>
+<span class="sd">        to any depth. Whether a given field is a reference is a property of the</span>
+<span class="sd">        stored class, not of this contract, so the chain is only resolved when</span>
+<span class="sd">        the query is built: a backend raises :class:`AttributeError` for a name</span>
+<span class="sd">        that is not a field of the referenced record, and for chaining off a</span>
+<span class="sd">        field that refers to nothing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+
+<div class="viewcode-block" id="SearchVariable">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchVariable">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SearchVariable</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bind a query variable to a target type whose attributes yield fields.</span>
+
+<span class="sd">    ``always_true``/``always_false`` are reserved names: they are real methods</span>
+<span class="sd">    of the variable, never stored fields resolved through ``__getattr__``.</span>
+<span class="sd">    They exist so a translation layer can express a constant truth value</span>
+<span class="sd">    without inventing a probe field. A ``field == field`` probe is NULL-unsound,</span>
+<span class="sd">    since it yields NULL (not true) for a NULL field.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SearchVariable.always_true">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchVariable.always_true">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">always_true</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;An expression that matches every row.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="SearchVariable.always_false">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchVariable.always_false">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">always_false</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchExpression</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;An expression that matches no row.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SearchField</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the named queryable field.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+
+<div class="viewcode-block" id="SearchResult">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchResult">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SearchResult</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represent one match with declared output values and names.</span>
+
+<span class="sd">    ``values`` holds one entry per :meth:`Searcher.output` call in declaration</span>
+<span class="sd">    order; it is a tuple, so ``values, names = result`` and ``result[0][0]``</span>
+<span class="sd">    both work.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SearchResult.values">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchResult.values">[docs]</a>
+    <span class="n">values</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="SearchResult.names">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.SearchResult.names">[docs]</a>
+    <span class="n">names</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="Searcher">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Searcher</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build one query and iterate its results.</span>
+
+<span class="sd">    Iteration yields one :class:`SearchResult` per match, so ``item[0][0]`` is</span>
+<span class="sd">    the first declared output of the match (typically the matched row object).</span>
+<span class="sd">    The expressions received by ``add`` are always ones produced by this same</span>
+<span class="sd">    backend&#39;s search variables, so implementations may type them as their own</span>
+<span class="sd">    expression class; a backend that needs a second (post-filter) evaluation</span>
+<span class="sd">    position decides that from the expression itself, not from the caller.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Searcher.offset">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.offset">[docs]</a>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span></div>
+
+
+<div class="viewcode-block" id="Searcher.variable">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.variable">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Bind a query variable to ``target``.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.output">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.output">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variable</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Declare ``variable`` as a named result output.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.add">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.add">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expression</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a filter expression to the query.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.count">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the exact count of the current query.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.set_limit">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.set_limit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set the query limit.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.add_offset">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.add_offset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_offset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add an offset to the query.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="Searcher.add_sort">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.add_sort">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_sort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">descending</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a field sort to the query.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">SearchResult</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Iterate over the query&#39;s matches.&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+<div class="viewcode-block" id="Searcher.results">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Searcher.results">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">outputs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResultSetLike</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a result set for the requested named outputs.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="Store">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Store">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Store</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Require a store that can create a query searcher.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Store.searcher">
+<a class="viewcode-back" href="../../../../reference/autoapi/httk/store/query/protocols/index.html#httk.store.db.Store.searcher">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">searcher</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Searcher</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an empty searcher.&quot;&quot;&quot;</span>
+        <span class="o">...</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The httk-store AUTHORS
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../_static/documentation_options.js?v=fe42cd0d"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../../../_static/selector.js?v=e591e119"></script>
+    <script>window.HTTK_DOCS_VERSIONING = {"channel":"dev","version":"dev:main","versionPathDepth":2};</script>
+    </body>
+</html>

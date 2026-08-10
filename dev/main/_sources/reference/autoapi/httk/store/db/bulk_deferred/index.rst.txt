@@ -1,0 +1,93 @@
+httk.store.db.bulk_deferred
+===========================
+
+.. py:module:: httk.store.db.bulk_deferred
+
+.. autoapi-nested-parse::
+
+   Stage-side finalization for fresh SQL bulk ingests.
+
+   Unlike :mod:`httk.store.db.bulk_parallel`'s parity merger this module never
+   loads provisional rows into a record table.  It builds temporary maps over the
+   external stage, computes the reachable canonical rows, and projects each real
+   table exactly once with final dense sids.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.bulk_deferred.DeferredFinalizer
+
+
+Module Contents
+---------------
+
+.. py:class:: DeferredFinalizer(ingest, manifests)
+
+   Set-wise, non-destructive finalizer for one empty-store ingest.
+
+
+   .. py:attribute:: ingest
+
+
+   .. py:attribute:: store
+
+
+   .. py:attribute:: connection
+
+
+   .. py:attribute:: manifests
+
+
+   .. py:attribute:: graph
+
+
+   .. py:attribute:: parents
+
+
+   .. py:attribute:: stage_views
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: maps
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: finals
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: objects
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: finalize_timings
+      :type:  dict[str, float]
+
+
+   .. py:attribute:: root_stage
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: root_occurrences
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:method:: run()
+
+
+   .. py:method:: cleanup()
+
+      Drop every main-database temporary relation before marker clear.
+
+
+

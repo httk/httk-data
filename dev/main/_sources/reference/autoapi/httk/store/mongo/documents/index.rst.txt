@@ -1,0 +1,73 @@
+httk.store.mongo.documents
+==========================
+
+.. py:module:: httk.store.mongo.documents
+
+.. autoapi-nested-parse::
+
+   Encoding and decoding of MongoStore record documents.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.mongo.documents.RecordTooLargeError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.documents.encode_record
+   httk.store.mongo.documents.decode_record
+   httk.store.mongo.documents.preflight_document
+
+
+Module Contents
+---------------
+
+.. py:exception:: RecordTooLargeError
+
+   Bases: :py:obj:`ValueError`
+
+
+   A record document exceeds the connected MongoDB BSON limit.
+
+
+.. py:function:: encode_record(schema, projected, source, record_type, resolve_reference)
+
+   Encode projected field values into the record's ``f`` document.
+
+   :param schema: The resolved record schema.
+   :param projected: The backend-neutral storage projection.
+   :param source: The source object used for derived stored properties.
+   :param record_type: The record representation being encoded.
+   :param resolve_reference: Callback saving a reference and returning its sid.
+   :return: The embedded ``f`` document.
+
+
+.. py:function:: decode_record(schema, document, resolve_reference)
+
+   Decode a MongoDB record document into its concrete storable instance.
+
+   :param schema: The resolved record schema.
+   :param document: The complete MongoDB record document.
+   :param resolve_reference: Callback hydrating a referenced sid.
+   :return: A concrete record instance.
+
+
+.. py:function:: preflight_document(document, max_bson_size, record_type)
+
+   Raise when ``document`` cannot be accepted by MongoDB's BSON limit.
+
+   :param document: Candidate record document.
+   :param max_bson_size: The server BSON limit read at store construction.
+   :param record_type: The record class used in the diagnostic.
+   :return: None.
+   :raises RecordTooLargeError: If BSON encoding exceeds the server limit.
+
+

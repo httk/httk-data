@@ -1,0 +1,280 @@
+httk.store.mongo.searcher
+=========================
+
+.. py:module:: httk.store.mongo.searcher
+
+.. autoapi-nested-parse::
+
+   MongoDB query planning for the neutral :mod:`httk.store.query` protocols.
+
+   The planner keeps a truth/falsity pair for each predicate.  This is important
+   for embedded arrays: the negation of "some element matches" is "no element
+   matches", not MongoDB's row-like ``$ne`` interpretation.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.searcher.ComparisonNode
+   httk.store.mongo.searcher.IsInNode
+   httk.store.mongo.searcher.StringMatchNode
+   httk.store.mongo.searcher.AndNode
+   httk.store.mongo.searcher.OrNode
+   httk.store.mongo.searcher.NotNode
+   httk.store.mongo.searcher.AlwaysTrueNode
+   httk.store.mongo.searcher.AlwaysFalseNode
+   httk.store.mongo.searcher.MongoExpression
+   httk.store.mongo.searcher.MongoField
+   httk.store.mongo.searcher.MongoVariable
+   httk.store.mongo.searcher.MongoSearcher
+
+
+Module Contents
+---------------
+
+.. py:class:: ComparisonNode
+
+   Compare one stored field with a literal or another field.
+
+
+   .. py:attribute:: field
+      :type:  MongoField
+
+
+   .. py:attribute:: op
+      :type:  Literal['eq', 'ne', 'lt', 'le', 'gt', 'ge']
+
+
+   .. py:attribute:: literal
+      :type:  Any
+
+
+.. py:class:: IsInNode
+
+   Test a scalar field for explicit membership.
+
+
+   .. py:attribute:: field
+      :type:  MongoField
+
+
+   .. py:attribute:: values
+      :type:  tuple[Any, Ellipsis]
+
+
+.. py:class:: StringMatchNode
+
+   Match literal text in a scalar string field.
+
+
+   .. py:attribute:: field
+      :type:  MongoField
+
+
+   .. py:attribute:: mode
+      :type:  Literal['contains', 'startswith', 'endswith']
+
+
+   .. py:attribute:: text
+      :type:  str
+
+
+.. py:class:: AndNode
+
+   Conjoin two AST nodes.
+
+
+   .. py:attribute:: left
+      :type:  Any
+
+
+   .. py:attribute:: right
+      :type:  Any
+
+
+.. py:class:: OrNode
+
+   Disjoin two AST nodes.
+
+
+   .. py:attribute:: left
+      :type:  Any
+
+
+   .. py:attribute:: right
+      :type:  Any
+
+
+.. py:class:: NotNode
+
+   Negate an AST node by swapping its truth and falsity filters.
+
+
+   .. py:attribute:: child
+      :type:  Any
+
+
+.. py:class:: AlwaysTrueNode
+
+   An AST constant that is true for every document.
+
+
+.. py:class:: AlwaysFalseNode
+
+   An AST constant that is false for every document.
+
+
+.. py:class:: MongoExpression(node)
+
+   A composable MongoDB expression backed by a neutral AST node.
+
+
+   .. py:attribute:: node
+
+
+.. py:class:: MongoField(variable, key_path, spec, codec = None, child_keys = (), presentation_prefix = '')
+
+   A scalar field, or the value channel of an embedded child field.
+
+
+   .. py:method:: is_in(*values)
+
+      Match a scalar member, or universally constrain a child field.
+
+
+
+   .. py:method:: has(value)
+
+      Match a child collection containing ``value``.
+
+
+
+   .. py:method:: has_any(*values)
+
+      Match a child collection containing any supplied value.
+
+
+
+   .. py:method:: has_only(*values)
+
+      Match a child collection containing no value outside those supplied.
+
+
+
+   .. py:method:: contains(text)
+
+      Match a literal substring, case-sensitively.
+
+
+
+   .. py:method:: startswith(prefix)
+
+      Match a literal, case-sensitive prefix.
+
+
+
+   .. py:method:: endswith(suffix)
+
+      Match a literal, case-sensitive suffix.
+
+
+
+.. py:class:: MongoVariable(searcher, cls, schema, alias)
+
+   A query variable, optionally produced by a lookup from another variable.
+
+
+   .. py:property:: sid
+      :type: MongoField
+
+
+      Return the store-managed sid field.
+
+
+   .. py:method:: always_true()
+
+      Return an expression matching every stored document.
+
+
+
+   .. py:method:: always_false()
+
+      Return an expression matching no stored document.
+
+
+
+.. py:class:: MongoSearcher(store)
+
+   Build and execute a MongoDB query over reference-connected variables.
+
+
+   .. py:attribute:: offset
+      :value: 0
+
+
+
+   .. py:method:: set_row_verifier(verifier, identity)
+
+      Attach the client-authoritative candidate verifier and its frozen identity.
+
+      The identity must be the canonical logical predicate payload, including
+      every verifier constant.  It is folded into continuation fingerprints,
+      so cursors never cross between otherwise identical server plans.
+
+      :param verifier: Return whether a server candidate is a real match.
+      :param identity: Canonical text or bytes identifying the verifier logic.
+      :raises TypeError: If either attachment component has the wrong type.
+
+
+
+   .. py:method:: variable(target)
+
+      Bind a query variable; each additional one must be join-connected.
+
+
+
+   .. py:method:: output(variable, name)
+
+      Declare an object variable or scalar field output.
+
+
+
+   .. py:method:: add(expression)
+
+      Add a filter expression, conjoined with earlier filters.
+
+
+
+   .. py:method:: add_sort(field, descending = False, *, nulls = 'last')
+
+      Append a stable scalar sort with an explicit null rank.
+
+
+
+   .. py:method:: set_limit(limit)
+
+      Set the iteration limit; negative values clear it.
+
+
+
+   .. py:method:: add_offset(offset)
+
+      Add rows to the iteration offset.
+
+
+
+   .. py:method:: count()
+
+      Return the exact filtered count, ignoring offset and limit.
+
+
+
+   .. py:method:: results(**outputs)
+
+      Return a materialized :class:`~httk.store.mongo.results.MongoResultSet` for this query.
+
+
+

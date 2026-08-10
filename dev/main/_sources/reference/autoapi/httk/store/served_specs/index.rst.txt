@@ -1,0 +1,44 @@
+httk.store.served_specs
+=======================
+
+.. py:module:: httk.store.served_specs
+
+.. autoapi-nested-parse::
+
+   Derive OPTIMADE property names and types from the storage schema IR.
+
+   This module deliberately depends only on the neutral schema representation and
+   httk-core definitions. SQL and Mongo layers can therefore share the same
+   property derivation without importing one another's backend.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.served_specs.served_specs
+   httk.store.served_specs.definition_fulltype
+
+
+Module Contents
+---------------
+
+.. py:function:: served_specs(schema, prefix)
+
+   Return the served ``(name, field spec, fulltype)`` triples.
+
+   :param schema: The resolved schema whose fields are inspected.
+   :param prefix: The registered prefix used for served property names.
+   :return: One triple for every schema field with an OPTIMADE value type.
+
+
+.. py:function:: definition_fulltype(definition)
+
+   Return the OPTIMADE fulltype declared by a property definition.
+
+   :param definition: The property definition to inspect.
+   :return: Its scalar, list, or dictionary fulltype string.
+
+

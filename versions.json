@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "project": "httk-store",
+  "url": "https://docs.httk.org/httk-store",
+  "source_commit": "3fc60fb19e5a6c7631106d07024d881abf5baa4b",
+  "default": {
+    "name": "dev:main",
+    "path": "dev/main/",
+    "channel": "dev"
+  },
+  "versions": [
+    {
+      "name": "dev:main",
+      "path": "dev/main/",
+      "channel": "dev"
+    }
+  ]
+}

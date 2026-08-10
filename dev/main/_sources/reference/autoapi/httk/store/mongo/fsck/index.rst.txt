@@ -1,0 +1,100 @@
+httk.store.mongo.fsck
+=====================
+
+.. py:module:: httk.store.mongo.fsck
+
+.. autoapi-nested-parse::
+
+   Integrity repair and mark/sweep collection for :mod:`httk.store.mongo`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.fsck.FsckCollectionSummary
+   httk.store.mongo.fsck.FsckSummary
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.fsck.run_fsck
+
+
+Module Contents
+---------------
+
+.. py:class:: FsckCollectionSummary
+
+   Counters collected for one record or dispatch collection.
+
+   :param examined: Documents inspected in the collection.
+   :param repaired: Documents inserted or removed by integrity repair.
+   :param conflicts: Integrity violations found in the collection.
+   :param deleted: Documents removed, including conflict removals and swept dependencies.
+
+
+   .. py:attribute:: examined
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: repaired
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: conflicts
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: deleted
+      :type:  int
+      :value: 0
+
+
+
+.. py:class:: FsckSummary
+
+   The immutable result of one :meth:`~httk.store.mongo.store.MongoStore.fsck` run.
+
+   :param generation: Metadata generation after this run's single increment.
+   :param collections: Per-collection repair and collection counters.
+   :param violations: Human-readable violations reported during the run.
+
+
+   .. py:attribute:: generation
+      :type:  int
+
+
+   .. py:attribute:: collections
+      :type:  collections.abc.Mapping[str, FsckCollectionSummary]
+
+
+   .. py:attribute:: violations
+      :type:  tuple[str, Ellipsis]
+
+
+.. py:function:: run_fsck(store, *, repair = True, collect_garbage = True, repair_conflicts = False, force = False, known_types = ())
+
+   Run the exclusive MongoStore integrity repair and garbage collector.
+
+   :param store: The owning MongoStore instance.
+   :param repair: Whether missing main-role dispatch entries are repaired.
+   :param collect_garbage: Whether unmarked dependency documents are swept.
+   :param repair_conflicts: Whether invalid dispatch documents are deleted.
+   :param force: Administrative override passed to the fsck lease protocol.
+   :param known_types: Record classes needed to attribute ordinary collections
+       after reopening a store.
+   :return: Immutable per-collection counters and all reported violations.
+
+

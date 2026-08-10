@@ -1,0 +1,453 @@
+httk.store.db.searcher
+======================
+
+.. py:module:: httk.store.db.searcher
+
+.. autoapi-nested-parse::
+
+   The query DSL: build and run searches over stored dataclasses through SQLAlchemy Core.
+
+   :class:`SqlSearcher` (obtained from :meth:`~httk.store.db.store.SqlStore.searcher`)
+   implements the backend-agnostic search protocols of :mod:`httk.store.query` —
+   :class:`~httk.store.query.Searcher`, :class:`~httk.store.query.SearchVariable`,
+   :class:`~httk.store.query.SearchField`, :class:`~httk.store.query.SearchExpression`
+   — porting the query semantics of the v1 ``httk.db`` ``FilteredCollection``
+   searchers onto SQLAlchemy Core:
+
+   - :meth:`SqlSearcher.variable` binds a storable class to a **fresh alias** of
+     its table; two variables of the same class therefore make a self-join.
+   - Attribute access on a :class:`SqlVariable` follows the class's resolved
+     :class:`~httk.store.db.schema.TableSchema`: scalar and encoded fields yield a
+     :class:`SqlColumn` over the field's query column; reference fields yield a
+     chainable :class:`SqlReference` that compares by foreign key
+     (``v.ref == other_variable`` / ``== stored_object`` / ``== None``) and, on
+     further attribute access, lazily LEFT OUTER JOINs a fresh alias of the target
+     table (``v.ref.doi`` chains arbitrarily deep; one join alias per reference
+     path per variable); variable-length (child-table) fields LEFT OUTER JOIN the
+     child table (a fresh alias per attribute access, so independent set
+     predicates on one field — e.g. ``v.symbols.has_any('O') &
+     v.symbols.has_any('Ca')`` — constrain independent joined rows, as in httk
+     v1) and switch the searcher into grouped mode (GROUP BY the root rows).
+   - Comparisons and set operations on columns produce :class:`SqlExpression`
+     objects carrying **two** renderings — a WHERE-position clause and a
+     HAVING-position clause — exactly as the v1 searcher rendered one expression
+     per position. Each expression also carries **its own placement**, so
+     :meth:`SqlSearcher.add` is the only way to apply one: the WHERE rendering
+     always applies, and the HAVING rendering additionally applies when the
+     expression is flagged :attr:`SqlExpression.post` (the for-all forms
+     ``has_only`` and child-field ``is_in``, and any ``~`` over a set-derived
+     subtree — see :class:`SqlExpression`'s ``__invert__``, which lets ``~``
+     express "no joined row matches").
+     Alongside the two renderings each expression carries the **non-aggregated
+     columns its HAVING rendering references** (:attr:`SqlExpression.group_columns`), unioned
+     by ``&``/``|`` and preserved by ``~``. A grouped query GROUP BYs those
+     columns in addition to the root ``sid``\ s (``SqlSearcher._grouping``, which
+     both ``count()`` and iteration go through): a plain comparison reaching HAVING
+     position mentions a root-table column directly, and strict dialects (DuckDB)
+     reject such a column unless it is grouped, while permissive ones (SQLite)
+     accept it via functional dependency on the grouped primary key. Grouping by
+     it is sound for exactly that reason — one distinct value per group — and the
+     same applies to the sort keys, which the same helper adds.
+
+   The neutral protocol's string matching is ``contains``/``startswith``/
+   ``endswith`` over **literal** text; this backend renders them as SQL LIKE with
+   backslash as the escape character, escaping ``%`` and ``_`` in the given text
+   first. The LIKE rendering itself is private (``SqlColumn._like``) precisely
+   because pattern syntax is a dialect detail that must not leak into the
+   contract.
+
+   Encoded (codec) fields compare against their query column: for rationals that
+   is the float companion column, so SQL comparisons on them are documented
+   float-approximate (stored values themselves round-trip exactly). Comparison
+   values are encoded through the field's codec, e.g. comparing a
+   :class:`fractions.Fraction` field against ``Fraction(1, 3)`` compares the
+   float column against ``float(Fraction(1, 3))``.
+
+   Set-operation semantics (ported from the v1 ``BinaryBooleanOp._sql``,
+   translated to portable SQLAlchemy aggregates): in WHERE position ``has_any``
+   renders as ``column IN values`` while ``has_only`` renders as constant true; in
+   HAVING position the aggregate forms
+   ``SUM(CASE WHEN column [NOT] IN values THEN 1 ELSE 0 END)``
+   compare per-group match counts. A NULL child value — the LEFT OUTER JOIN row
+   of a parent with no children — never satisfies ``IN`` (nor ``NOT IN``), so a
+   record with an empty child list matches ``has_only`` and fails ``has_any``,
+   the exact set semantics of the reference in-memory store.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.searcher.SqlExpression
+   httk.store.db.searcher.SqlColumn
+   httk.store.db.searcher.SqlReference
+   httk.store.db.searcher.SqlVariable
+   httk.store.db.searcher.SqlSearcher
+
+
+Module Contents
+---------------
+
+.. py:class:: SqlExpression(where_clause, having_clause, *, post = False, set_derived = False, group_columns = (), correlation_depth = 0)
+
+   A search condition carrying both its WHERE-position and HAVING-position renderings.
+
+   Plain comparisons render identically in both positions; the set operations
+   differ (constant true/false in WHERE, aggregate match counts in HAVING).
+   The combinators ``&``, ``|`` and ``~`` combine the two renderings pairwise.
+   :attr:`group_columns` travels along so a grouped query can GROUP BY every
+   non-aggregated column its HAVING clauses mention.
+
+   :param where_clause: The SQL condition used in WHERE position.
+   :param having_clause: The SQL condition used in HAVING position.
+   :param post: Whether the HAVING condition is also applied.
+   :param set_derived: Whether the condition depends on a set of joined rows.
+   :param group_columns: The non-aggregated columns required by the HAVING condition.
+
+
+   .. py:attribute:: where_clause
+
+      The rendering applied in WHERE position (always applied).
+
+
+   .. py:attribute:: having_clause
+
+      The rendering applied in HAVING position when :attr:`post` is set.
+
+
+   .. py:attribute:: post
+      :value: False
+
+
+      Whether :meth:`SqlSearcher.add` must *also* apply :attr:`having_clause`.
+
+      Set when the WHERE rendering alone is incomplete, i.e. by the for-all
+      forms (``has_only``, ``is_in`` on a child field) and by ``~`` over a
+      set-derived subtree. Those all render WHERE as constant true, so the
+      pair "WHERE plus HAVING" is never a double restriction. ``has_any``
+      deliberately does **not** set it: its WHERE rendering is exact, and
+      forcing it into HAVING measurably slows DuckDB down.
+
+
+   .. py:attribute:: set_derived
+      :value: False
+
+
+      Whether this expression's truth is a property of a *set* of joined rows.
+
+      Negating such an expression cannot be done row-by-row in WHERE
+      position (no single joined row can witness "no row matches"), so
+      ``__invert__`` negates the aggregate instead — see there.
+
+
+   .. py:attribute:: group_columns
+      :value: ()
+
+
+      Non-aggregated columns of :attr:`having_clause` that must be grouped by.
+
+      Empty for the set operations (their HAVING rendering is fully
+      aggregated) and for child-table comparisons (those columns *are* the
+      aggregated rows); a root-table comparison contributes its own column.
+
+
+   .. py:attribute:: correlation_depth
+      :value: 0
+
+
+
+.. py:class:: SqlColumn(searcher, element, *, variable = None, spec = None, codec = None, query_index = 0, from_child = False)
+
+   A queryable column of a search variable.
+
+   Rich comparisons (``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``),
+   ``contains``/``startswith``/``endswith``/``is_in`` and the set operations
+   return :class:`SqlExpression`. Comparison values are encoded through the
+   field's value codec when the field is codec-encoded, so e.g. rational
+   comparisons run on the float companion column (documented approximate).
+   Comparing against another :class:`SqlColumn` compares the two columns.
+
+   :param searcher: The searcher that owns this column.
+   :param element: The SQL expression represented by the column.
+   :param variable: The variable containing the column, when applicable.
+   :param spec: The stored field specification, when applicable.
+   :param codec: The value codec, when the field is encoded.
+   :param query_index: The codec-column index used for query comparisons.
+   :param from_child: Whether the column comes from a child-table join.
+
+
+   .. py:method:: contains(text)
+
+      Match values containing the literal ``text`` (LIKE wildcards escaped).
+
+      :param text: The literal text to find.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: startswith(prefix)
+
+      Match values beginning with the literal ``prefix`` (LIKE wildcards escaped).
+
+      :param prefix: The literal prefix to find.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: endswith(suffix)
+
+      Match values ending with the literal ``suffix`` (LIKE wildcards escaped).
+
+      :param suffix: The literal suffix to find.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: is_in(*values)
+
+      Membership in ``values``.
+
+      On a root column this is plain ``column IN values``. On a *child* field
+      it is the for-all reading — every child value is in ``values`` — which,
+      exactly as :meth:`has_only`, is an aggregate over the group and so
+      renders as constant true in WHERE position and forces the HAVING
+      rendering (:attr:`SqlExpression.post`).
+
+      Only the child form is :attr:`~SqlExpression.set_derived`: on a root
+      column ``~column.is_in(...)`` is exactly ``column NOT IN values``
+      row-wise, so negating it aggregate-style would switch the query into
+      grouped mode for no gain.
+
+      :param \*values: The values to test for membership.
+      :return: The membership condition.
+
+
+
+   .. py:method:: has(value)
+
+      Match a child collection containing ``value``.
+
+      :param value: The child value to find.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: has_any(*values)
+
+      Some child value is in ``values``: WHERE ``IN``; HAVING a positive match count.
+
+      The WHERE rendering is exact, so this does not set
+      :attr:`SqlExpression.post` — pushing it into HAVING as well is a
+      measured DuckDB slowdown for no semantic gain. It is nonetheless
+      set-derived, so ``~`` negates the aggregate.
+
+      :param \*values: The values of which at least one child must match.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: has_only(*values)
+
+      Every child value is in ``values``: constant true in WHERE, zero outsiders in HAVING.
+
+      A record with no child rows at all satisfies this (its single LEFT
+      OUTER JOIN row is NULL, which never matches ``NOT IN``) — the empty
+      set is a subset of any value set.
+
+      :param \*values: The complete set of allowed child values.
+      :return: The condition requiring every child value to match.
+
+
+
+.. py:class:: SqlReference(variable, spec)
+
+   A reference (foreign key) field of a search variable, chainable into the target.
+
+   Supports ``== other_variable`` (join condition), ``== stored_object``
+   (the object must be known to the store), and ``== None`` (no referent);
+   ``!=`` gives the negated forms. The set operations (``has_any``/``has_only``)
+   treat the reference as the (at most one-element) set of its referent,
+   rendering directly over the foreign-key column (WHERE-position ``IN``);
+   their values are stored instances or raw sids (:class:`int`, as returned
+   by :meth:`~httk.store.db.store.SqlStore.save`). Attribute access LEFT OUTER
+   JOINs the target class's table (once per reference path per variable) and
+   delegates to the joined sub-variable, so chains like ``v.ref.doi`` — or
+   deeper — work and repeated access hits the same join alias.
+
+   :param variable: The query variable containing the reference.
+   :param spec: The stored field specification for the reference.
+
+
+   .. py:method:: has(value)
+
+      Match a referent equal to ``value``.
+
+      :param value: The stored instance or store id to match.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: has_any(*values)
+
+      Match a referent among ``values`` through the foreign key.
+
+      :param \*values: The stored instances or store ids to match.
+      :return: The matching SQL condition.
+
+
+
+   .. py:method:: has_only(*values)
+
+      Require the referent, when set, to be among ``values``.
+
+      :param \*values: The complete set of allowed stored instances or store ids.
+      :return: The matching SQL condition.
+
+
+
+.. py:class:: SqlVariable(searcher, cls, schema, alias)
+
+   A query variable bound to a fresh alias of a storable class's table.
+
+   Attribute access resolves stored fields (including stored properties) into
+   :class:`SqlColumn` / :class:`SqlReference` objects per the class's
+   :class:`~httk.store.db.schema.TableSchema`; ``sid`` (a reserved field name)
+   yields the store-managed integer primary key column; accessing a
+   variable-length (child-table) field registers a LEFT OUTER JOIN and
+   switches the searcher into grouped mode. Unknown names raise
+   :class:`AttributeError`;
+   fixed-shape tensor fields raise :class:`~httk.store.db.schema.SchemaError`
+   (they are not queryable as a whole).
+
+   :meth:`always_true` and :meth:`always_false` are — like ``sid`` — reserved
+   names that never resolve to a stored field: they are real methods declared
+   before ``__getattr__``, so no query column is involved at all.
+
+   :param searcher: The searcher that owns this variable.
+   :param cls: The storable class represented by the variable.
+   :param schema: The resolved table schema for ``cls``.
+   :param alias: The fresh SQL table alias bound to the variable.
+
+
+   .. py:method:: always_true()
+
+      Return a condition matching every row.
+
+      :return: A condition that is true in both SQL positions.
+
+
+
+   .. py:method:: always_false()
+
+      Return a condition matching no row.
+
+      :return: A condition that is false in both SQL positions.
+
+
+
+.. py:class:: SqlSearcher(store)
+
+   One query under construction against a :class:`~httk.store.db.store.SqlStore`.
+
+   Build the query with :meth:`variable`, :meth:`add` (AND-joined conditions,
+   each placed by the expression itself), :meth:`output`, :meth:`add_sort`,
+   :meth:`set_limit` (``-1`` clears the limit) and :meth:`add_offset` (the
+   public :attr:`offset` attribute is readable and writable). Iterating
+   yields one :class:`~httk.store.query.SearchResult` per match, whose
+   ``values`` holds one entry per declared output — a lazy row for variable
+   outputs (bypassing the identity cache), the raw column value for column outputs. :meth:`count`
+   returns the number of matches, disregarding any limit and offset.
+
+   :param store: The SQL store whose tables and connection serve the query.
+
+
+   .. py:attribute:: offset
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: variable(target)
+
+      A new query variable over ``target``'s table (a fresh alias; self-joins allowed).
+
+      A missing table makes this variable a vacuous search; reads never
+      create tables.
+
+      :param target: The storable class whose table the variable represents.
+      :return: A fresh query variable.
+
+
+
+   .. py:method:: output(variable, name)
+
+      Append an output for a reconstructed instance or raw column value.
+
+      :param variable: The query variable or column to project.
+      :param name: The name exposed for the projected value.
+      :return: None.
+      :raises TypeError: If ``variable`` is neither a query variable nor a query column.
+
+
+
+   .. py:method:: add(expression)
+
+      Add a condition; all added conditions must hold.
+
+      The expression decides its own placement: it always applies in WHERE
+      position, and an expression flagged :attr:`SqlExpression.post` — a
+      for-all form, or a negated set-derived subtree — additionally applies
+      in HAVING position, which switches the searcher into grouped mode.
+
+      :param expression: The condition to add to the query.
+      :return: None.
+
+
+
+   .. py:method:: add_sort(field, descending = False)
+
+      Append a sort key; the first-declared key is the most significant.
+
+      :param field: The column used as the next sort key.
+      :param descending: Whether the key is ordered from highest to lowest.
+      :return: None.
+
+
+
+   .. py:method:: set_limit(limit)
+
+      Limit the number of iterated matches; a negative value clears the limit.
+
+      :param limit: The maximum number of matches, or a negative value to clear it.
+      :return: None.
+
+
+
+   .. py:method:: add_offset(offset)
+
+      Add to the row :attr:`offset` applied when iterating.
+
+      :param offset: The amount to add to the current row offset.
+      :return: None.
+
+
+
+   .. py:method:: results(**outputs)
+
+      Freeze this search into a lazy :class:`~httk.store.db.results.SqlResultSet`.
+
+      :param \*\*outputs: Optional output names mapped to query variables or columns.
+      :return: The frozen lazy result plan.
+
+
+
+   .. py:method:: count()
+
+      Return the number of matches, disregarding any limit and offset.
+
+      :return: The number of matching rows, or groups for a grouped query.
+
+
+

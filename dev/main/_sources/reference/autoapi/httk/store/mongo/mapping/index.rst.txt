@@ -1,0 +1,234 @@
+httk.store.mongo.mapping
+========================
+
+.. py:module:: httk.store.mongo.mapping
+
+.. autoapi-nested-parse::
+
+   Pure MongoDB physical mapping derived from the schema intermediate form.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   httk.store.mongo.mapping.METADATA_COLLECTION
+   httk.store.mongo.mapping.COUNTERS_COLLECTION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.mapping.DocumentFieldSpec
+   httk.store.mongo.mapping.IndexSpec
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.mapping.entry_dispatch_table_name
+   httk.store.mongo.mapping.collection_name_for
+   httk.store.mongo.mapping.document_fields_for
+   httk.store.mongo.mapping.index_specs_for
+   httk.store.mongo.mapping.validator_for
+   httk.store.mongo.mapping.dispatch_validator_for
+   httk.store.mongo.mapping.dispatch_index_specs
+   httk.store.mongo.mapping.counter_next
+
+
+Module Contents
+---------------
+
+.. py:data:: METADATA_COLLECTION
+   :type:  Final
+   :value: '_httk_store_metadata'
+
+
+.. py:data:: COUNTERS_COLLECTION
+   :type:  Final
+   :value: '_httk_counters'
+
+
+.. py:class:: DocumentFieldSpec
+
+   Describe one field's location and embedded value shape in ``f``.
+
+   :param field: The logical schema field name.
+   :param role: The schema field role.
+   :param keys: Parent document keys used by non-child fields.
+   :param element_keys: Keys used by one embedded child element.
+   :param optional: Whether an absent key represents ``None``.
+   :param shape: The schema shape marker, when present.
+
+
+   .. py:attribute:: field
+      :type:  str
+
+
+   .. py:attribute:: role
+      :type:  str
+
+
+   .. py:attribute:: keys
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: element_keys
+      :type:  tuple[str, Ellipsis]
+      :value: ()
+
+
+
+   .. py:attribute:: optional
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: shape
+      :type:  Any
+      :value: None
+
+
+
+   .. py:property:: key
+      :type: str
+
+
+      Return the single parent key for this field.
+
+      :return: The parent key.
+      :raises ValueError: If the field has multiple or no parent keys.
+
+
+   .. py:property:: columns
+      :type: tuple[str, Ellipsis]
+
+
+      Return the generated column names represented by this plan.
+
+      :return: The physical field column names.
+
+
+.. py:class:: IndexSpec
+
+   Describe one MongoDB index without performing any I/O.
+
+   :param keys: Ordered dotted field paths and ascending/descending directions.
+   :param name: Deterministic index name.
+   :param unique: Whether duplicate keys are rejected.
+   :param partial_filter_expression: Optional MongoDB partial-index predicate.
+
+
+   .. py:attribute:: keys
+      :type:  tuple[tuple[str, int], Ellipsis]
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: unique
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: partial_filter_expression
+      :type:  dict[str, Any] | None
+      :value: None
+
+
+
+   .. py:property:: key
+      :type: tuple[tuple[str, int], Ellipsis]
+
+
+      Return the ordered MongoDB key pattern.
+
+      :return: The ordered key pattern.
+
+
+   .. py:property:: partial_filter
+      :type: dict[str, Any] | None
+
+
+      Return the partial filter expression.
+
+      :return: The partial filter, or ``None``.
+
+
+.. py:function:: entry_dispatch_table_name(family_name)
+
+   Return the deterministic reserved dispatch collection name.
+
+   :param family_name: Registered entry-family name.
+   :return: The physical dispatch collection name.
+
+
+.. py:function:: collection_name_for(schema)
+
+   Return the collection name for a resolved schema.
+
+   :param schema: Resolved storable schema.
+   :return: The schema's physical collection name.
+   :raises ValueError: If the name uses the reserved ``_httk_`` prefix.
+
+
+.. py:function:: document_fields_for(schema)
+
+   Derive the user-field document plan under the ``f`` subdocument.
+
+   :param schema: Resolved storable schema.
+   :return: One immutable document-field plan per stored schema field.
+
+
+.. py:function:: index_specs_for(schema)
+
+   Derive all record-collection indexes from the schema IR.
+
+   :param schema: Resolved storable schema.
+   :return: Deterministically ordered index specifications.
+
+
+.. py:function:: validator_for(schema)
+
+   Build the writer-owned ``$jsonSchema`` validator for a record collection.
+
+   :param schema: Resolved storable schema.
+   :return: A MongoDB collection validator command fragment.
+
+
+.. py:function:: dispatch_validator_for(family)
+
+   Build the validator for one entry-family dispatch collection.
+
+   :param family: Normalized entry-family layout.
+   :return: A MongoDB collection validator command fragment.
+
+
+.. py:function:: dispatch_index_specs(family)
+
+   Derive the unique ``(record, sid)`` dispatch index.
+
+   :param family: Normalized multi-record entry-family layout.
+   :return: The dispatch collection's index specification.
+   :raises ValueError: If the family has fewer than two backing records.
+
+
+.. py:function:: counter_next(database, collection_name, *, session = None)
+
+   Atomically allocate the next integer sid from the counters collection.
+
+   :param database: A PyMongo database handle.
+   :param collection_name: Counter key, normally a record collection name.
+   :param session: Optional active MongoDB transaction session.
+   :return: The allocated monotonically increasing integer.
+
+

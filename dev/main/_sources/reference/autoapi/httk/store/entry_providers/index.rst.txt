@@ -1,0 +1,262 @@
+httk.store.entry_providers
+==========================
+
+.. py:module:: httk.store.entry_providers
+
+.. autoapi-nested-parse::
+
+   Serve standard entry types through in-memory :class:`~httk.core.EntryProvider` implementations.
+
+   These providers map ``{id: record}`` mappings of the stdlib-only record models
+   defined in *httk-core* (:class:`~httk.core.Reference`, :class:`~httk.core.File`,
+   :class:`~httk.core.Calculation`) onto the neutral httk-core entry-provider
+   contract, so a serving module (such as *httk-serve*) can expose them as
+   OPTIMADE ``references``/``files``/``calculations`` endpoints without either side
+   depending on the other. Each provider describes its entry type with the vendored
+   OPTIMADE standard definition loaded from httk-core via
+   :func:`~httk.core.standard_entry_type`.
+
+   The record *models* live in httk-core (contracts and models); these *providers*
+   live in httk-store (the capability layer built on those models), together with
+   property-definition validation. The database storage layer in
+   :mod:`httk.store.db` complements them with a database-backed provider
+   (:class:`~httk.store.db.entry_provider.StoreEntryProvider`) serving stored
+   dataclasses the same way.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.entry_providers.StandardEntryProvider
+   httk.store.entry_providers.ReferenceEntryProvider
+   httk.store.entry_providers.FileEntryProvider
+   httk.store.entry_providers.CalculationEntryProvider
+   httk.store.entry_providers.RunEntryProvider
+   httk.store.entry_providers.DataRecordEntryProvider
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.entry_providers.product_relationships
+
+
+Module Contents
+---------------
+
+.. py:class:: StandardEntryProvider(entries, *, record_type, entry_type, relationships)
+
+   Bases: :py:obj:`httk.core.EntryProvider`
+
+
+   Serve one standard entry type through the neutral provider contract.
+
+   :param entries: The records keyed by their served identifiers.
+   :param record_type: The core record class used to construct each entry.
+   :param entry_type: The OPTIMADE entry type served by this provider.
+   :param relationships: Optional related entries keyed by served identifier.
+
+
+   .. py:method:: entry_types()
+
+      Return the one standard entry-type definition served by this provider.
+
+      :return: The served entry-type definition.
+
+
+
+   .. py:method:: property_keys(entry_type)
+
+      Return served property names mapped to record attribute names.
+
+      :param entry_type: The entry type to inspect.
+      :return: The served-property to record-key mapping.
+      :raises KeyError: If ``entry_type`` is not this provider's entry type.
+
+
+
+   .. py:method:: records(entry_type)
+
+      Return JSON-compatible records for the requested entry type.
+
+      :param entry_type: The entry type to enumerate.
+      :return: The provider's records in mapping iteration order.
+      :raises KeyError: If ``entry_type`` is not this provider's entry type.
+
+
+
+   .. py:method:: relationships(entry_type)
+
+      Return related entries keyed by served identifier.
+
+      :param entry_type: The entry type to inspect.
+      :return: The normalized relationship mapping.
+      :raises KeyError: If ``entry_type`` is not this provider's entry type.
+
+
+
+.. py:class:: ReferenceEntryProvider(entries, *, relationships = None)
+
+   Bases: :py:obj:`StandardEntryProvider`
+
+
+   Serves OPTIMADE ``references`` from a mapping of id to :class:`~httk.core.Reference`.
+
+   ``relationships`` optionally maps a reference id to its related entries
+   (:class:`~httk.core.RelatedEntry` values, served flat per id).
+
+   :param entries: The references keyed by their served identifiers.
+   :param relationships: Optional related entries keyed by reference identifier.
+
+
+.. py:class:: FileEntryProvider(entries, *, relationships = None)
+
+   Bases: :py:obj:`StandardEntryProvider`
+
+
+   Serves OPTIMADE ``files`` from a mapping of id to :class:`~httk.core.File`.
+
+   ``relationships`` optionally maps a file id to its related entries
+   (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. the
+   calculations a file is ``input``/``output`` of.
+
+   :param entries: The files keyed by their served identifiers.
+   :param relationships: Optional related entries keyed by file identifier.
+
+
+.. py:class:: CalculationEntryProvider(entries, *, relationships = None)
+
+   Bases: :py:obj:`StandardEntryProvider`
+
+
+   Serves OPTIMADE ``calculations`` from a mapping of id to :class:`~httk.core.Calculation`.
+
+   ``relationships`` optionally maps a calculation id to its related entries
+   (:class:`~httk.core.RelatedEntry` values, served flat per id) — e.g. its
+   ``input``/``output`` files, expressed via the ``role`` metadata.
+
+   :param entries: The calculations keyed by their served identifiers.
+   :param relationships: Optional related entries keyed by calculation identifier.
+
+
+.. py:class:: RunEntryProvider(entries)
+
+   Bases: :py:obj:`httk.core.EntryProvider`
+
+
+   Serve core :class:`~httk.core.Run` records and their provenance edges.
+
+   :param entries: The runs keyed by their served identifiers.
+
+
+   .. py:method:: entry_types()
+
+      Return the vendored ``_httk_runs`` entry definition.
+
+      :return: The served run entry-type definition.
+
+
+
+   .. py:method:: property_keys(entry_type)
+
+      Return the served run-property to record-key mapping.
+
+      :param entry_type: The entry type to inspect.
+      :return: The served-property to record-key mapping.
+      :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+
+
+
+   .. py:method:: records(entry_type)
+
+      Return JSON-compatible run records.
+
+      :param entry_type: The entry type to enumerate.
+      :yield: Run records in input mapping order.
+      :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+
+
+
+   .. py:method:: relationships(entry_type)
+
+      Return run provenance edges with role and edge-label metadata.
+
+      :param entry_type: The entry type to inspect.
+      :return: Relationships grouped by run identifier.
+      :raises KeyError: If ``entry_type`` is not ``_httk_runs``.
+
+
+
+.. py:class:: DataRecordEntryProvider(entries, *, definitions = None, relationships = None)
+
+   Bases: :py:obj:`httk.core.EntryProvider`
+
+
+   Serve core :class:`~httk.core.DataRecord` values as provider properties.
+
+   Definitions are resolved eagerly at construction. Every served property name
+   must start with ``_``; absent record properties are emitted as JSON null.
+
+   :param entries: The data records keyed by their served identifiers.
+   :param definitions: Optional property definitions keyed by served property name.
+   :param relationships: Optional related entries keyed by record identifier.
+   :raises ValueError: If a property name, definition, or non-nullable property
+       is inconsistent with the supplied records.
+
+
+   .. py:method:: entry_types()
+
+      Return the resolved ``_httk_records`` entry definition.
+
+      :return: The served data-record entry-type definition.
+
+
+
+   .. py:method:: property_keys(entry_type)
+
+      Return served property names mapped to data-record keys.
+
+      :param entry_type: The entry type to inspect.
+      :return: The served-property to record-key mapping.
+      :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+
+
+
+   .. py:method:: records(entry_type)
+
+      Return records with union-null values for unserved properties.
+
+      :param entry_type: The entry type to enumerate.
+      :yield: JSON-compatible records in input mapping order.
+      :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+
+
+
+   .. py:method:: relationships(entry_type)
+
+      Return normalized data-record relationships by identifier.
+
+      :param entry_type: The entry type to inspect.
+      :return: The relationship mapping supplied at construction.
+      :raises KeyError: If ``entry_type`` is not ``_httk_records``.
+
+
+
+.. py:function:: product_relationships(links)
+
+   Build source-side relationships for a provider's ``relationships=`` argument.
+
+   Feed the inner mapping into the source-side provider's ``relationships=`` argument;
+   per-edge ``workflow_declaration_uri`` is deliberately not served yet (relation-object
+   serving is future work).
+
+   :param links: The product links to group by source type and identifier.
+   :return: Source-type mappings of source identifiers to related product entries.
+   :raises ValueError: If one source has duplicate product labels.
+
+

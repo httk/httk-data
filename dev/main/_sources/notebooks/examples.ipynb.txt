@@ -1,0 +1,46 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "md1",
+   "metadata": {},
+   "source": [
+    "# Examples\n",
+    "\n",
+    "Serving a reference through an entry provider and validating a record."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "code1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from httk.core import standard_entry_type\n",
+    "from httk.store import ReferenceEntryProvider, validate_record\n",
+    "\n",
+    "provider = ReferenceEntryProvider({\"ref-1\": {\"title\": \"A study\", \"year\": \"2021\"}})\n",
+    "print(list(provider.entry_types()))\n",
+    "\n",
+    "validate_record(\n",
+    "    standard_entry_type(\"references\"),\n",
+    "    {\"id\": \"ref-1\", \"type\": \"references\", \"title\": \"A study\", \"year\": \"2021\"},\n",
+    ")\n",
+    "print(\"record is valid\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

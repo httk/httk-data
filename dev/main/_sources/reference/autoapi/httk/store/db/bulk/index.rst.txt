@@ -1,0 +1,190 @@
+httk.store.db.bulk
+==================
+
+.. py:module:: httk.store.db.bulk
+
+.. autoapi-nested-parse::
+
+   Bulk ingestion for :class:`~httk.store.db.store.SqlStore`.
+
+   :class:`BulkIngest` is the context manager returned by
+   :meth:`~httk.store.db.store.SqlStore.bulk_ingest`. It replaces the per-record
+   ``save()`` loop: instead of one statement round-trip per row with an
+   in-database deduplication protocol, it encodes each object with the pure
+   encoders in :mod:`httk.store.db.store` (``_encode_parent_row`` and
+   ``_encode_child_rows``), assigns sids from monotonic in-memory counters,
+   deduplicates set-wise, and appends buffered rows into the record tables with
+   executemany batches inside one transaction.
+
+   Two modes share the same encoder:
+
+   - *Empty store* (a fresh build): tables absent from the database are created
+     without their separable indexes, buffered rows are appended directly, and the
+     indexes (content-id uniqueness, ``ix_``/``uq_``, composite, child parent-sid)
+     are built only once the stream has loaded — their creation is itself the
+     uniqueness verification.
+   - *Populated store* (incremental append): tables that already hold rows keep
+     their sid allocation above the current maximum. Each flushed chunk is staged
+     into an ordinary ``bulkstage_<table>`` table and resolved set-wise against the
+     target — a content-id anti-join (with in-memory
+     :class:`~httk.core.storage.markers.IdentitySkip` metadata verification of the
+     hits, reproducing :meth:`~httk.store.db.store.SqlStore.save`), a ``by_value``
+     whole-parent-column anti-join with null-safe equality, and a sid remap that
+     rewrites every still-buffered reference to a deduplicated existing sid before
+     it is flushed. The ``index_strategy`` knob chooses whether existing tables
+     keep their indexes during the append or rebuild them at the end.
+
+   Deduplication mirrors :meth:`~httk.store.db.store.SqlStore.save` set-wise: a
+   ``"content_id"`` table keeps a ``content_id -> sid`` map (a hit returns the
+   mapped sid and buffers neither the parent row nor its children, and — unless
+   ``verify_metadata`` is disabled — compares
+   :class:`~httk.core.storage.markers.IdentitySkip` metadata against the first
+   occurrence in memory, or against the stored row for a hit against existing data,
+   raising :class:`~httk.store.store_common.EntryMetadataConflictError`); a
+   ``"by_value"`` table keeps a whole-parent-column-tuple map (a hit returns the
+   mapped sid with no metadata check); a ``"none"`` table always inserts.
+   Multi-record entry families buffer one deduplicated dispatch row per content id,
+   raising :class:`~httk.store.store_common.EntryDispatchIntegrityError` on a
+   conflicting backing.
+
+   A third, opt-in mode parallelizes the encode. ``bulk_ingest(workers=N)`` with
+   ``N > 1`` forks a pool of worker processes (the ``fork`` start method, so each
+   inherits the unpicklable store and never touches its database) and pickles each
+   saved object onto a shared task queue. Every worker runs the *same* pure
+   encoders against a per-worker :class:`~httk.store.store_common.SaveProjection`,
+   allocating sids from a disjoint block and writing per-table shard files
+   (pyarrow Parquet on DuckDB — the optional ``parallel`` extra — or a native
+   SQLite database per worker). The main process then merges the shards inside the
+   ingest's spanning transaction: it loads every shard under the block sids,
+   collapses cross-worker duplicates set-wise (content-id and by_value), verifies
+   each surviving collision's identity-excluded metadata with a grouped scan,
+   sweeps rows orphaned by a collapsed duplicate's subtree, and renumbers the
+   survivors to a compact range.
+   Parallel mode targets the offline *build* of a store and requires a physically
+   empty target; incremental appends into a populated store stay on the serial
+   path. The implementation lives in :mod:`httk.store.db.bulk_parallel`; see its
+   module docstring for the full contract. On a fresh supported store, serial
+   ``finalize="auto"`` selects the deferred finalizer; parallel ``auto`` remains
+   on the parity merge.
+
+   Identity caches are not populated by bulk ingestion (documented best-effort);
+   they are cleared on failure.
+
+   Two behaviors diverge from the per-record ``save()`` loop:
+
+   - *Returned sids are provisional until the context exits.* A record that
+     deduplicates against a row the store already held is remapped to that existing
+     sid at flush, so the sid :meth:`BulkIngest.save` returned is not durable for
+     such a record. :meth:`BulkIngest.resolved_sid`, given the stored record type
+     and a returned sid, maps it to its final stored sid once the context has
+     exited cleanly.
+   - *Nested metadata-conflict messages carry the descendant's path.* Because the
+     bulk encoder resolves referenced and child records eagerly and only discovers
+     their existing-row hits at flush, an :class:`~httk.core.storage.markers.IdentitySkip`
+     conflict reached through a ``descend`` field (a non-skipped reference whose
+     target itself carries skipped metadata) is reported against the descendant
+     record (at its own path, e.g. ``"Leaf.note"``) rather than the ancestor field
+     path save() would use (e.g. ``"Root.primary.note"``). The exception type and
+     abort-and-roll-back behavior are identical; the conflict message differs in
+     its path prefix and, for some nested ``None``/length mismatches, in its
+     detail text.
+   - *DuckDB never drops an existing table's indexes.* DuckDB reserves a dropped
+     index's name until commit, so an in-transaction drop-then-recreate of the same
+     index is rejected. Under ``index_strategy="rebuild"`` (or an ``"auto"`` rebuild
+     decision) DuckDB therefore keeps the indexes in place through the append —
+     relying on their incremental maintenance — and verifies content-id uniqueness
+     with a duplicate-scan at finalize instead of an index rebuild. SQLite drops the
+     separable indexes up front and recreates them at the end, where the creation is
+     itself the uniqueness verification. Both leave the same final indexes present.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.bulk.BulkIngest
+
+
+Module Contents
+---------------
+
+.. py:class:: BulkIngest(store, *, chunk_size = 100000, verify_metadata = True, index_strategy = 'auto', on_progress = None, workers = 1, finalize = 'auto', track_sids = True)
+
+   Append a stream of storable objects into a store, then verify its indexes.
+
+   Instances are produced by :meth:`~httk.store.db.store.SqlStore.bulk_ingest`
+   and used as a context manager. Inside the ``with`` block, :meth:`save`
+   encodes and buffers objects; on clean exit the buffered rows are flushed
+   (staged and resolved set-wise against any existing rows), the separable
+   indexes are created or rebuilt (verifying uniqueness), DuckDB sid sequences
+   are resynchronized, per-table row counts are asserted against the encoder's
+   bookkeeping, and the single spanning transaction commits on SQLite and
+   DuckDB. On those backends, any exception rolls the transaction back, drops
+   every table the context created, restores any index the context dropped,
+   removes staging tables, and clears the store's identity caches, leaving the
+   store exactly as it was before the context opened. ClickHouse is
+   fresh-store-only and fail-closed through its KeeperMap marker; its P3
+   loader/finalizer owns the durable ingest path.
+
+   :param store: The store to ingest into.
+   :param chunk_size: The number of top-level saves buffered before a flush.
+   :param verify_metadata: Whether content-id hits compare identity-excluded metadata.
+   :param index_strategy: How existing tables' separable indexes are handled during the append.
+   :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
+   :param workers: The number of worker processes; ``1`` (the default) is the serial path, ``>1`` encodes in parallel and merges shards.
+   :param finalize: The finalization profile: ``"auto"`` selects the deferred finalizer on a fresh supported store for serial ingestion and the parity merge otherwise; ``"parity"`` and ``"deferred"`` force the respective profile.
+   :param track_sids: Retain the per-save provisional-to-final sid mapping.  Disable it for bounded-memory offline builds when callers do not need :meth:`resolved_sid`.
+
+
+   .. py:attribute:: finalize_timings
+      :type:  dict[str, float]
+
+
+   .. py:method:: save(obj, *, as_record = None)
+
+      Encode and buffer ``obj``, returning its assigned or deduplicated sid.
+
+      Mirrors :meth:`~httk.store.db.store.SqlStore.save`: an opted-in domain
+      object is projected through its exact ``__httk_storage_record__`` and
+      ``as_record`` selects an alternate record representation.
+
+      The returned sid is **provisional** while the context is open. A newly
+      inserted object keeps its returned sid, but an object that deduplicates
+      against a row the store already held is remapped to that existing sid at
+      the next flush, so its provisional sid is not the durable identifier.
+      After the context exits cleanly, :meth:`resolved_sid` maps any returned
+      sid — provisional or final — to the durable stored sid.
+
+      :param obj: The object to store.
+      :param as_record: The alternate record representation to use, if any.
+      :return: The provisional sid (see :meth:`resolved_sid` for the durable one).
+      :raises RuntimeError: If the bulk context is not open.
+      :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
+      :raises httk.store.store_common.EntryMetadataConflictError: If a content-id hit has conflicting metadata.
+      :raises httk.store.store_common.EntryDispatchIntegrityError: If a dispatch content id maps to a conflicting backing.
+      :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
+
+
+
+   .. py:method:: resolved_sid(record_type, sid)
+
+      Map a sid returned by :meth:`save` to its durable stored sid after the context exits.
+
+      A newly inserted object's provisional sid resolves to itself; a sid that
+      deduplicated against a pre-existing row resolves to that existing row's
+      sid. This is the durable lookup for provisional sids (see :meth:`save`).
+
+      Sids are allocated per table, so both the record type the sid was saved
+      as (the same class :meth:`~httk.store.db.store.SqlStore.fetch` takes) and
+      the sid are required to identify it unambiguously.
+
+      :param record_type: The stored record class the sid was saved as.
+      :param sid: A sid previously returned by :meth:`save`.
+      :return: The durable stored sid.
+      :raises RuntimeError: If the bulk context has not yet exited cleanly (resolution is incomplete).
+      :raises KeyError: If ``(record_type, sid)`` was never returned by this ingest's :meth:`save`.
+
+
+

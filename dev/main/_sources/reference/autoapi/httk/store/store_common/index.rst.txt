@@ -1,0 +1,148 @@
+httk.store.store_common
+=======================
+
+.. py:module:: httk.store.store_common
+
+.. autoapi-nested-parse::
+
+   Backend-neutral save-path machinery shared by storage backends.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.store_common.EntryMetadataConflictError
+   httk.store.store_common.EntryDispatchIntegrityError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.store_common.EntryStore
+   httk.store.store_common.SaveProjection
+   httk.store.store_common.IdentityCaches
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.store_common.reject_cursor_proxy
+
+
+Module Contents
+---------------
+
+.. py:class:: EntryStore
+
+   Bases: :py:obj:`Protocol`
+
+
+   The store surface consumed by :mod:`httk.store.db.stored_federation`.
+
+   This protocol deliberately describes the small backend seam used by the
+   federation.  The stored-property plan and candidate-stream objects remain
+   backend-specific; their SQL implementations use :meth:`searcher`.
+
+
+   .. py:property:: entry_layout
+      :type: tuple[Any, Ellipsis]
+
+
+      Return the configured entry-family layouts in stable order.
+
+
+   .. py:method:: searcher()
+
+      Return a backend searcher used to build candidate ID streams.
+
+
+
+   .. py:method:: fetch(cls, sid)
+
+      Fetch the stored record of ``cls`` identified by ``sid``.
+
+
+
+   .. py:method:: stored_property_plan(family)
+
+      Return the backend-specific stored-property plan for one family.
+
+      :param family: The logical entry-family class to plan.
+      :return: The validated stored-property plan consumed by federation.
+
+
+
+.. py:exception:: EntryMetadataConflictError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Stored identity-excluded metadata differs from a repeated save.
+
+
+.. py:exception:: EntryDispatchIntegrityError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A persisted entry dispatch row does not name exactly its expected backing.
+
+
+.. py:class:: SaveProjection
+
+   One-save projection cache shared by core identity and SQL encoding.
+
+
+   .. py:attribute:: values_by_source
+      :type:  dict[tuple[type, int], collections.abc.Mapping[str, object]]
+
+
+   .. py:attribute:: validated
+      :type:  set[tuple[type, int]]
+
+
+   .. py:attribute:: metadata_rows
+      :type:  dict[tuple[type, int], collections.abc.Mapping[str, Any]]
+
+
+   .. py:attribute:: metadata_children
+      :type:  dict[tuple[type, int, str], Any]
+
+
+   .. py:attribute:: metadata_content_ids
+      :type:  dict[tuple[type, int], str]
+
+
+   .. py:attribute:: active
+      :type:  set[tuple[type, int]]
+
+
+   .. py:attribute:: inserted
+      :type:  list[tuple[type, int]]
+      :value: []
+
+
+
+   .. py:method:: projector(record_type, source)
+
+
+   .. py:method:: content_id(record_type, source)
+
+
+.. py:function:: reject_cursor_proxy(obj)
+
+   Reject a lazy cursor row before a backend attempts to save it.
+
+
+.. py:class:: IdentityCaches
+
+   Weak identity caches shared by storage backends.
+
+

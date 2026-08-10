@@ -1,0 +1,173 @@
+httk.store.db.entry_provider
+============================
+
+.. py:module:: httk.store.db.entry_provider
+
+.. autoapi-nested-parse::
+
+   Serve stored dataclasses through the httk-core entry-provider contract.
+
+   :class:`StoreEntryProvider` bridges the SQL storage layer to the neutral
+   :class:`~httk.core.EntryProvider` contract: it serves the rows of one or more
+   storable classes in a :class:`~httk.store.db.store.SqlStore` as described,
+   JSON-able entry-type records, so a serving module (such as *httk-serve*)
+   can expose a database as an OPTIMADE API without either side depending on the
+   other.
+
+   For each served class the provider either passes through a supplied
+   :class:`~httk.core.EntryTypeDefinition` (validated to describe every served
+   property) or auto-generates one from the class's resolved
+   :class:`~httk.store.db.schema.TableSchema`: the OPTIMADE core ``id``/``type``
+   properties plus one :meth:`~httk.core.PropertyDefinition.from_simple`
+   definition per servable stored field, each named with a registered
+   database-specific ``prefix`` (default ``"_httk_"``) and merged in via
+   :meth:`~httk.core.EntryTypeDefinition.extended` — the same construction route
+   the other httk entry providers use.
+
+   The schema-to-OPTIMADE type mapping is:
+
+   - ``str``/``int``/``bool``/``float`` fields — ``string``/``integer``/
+     ``boolean``/``float``;
+   - rational fields (:class:`fractions.Fraction`, :class:`~httk.core.FracScalar`,
+     :class:`~httk.core.SurdScalar`) — ``float``, served as the nearest float
+     (stored values themselves remain exact; only the *served* value is
+     approximate);
+   - :class:`datetime.datetime` fields — ``timestamp``, served as ISO-8601 text;
+   - fixed-shape (``Shape(r, c)``) and variable-rows (``Shape(0, c)``)
+     :class:`~httk.core.FracVector` fields — ``list of list of float`` (the fixed
+     shape also declares its dimension sizes);
+   - ``list``/``tuple`` fields of scalars or of the codec types above — ``list
+     of`` the mapped element type.
+
+   Not every stored field can be served as a property: ``bytes`` fields (and
+   fields encoded by a custom, non-built-in value codec) have no OPTIMADE value
+   representation and are skipped, while reference fields and child fields of
+   storable elements surface through :meth:`StoreEntryProvider.relationships`
+   instead — when their target class is itself served, each record declares its
+   related entries as a flat tuple of :class:`~httk.core.RelatedEntry` values,
+   carrying the ``role``/``description`` metadata of an optional
+   :class:`~httk.core.storage.Related` field marker (``Related(serve=False)`` suppresses
+   the field as a relationship).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.entry_provider.StoreEntryProvider
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.db.entry_provider.served_specs
+   httk.store.db.entry_provider.auto_definition
+
+
+Module Contents
+---------------
+
+.. py:function:: served_specs(schema, prefix)
+
+   Return the served ``(name, field spec, fulltype)`` triples.
+
+   :param schema: The resolved schema whose fields are inspected.
+   :param prefix: The registered prefix used for served property names.
+   :return: One triple for every schema field with an OPTIMADE value type.
+
+
+.. py:function:: auto_definition(entry_type, schema, prefix)
+
+   Auto-generate the :class:`~httk.core.EntryTypeDefinition` of a storable class.
+
+   The definition carries the OPTIMADE core ``id``/``type`` properties plus
+   one :meth:`~httk.core.PropertyDefinition.from_simple` definition per triple
+   of :func:`served_specs`, named in the ``custom_`` sub-namespace of
+   ``prefix`` so generated names cannot collide with curated prefixed
+   definitions, merged in via
+   :meth:`~httk.core.EntryTypeDefinition.extended` (so ``prefix`` must be a
+   registered definition prefix).
+
+   :param entry_type: The entry type name to define.
+   :param schema: The resolved schema of the stored class.
+   :param prefix: The registered prefix used for generated property names.
+   :return: The generated entry-type definition.
+
+
+.. py:class:: StoreEntryProvider(store, classes, *, definitions = None, prefix = '_httk_', id_of = None, link_classes = ())
+
+   Bases: :py:obj:`httk.core.EntryProvider`
+
+
+   Serves the stored rows of storable classes as httk-core entry types.
+
+   ``classes`` maps each served entry-type name to its storable dataclass;
+   the classes' tables are read through ``store``. ``definitions`` optionally
+   supplies the :class:`~httk.core.EntryTypeDefinition` of an entry type
+   (validated: it must describe every property the provider serves for it);
+   entry types without a supplied definition get one auto-generated from the
+   class's schema, with every schema-derived property name carrying
+   ``prefix`` (which must be registered, see
+   :func:`~httk.core.register_definition_prefix`). ``id_of`` maps
+   ``(entry_type, sid, instance)`` to the served entry id; the default is
+   ``"<entry_type>-<sid>"``. ``link_classes`` supplies additional storable
+   classes for link metadata validation.
+
+   See the module docstring for which stored fields are served as properties
+   (and how their types map), which are skipped, and which surface through
+   :meth:`relationships` instead.
+
+   :param store: The SQL store containing the served records.
+   :param classes: The served entry-type names and their storable classes.
+   :param definitions: Optional definitions to use instead of auto-generation.
+   :param prefix: The registered prefix for generated property names.
+   :param id_of: The function that maps a served record to its public id.
+   :param link_classes: Additional storable classes supplied for link metadata validation.
+
+
+   .. py:method:: entry_types()
+
+      Return the definitions of all served entry types.
+
+      :return: The served entry-type definitions keyed by entry type.
+
+
+
+   .. py:method:: property_keys(entry_type)
+
+      Return the served property-to-storage-key mapping for an entry type.
+
+      :param entry_type: The served entry type to inspect.
+      :return: The public property names and their storage keys.
+      :raises KeyError: If ``entry_type`` is not served.
+
+
+
+   .. py:method:: records(entry_type)
+
+      Yield JSON-able records for a served entry type.
+
+      :param entry_type: The served entry type whose records are read.
+      :yield: A served record.
+      :raises KeyError: If ``entry_type`` is not served.
+
+
+
+   .. py:method:: relationships(entry_type)
+
+      Return relationships grouped by source entry id.
+
+      Relationships come from stored reference fields and child fields
+      targeting served storable classes; loose-edge projections are not part
+      of this provider contract.
+
+      :param entry_type: The served entry type whose relationships are read.
+      :return: Related entries keyed by source entry id.
+      :raises KeyError: If ``entry_type`` is not served.
+
+
+

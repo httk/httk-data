@@ -1,0 +1,104 @@
+httk.store.validation
+=====================
+
+.. py:module:: httk.store.validation
+
+.. autoapi-nested-parse::
+
+   Validate values offline against OPTIMADE property definitions with JSON Schema.
+
+   httk-core models each OPTIMADE property as a self-describing definition whose
+   :meth:`~httk.core.PropertyDefinition.as_optimade` document *is* a JSON Schema
+   (plus ``x-optimade-*`` annotations that validators ignore). This module uses
+   that document directly to validate concrete values with ``jsonschema``'s Draft
+   2020-12 dialect.
+
+   The definitions are self-contained: they carry no ``$ref``, so validation never
+   needs to resolve or fetch anything. The document's ``$schema`` key points at the
+   OPTIMADE property-definition *meta*-schema URI (which describes definitions, not
+   values); it is removed before building the validator so ``jsonschema`` never
+   attempts to resolve it, and the dialect is pinned explicitly to
+   ``jsonschema.Draft202012Validator``. Validation is therefore fully offline.
+   The local RFC 3339 ``date-time`` checker below supplies format validation
+   without network access or additional dependencies.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.validation.PropertyValidationError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.validation.validate_property
+   httk.store.validation.validate_record
+
+
+Module Contents
+---------------
+
+.. py:exception:: PropertyValidationError(name, message)
+
+   Bases: :py:obj:`ValueError`
+
+
+   Report that a value did not conform to its OPTIMADE property definition.
+
+   Carries the offending property ``name`` and a human-readable ``message``. For
+   single-value failures the message wraps the underlying ``jsonschema`` error
+   message, and that ``jsonschema.exceptions.ValidationError`` is preserved
+   as the chained ``__cause__``.
+
+   :param name: The name of the invalid property.
+   :param message: The validation failure message.
+
+
+   .. py:attribute:: name
+
+
+   .. py:attribute:: message
+
+
+.. py:function:: validate_property(definition, value)
+
+   Validate a single ``value`` against ``definition``'s JSON-Schema payload.
+
+   Builds a ``jsonschema.Draft202012Validator`` directly from the
+   definition's document (with the ``$schema`` meta-schema reference removed)
+   and validates ``value`` against it using the local format checker. Returns
+   ``None`` on success; raises :class:`PropertyValidationError` on failure,
+   chaining the underlying ``jsonschema.exceptions.ValidationError`` as the
+   cause. No network access or registry lookup ever happens.
+
+   :param definition: The self-contained OPTIMADE property definition.
+   :param value: The value to validate.
+   :return: None.
+   :raises PropertyValidationError: If ``value`` violates ``definition``.
+
+
+.. py:function:: validate_record(entry_type, record)
+
+   Validate every property present in ``record`` against ``entry_type``.
+
+   Each key in ``record`` must be described by ``entry_type``; unknown property
+   names are rejected with a :class:`PropertyValidationError` naming them and the
+   entry type. ``id`` and ``type`` must both be present. Properties described by
+   the definition but absent from ``record`` are simply not checked (serving a
+   subset of the described properties is normal). The value of every property
+   that *is* present is validated via :func:`validate_property`. Returns ``None``
+   on success.
+
+   :param entry_type: The entry definition describing allowed properties.
+   :param record: The record mapping to validate.
+   :return: None.
+   :raises PropertyValidationError: If a property is unknown, ``id`` or ``type``
+       is missing, or a value violates its property definition.
+
+

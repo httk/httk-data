@@ -1,0 +1,76 @@
+httk.store.mongo.results
+========================
+
+.. py:module:: httk.store.mongo.results
+
+.. autoapi-nested-parse::
+
+   Materialized MongoDB result sets and live keyset pages.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.results.MongoResultSet
+
+
+Module Contents
+---------------
+
+.. py:class:: MongoResultSet(searcher, outputs = None)
+
+   A materialized MongoDB result set with named rows and scalar helpers.
+
+   :param searcher: The search plan to freeze.
+   :param outputs: Optional replacement output declarations.
+
+
+   .. py:attribute:: names
+
+
+   .. py:method:: first()
+
+      Return the first row or ``None``.
+
+
+
+   .. py:method:: one()
+
+      Return the sole row.
+
+      :raises ~httk.store.query.NoResultError: If no row exists.
+      :raises ~httk.store.query.MultipleResultsError: If multiple rows exist.
+      :return: The sole result row.
+
+
+
+   .. py:method:: scalars(name = None)
+
+      Iterate one named output from each row.
+
+
+
+   .. py:method:: column(name)
+
+      Return an iterator over one scalar output.
+
+      Mongo packet 4a keeps this optional capability intentionally small;
+      object-output validation is performed from the frozen output plan.
+
+
+
+   .. py:method:: page(*, size, order_by, cursor = None, include_total = False)
+
+      Fetch one bounded live page using a strict MongoDB keyset seek.
+
+      :param size: The maximum number of verified rows to return.
+      :param order_by: Root scalar result projections used as order keys.
+      :param cursor: A continuation token returned by a preceding page.
+      :param include_total: Whether to calculate the exact server-side total.
+      :return: The requested immutable result page.
+
+
+

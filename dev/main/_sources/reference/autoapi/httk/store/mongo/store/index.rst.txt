@@ -1,0 +1,215 @@
+httk.store.mongo.store
+======================
+
+.. py:module:: httk.store.mongo.store
+
+.. autoapi-nested-parse::
+
+   MongoDB store layout initialization and collection preparation.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.store.MongoStore
+
+
+Module Contents
+---------------
+
+.. py:class:: MongoStore(database, *, entry_records = None)
+
+   Object store foundation for MongoDB-backed storable records.
+
+   Construction stamps a new empty database or validates the existing layout
+   declaration.  Record collections are deliberately created only by the
+   explicit :meth:`ensure_collections` operation; save and fetch belong to a
+   later phase.
+
+   :param database: The MongoDB database wrapper.
+   :param entry_records: The required entry-family declaration on first open.
+   :raises TypeError: If the first open omits ``entry_records``.
+   :raises ~httk.store.storage_layout.StorageLayoutUpgradeRequiredError: If the
+       persisted layout is not trusted by this implementation.
+
+
+   .. py:attribute:: supports_page
+      :value: True
+
+
+      Whether this backend implements keyset result paging.
+
+
+   .. py:property:: layout
+      :type: httk.store.storage_layout.StorageLayout
+
+
+      Return the immutable persisted entry declaration.
+
+      :return: The normalized storage layout.
+
+
+   .. py:property:: entry_layout
+      :type: tuple[httk.store.storage_layout.EntryFamilyLayout, Ellipsis]
+
+
+      Return configured entry-family layouts in stable order.
+
+      :return: The configured entry-family layouts.
+
+
+   .. py:property:: entry_records
+      :type: collections.abc.Mapping[type, tuple[type, Ellipsis]]
+
+
+      Return configured family classes mapped to backing classes.
+
+      :return: The normalized entry declaration keyed by family class.
+
+
+   .. py:method:: ensure_collections(*classes)
+
+      Synchronously create or update record collections and their indexes.
+
+      :param \*classes: Storable record classes whose collections should be
+          prepared.  A configured multi-record family also prepares its
+          dispatch collection.
+      :return: None.
+      :raises ValueError: If a requested physical name is reserved.
+
+
+
+   .. py:method:: transaction()
+
+      Return a flat explicit MongoDB transaction context manager.
+
+      :return: A context that commits on normal exit and aborts on exception.
+      :raises TransactionsUnavailableError: If this store is in degraded mode.
+
+
+
+   .. py:method:: clear_stale_lock()
+
+      Clear a stale fsck lease after verifying its owner is dead.
+
+      This is an administrative operation. Clearing a merely slow fsck can
+      corrupt the store because the lease protocol intentionally has no
+      fencing token.
+
+      :return: None.
+      :raises StoreLockedError: If the fsck lease is still fresh.
+
+
+
+   .. py:method:: fsck(*, repair = True, collect_garbage = True, repair_conflicts = False, force = False, known_types = ())
+
+      Exclusively repair dispatch integrity and collect orphan dependencies.
+
+      Main-role records and dispatch-addressed records are roots. Only
+      dependency-role documents are eligible for collection; fsck never
+      creates a dispatch for a dependency-role backing.
+
+      :param repair: Insert missing dispatches for main multi-family backings.
+      :param collect_garbage: Delete unmarked dependency documents.
+      :param repair_conflicts: Delete invalid dispatch documents after reporting them.
+      :param force: Administrative stale-lease override for the fsck handshake.
+      :param known_types: Record classes that attribute ordinary collections
+          from earlier store sessions, allowing a safe sweep after reopen.
+      :return: An immutable :class:`~httk.store.mongo.fsck.FsckSummary`.
+
+
+
+   .. py:method:: save(obj, *, as_record = None)
+
+      Store an object graph and return its integer sid.
+
+      :param obj: The object or projected domain object to store.
+      :param as_record: An explicit alternate storage-record class.
+      :return: The stored sid.
+      :raises TypeError: If ``obj`` is a cursor proxy.
+      :raises ~httk.core.storage.StorageProjectionCycleError: If the projected graph cycles.
+      :raises ~httk.store.store_common.EntryMetadataConflictError: If identity-excluded metadata conflicts.
+
+
+
+   .. py:method:: fetch[T](cls, sid)
+
+      Fetch and eagerly hydrate ``cls`` at ``sid``.
+
+      :param cls: The storable record class.
+      :param sid: The integer sid.
+      :return: The hydrated record.
+      :raises KeyError: If the record does not exist.
+
+
+
+   .. py:method:: fetch_by_content_id[T](cls, key)
+
+      Fetch a content-addressed record, or return ``None``.
+
+      :param cls: The storable record class.
+      :param key: The content identity.
+      :return: The hydrated record or ``None``.
+      :raises ~httk.store.db.schema.SchemaError: If ``cls`` is not content-id deduplicated.
+
+
+
+   .. py:method:: fetch_entry(family_cls, content_id)
+
+      Fetch the concrete backing record for an entry-family identity.
+
+      :param family_cls: The configured entry-family class.
+      :param content_id: The entry content identity.
+      :return: The backing record or ``None``.
+      :raises ValueError: If the family is not configured.
+      :raises ~httk.store.store_common.EntryDispatchIntegrityError: If dispatch and backing disagree.
+
+
+
+   .. py:method:: sid_of(obj, *, as_record = None)
+
+      Return the sid known for ``obj``, using content lookup when allowed.
+
+      :param obj: The object whose sid is requested.
+      :param as_record: An explicit alternate record class.
+      :return: The sid, or ``None``.
+
+
+
+   .. py:method:: searcher()
+
+      Return a Mongo searcher bound to this store's read path.
+
+      Queries use the active transaction session when one is open, so they
+      see that transaction's uncommitted writes, and object outputs hydrate
+      through :meth:`fetch`, preserving the identity-cache contract.
+
+      :return: A new MongoDB searcher bound to this store.
+
+
+
+   .. py:method:: stored_property_plan(family)
+
+      Return the Mongo stored-property plan for one configured entry family.
+
+      :param family: The logical entry-family class.
+      :return: Its validated Mongo stored-property plan.
+
+
+
+   .. py:method:: referring(cls, *, field, to)
+
+      Return records whose reference field points at ``to``, ordered by sid.
+
+      :param cls: The referring record class.
+      :param field: The reference field.
+      :param to: The stored target instance.
+      :return: Matching records ordered by sid.
+      :raises ~httk.store.db.schema.SchemaError: If the field or target class is incompatible.
+      :raises ValueError: If ``to`` is not stored or fetched here.
+
+
+

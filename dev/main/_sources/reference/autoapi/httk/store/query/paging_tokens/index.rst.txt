@@ -1,0 +1,16 @@
+httk.store.query.paging_tokens
+==============================
+
+.. py:module:: httk.store.query.paging_tokens
+
+.. autoapi-nested-parse::
+
+   Private canonical continuation-token primitives for any keyset-paging backend.
+
+   The token is intentionally an opaque, transport-safe value rather than a SQL
+   fragment.  Its payload carries only typed anchor values and a digest of the
+   frozen result plan; every decoded anchor is subsequently passed to SQLAlchemy
+   as a normal bound parameter.
+
+
+

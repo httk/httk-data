@@ -1,0 +1,89 @@
+httk.store.mongo.entry_provider
+===============================
+
+.. py:module:: httk.store.mongo.entry_provider
+
+.. autoapi-nested-parse::
+
+   Serve MongoDB-backed records through the neutral entry-provider contract.
+
+   Mongo entry identities are content identities rather than SQL row identities.
+   Configured entry families are rendered through their Mongo stored-property plan;
+   configured backing records are also accepted for the schema-derived provider
+   surface used by the SQL provider's parity tests.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.mongo.entry_provider.StoreEntryProvider
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   httk.store.mongo.entry_provider.served_specs
+   httk.store.mongo.entry_provider.auto_definition
+
+
+Module Contents
+---------------
+
+.. py:function:: served_specs(schema, prefix)
+
+   Return the served ``(name, field spec, fulltype)`` triples.
+
+   :param schema: The resolved schema whose fields are inspected.
+   :param prefix: The registered prefix used for served property names.
+   :return: One triple for every schema field with an OPTIMADE value type.
+
+
+.. py:function:: auto_definition(entry_type, schema, prefix)
+
+   Build a definition for the JSON-able fields of one backing class.
+
+
+.. py:class:: StoreEntryProvider(store, classes, *, definitions = None, prefix = '_httk_', id_of = None, link_classes = ())
+
+   Bases: :py:obj:`httk.core.EntryProvider`
+
+
+   Serve configured Mongo entry families or their concrete backings.
+
+   ``classes`` maps public entry-type names to either configured entry-family
+   classes or configured concrete backing classes. Family classes use the
+   family's :class:`~httk.store.mongo.stored_properties.MongoStoredPropertyPlan`; backing classes use the same
+   schema-derived property contract as the SQL provider. ``id_of`` receives
+   ``(entry_type, sid, hydrated_record)`` and defaults to the record's
+   content identity.
+
+
+   .. py:method:: entry_types()
+
+      Return definitions for all served entry types.
+
+
+
+   .. py:method:: property_keys(entry_type)
+
+      Return public property names mapped to Mongo response keys.
+
+
+
+   .. py:method:: records(entry_type)
+
+      Yield JSON-able records for one served entry type.
+
+
+
+   .. py:method:: relationships(entry_type)
+
+      Return direct and link-derived relationships grouped by source id.
+
+
+

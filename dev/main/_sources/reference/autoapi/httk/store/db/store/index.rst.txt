@@ -1,0 +1,348 @@
+httk.store.db.store
+===================
+
+.. py:module:: httk.store.db.store
+
+.. autoapi-nested-parse::
+
+   The SQL store: save and fetch storable frozen dataclasses through a :class:`~httk.store.db.engine.Database`.
+
+   :class:`SqlStore` is the object-level storage API on top of the schema IR
+   (:mod:`httk.store.db.schema`), the value codecs (:mod:`httk.store.db.codecs`),
+   the content identity (:mod:`httk.core.storage`), and the SQLAlchemy table
+   mapping (:mod:`httk.store.db.mapping`):
+
+   - :meth:`SqlStore.save` writes an instance (recursing into referenced and
+     child-element storables) and returns its integer ``sid``, deduplicating per
+     the class's :attr:`~httk.core.storage.StorageInfo.dedup` policy;
+   - :meth:`SqlStore.fetch` reconstructs the instance stored under a ``sid`` —
+     exactly, via the ``*_exact`` companion columns for rationals — with an
+     identity guarantee: while an instance is alive, fetching its sid again
+     returns the very same object;
+   - :meth:`SqlStore.transaction` scopes several operations into one database
+     transaction (commit on exit, roll back on exception); outside of it every
+     operation autocommits;
+   - :meth:`SqlStore.referring` finds join-objects (tags, references) pointing at
+     a stored instance, replacing v1's implicit codependent-data machinery;
+   - :meth:`SqlStore.searcher` starts a query through the search DSL
+     (:mod:`httk.store.db.searcher`), implementing the :mod:`httk.store.query`
+     protocols.
+
+   Deduplication semantics (ported from v1): under ``"content_id"`` an equal
+   instance maps to the existing row (children are not re-inserted); under
+   ``"by_value"`` a row matching **all parent-table columns** is reused — child
+   table contents are *not* part of the match, mirroring v1 which matched key
+   columns only; under ``"none"`` every save inserts a new row.
+
+   Identity caches are best-effort; content-addressed :meth:`SqlStore.sid_of`
+   lookups fall back to the database.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   httk.store.db.store.EntryDispatchIntegrityError
+   httk.store.db.store.EntryMetadataConflictError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   httk.store.db.store.SqlStore
+
+
+Module Contents
+---------------
+
+.. py:exception:: EntryDispatchIntegrityError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   A persisted entry dispatch row does not name exactly its expected backing.
+
+
+.. py:exception:: EntryMetadataConflictError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Stored identity-excluded metadata differs from a repeated save.
+
+
+.. py:class:: SqlStore(database, *, entry_records = None)
+
+   Object storage for storable frozen dataclasses in a relational :class:`~httk.store.db.engine.Database`.
+
+   A store starts with an explicit, versioned entry declaration. Ordinary
+   unconfigured frozen-dataclass tables remain on-demand, but only after the
+   layout marker has been initialized on a physically empty database. Schemas
+   edited out-of-band fail at use time with the database's own errors.
+
+   The first open of a database requires ``entry_records``. The store stamps
+   the canonical JSON declaration and protocol version, then trusts that
+   declaration on reopen: a supplied declaration must be byte-identical, and
+   mismatches raise :class:`~httk.store.db.layout.StorageLayoutUpgradeRequiredError`.
+   Reopening does not diff or migrate record schemas. Read paths never issue
+   DDL; missing ordinary tables behave as empty results or missing rows, while
+   table creation happens only through writes or :meth:`ensure_tables`.
+
+   :param database: The database used for storage.
+   :param entry_records: The required entry-family declaration when first opening a database.
+   :raises TypeError: If the first open omits ``entry_records``.
+   :raises httk.store.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
+
+
+   .. py:attribute:: bulk_ingest_finalize_default
+      :type:  Literal['auto', 'parity', 'deferred']
+      :value: 'auto'
+
+
+
+   .. py:property:: layout
+      :type: httk.store.db.layout.StorageLayout
+
+
+      Return the immutable persisted entry declaration and resolved classes.
+
+      :return: The persisted storage layout.
+
+
+   .. py:property:: backend_facts
+      :type: httk.store.db.layout.BackendFacts
+
+
+      Return the dialect capabilities resolved when this store was opened.
+
+
+   .. py:property:: write_profile
+      :type: Literal['transactional', 'degraded', 'bulk-fenced']
+
+
+      Return the persisted permanentization write profile.
+
+
+   .. py:property:: entry_layout
+      :type: tuple[httk.store.db.layout.EntryFamilyLayout, Ellipsis]
+
+
+      Return configured entry-family layouts in deterministic stable-name order.
+
+      :return: The configured entry-family layouts.
+
+
+   .. py:property:: entry_records
+      :type: collections.abc.Mapping[type, tuple[type, Ellipsis]]
+
+
+      Return configured entry-family classes mapped to ordered concrete records.
+
+      :return: The entry-family to concrete-record mapping.
+
+
+   .. py:method:: bulk_ingest(*, chunk_size = 100000, verify_metadata = True, index_strategy = 'auto', on_progress = None, workers = 1, finalize = 'auto', track_sids = True)
+
+      Return a context manager that appends a stream of objects into this store.
+
+      The returned :class:`~httk.store.db.bulk.BulkIngest` exposes
+      ``save(obj, *, as_record=None) -> int`` mirroring :meth:`save`, but
+      buffers encoded rows with pre-assigned sids and appends them in
+      executemany batches. On a physically empty store the record tables are
+      created index-less and their separable indexes are built once the stream
+      completes; on a populated store each flushed chunk is staged and
+      resolved set-wise against the existing rows (content-id anti-join with
+      metadata verification, ``by_value`` whole-column anti-join, and a sid
+      remap of the surviving references) before it is appended. While the
+      context is open the store's ordinary write path is exclusively owned:
+      :meth:`save`, :meth:`ensure_tables` and :meth:`transaction` raise
+      :class:`RuntimeError`.
+
+      A sid returned by ``save`` inside the context is provisional: a record
+      that deduplicates against a pre-existing row is remapped at flush, so its
+      durable sid is obtained from :meth:`~httk.store.db.bulk.BulkIngest.resolved_sid`
+      once the context has exited cleanly.
+
+      :param chunk_size: The number of top-level saves buffered before a flush.
+      :param verify_metadata: Whether content-id hits compare identity-excluded metadata.
+      :param index_strategy: How an existing table's separable indexes are handled during the append —
+          ``"keep"`` appends through them, ``"rebuild"`` drops and recreates them, and ``"auto"`` picks
+          per table by the staged-to-existing row ratio. On DuckDB, which reserves a dropped index's name
+          until commit, ``"rebuild"`` instead keeps the indexes and verifies content-id uniqueness with a
+          duplicate scan; the final indexes are the same either way.
+      :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
+      :param workers: The number of worker processes. ``1`` (the default) is the serial path with byte-for-byte
+          unchanged semantics; ``>1`` encodes the stream in forked worker processes and merges their per-table
+          shards set-wise. Parallel mode requires a physically empty target store (the offline-build use case) and,
+          on DuckDB, the ``httk-store[parallel]`` extra (pyarrow); incremental appends stay on the serial path.
+      :param finalize: ``"parity"`` selects the historical in-database ingest; ``"deferred"`` stages a physically
+          empty ingest outside the store and finalizes it at context exit; ``"auto"`` selects deferred only for a
+          physically empty, supported serial ingest and otherwise selects parity (including ``workers>1``). A
+          subclass may override :attr:`bulk_ingest_finalize_default` for ``"auto"`` calls.
+      :return: A bulk-ingest context manager bound to this store.
+
+
+
+   .. py:method:: ensure_tables(*classes)
+
+      Create the requested tables as an explicit write operation.
+
+      :param \*classes: The storable classes whose tables should exist.
+      :return: None.
+      :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
+
+
+
+   .. py:method:: transaction()
+
+      Return a context manager for one database transaction.
+
+      :return: A transaction context manager that commits on normal exit and rolls back on failure.
+
+
+
+   .. py:method:: steal_lease()
+
+      Conditionally replace the current degraded-store writer lease.
+
+      The compare-and-swap includes the complete observed value so a stale
+      caller can never overwrite a newer owner.
+
+
+
+   .. py:method:: save(obj, *, as_record = None)
+
+      Store ``obj`` (deduplicating per its class's policy) and return its integer sid.
+
+      An opted-in domain object is projected through its exact
+      ``__httk_storage_record__``; ``as_record`` selects an alternate record
+      representation explicitly. Referenced records and record-valued child
+      elements are saved recursively without constructing intermediate
+      record instances.
+
+      A content-id deduplication hit compares metadata marked with
+      :class:`~httk.core.storage.markers.IdentitySkip` in schema order.
+      Nested plans are cached per record type, and a mismatch raises
+      :class:`~httk.store.db.store.EntryMetadataConflictError` without replacing the row.
+
+      :param obj: The object to store.
+      :param as_record: The alternate record representation to use, if any.
+      :return: The stored row's sid.
+      :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
+      :raises httk.store.db.store.EntryMetadataConflictError: If a deduplication hit has conflicting metadata.
+      :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
+      :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
+
+
+
+   .. py:method:: fetch[T](cls, sid)
+
+      Reconstruct the ``cls`` instance stored under ``sid``.
+
+      While a previously fetched (or saved) instance for this ``(class,
+      sid)`` is alive, the very same object is returned. Raises
+      :class:`KeyError` (carrying the class and sid) when no such row exists.
+      A missing table therefore has the same result as a missing row.
+
+      :param cls: The storable class to reconstruct.
+      :param sid: The stored row identifier.
+      :return: The reconstructed instance.
+      :raises KeyError: If no row exists for ``cls`` and ``sid``.
+
+
+
+   .. py:method:: fetch_by_content_id[T](cls, key)
+
+      Return the ``cls`` instance whose content identity is ``key``, or None if not stored.
+
+      Only classes with the ``"content_id"`` dedup policy carry a content
+      identity column; :class:`~httk.store.db.schema.SchemaError` is raised
+      for any other class.
+
+      :param cls: The storable class to search.
+      :param key: The content identity to find.
+      :return: The stored instance, or ``None`` when no row matches.
+      :raises httk.store.db.schema.SchemaError: If the class does not use content-id deduplication.
+
+
+
+   .. py:method:: fetch_entry(family_cls, content_id)
+
+      Return the concrete configured record for an entry-family content identity.
+
+      The result is the actual frozen record class, not the family protocol.
+      A single-record family can query that record directly; only
+      multi-record families use their reserved one-of-many dispatch table,
+      whose constraint permits exactly one backing sid per content identity.
+
+      :param family_cls: The configured entry-family class.
+      :param content_id: The entry content identity to find.
+      :return: The concrete stored record, or ``None`` when no row matches.
+      :raises ValueError: If ``family_cls`` is not configured for this store.
+      :raises EntryDispatchIntegrityError: If a dispatch row is inconsistent with its backing row.
+
+
+
+   .. py:method:: sid_of(obj, *, as_record = None)
+
+      Return this store's sid for ``obj``'s record identity, if present.
+
+      :param obj: The object whose stored identity should be looked up.
+      :param as_record: The alternate record representation to use, if any.
+      :return: The stored sid, or ``None`` when no matching row is known.
+
+
+
+   .. py:method:: searcher()
+
+      Return a new :class:`~httk.store.db.searcher.SqlSearcher` querying this store.
+
+      The searcher runs on this store's read path — inside an open
+      :meth:`transaction` block it sees uncommitted writes — and
+      reconstructs matched objects through :meth:`fetch`, so the identity
+      cache applies.
+
+      :return: A new SQL searcher bound to this store.
+
+
+
+   .. py:method:: fsck(*, repair = True, collect_garbage = True, repair_conflicts = False, known_types = (), exclusive = False)
+
+      Repair dispatches and reclaim permanentization residue.
+
+      Only tables attributable to the persisted layout or ``known_types``
+      are swept; unrelated application tables make collection refuse.
+
+
+
+   .. py:method:: stored_property_plan(family)
+
+      Return the SQL stored-property plan for one configured entry family.
+
+      :param family: The logical entry-family class to plan.
+      :return: The validated SQL stored-property plan.
+
+
+
+   .. py:method:: referring(cls, *, field, to)
+
+      Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
+
+      ``field`` must be a reference field of ``cls`` targeting ``to``'s class
+      (:class:`~httk.store.db.schema.SchemaError` otherwise), and ``to`` must
+      be known to this store — saved or fetched through it — else
+      :class:`ValueError` is raised. Results are ordered by sid.
+
+      :param cls: The storable class whose references should be searched.
+      :param field: The reference field to match.
+      :param to: The stored target instance.
+      :return: The referring stored instances ordered by sid.
+      :raises httk.store.db.schema.SchemaError: If ``field`` is not a compatible reference field.
+      :raises ValueError: If ``to`` is not known to this store.
+
+
+
