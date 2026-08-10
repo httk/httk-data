@@ -16,6 +16,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from fractions import Fraction
@@ -33,6 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE = "_httk_exact_fraction_functions_installed"
 _EXACT_FRACTION_FUNCTIONS_KEY = "httk_exact_fraction_functions_installed"
+_DISPOSE_WAIT_WARNING_SECONDS = 60.0
 
 
 class Database:
@@ -77,6 +79,9 @@ class Database:
         self._server_version: str | None = None
         self._dispose_callbacks: list[Callable[[], None]] = []
         self._dispose_lock = threading.RLock()
+        self._lifecycle_condition = threading.Condition(self._dispose_lock)
+        self._lifecycle_holders: dict[str, int] = {}
+        self._lifecycle_owner: int | None = None
         self._disposed = False
         self._lifecycle_generation = 0
         if engine.dialect.name == "clickhousedb":
@@ -232,12 +237,31 @@ class Database:
             return self._lifecycle_generation
 
     @contextmanager
-    def lifecycle_guard(self, generation: int) -> Any:
-        """Prevent disposal while one store mutation uses ``generation``."""
-        with self._dispose_lock:
+    def lifecycle_guard(self, generation: int, *, holder: str | None = None) -> Any:
+        """Prevent disposal while one named store mutation uses ``generation``."""
+        label = holder or threading.current_thread().name
+        owner = threading.get_ident()
+        with self._lifecycle_condition:
+            while self._lifecycle_holders and self._lifecycle_owner != owner:
+                if self._disposed:
+                    raise RuntimeError("Database has been disposed; create a new Database before mutating this store")
+                self._lifecycle_condition.wait()
             if self._disposed or generation != self._lifecycle_generation:
                 raise RuntimeError("Database has been disposed; create a new Database before mutating this store")
+            self._lifecycle_owner = owner
+            self._lifecycle_holders[label] = self._lifecycle_holders.get(label, 0) + 1
+        try:
             yield
+        finally:
+            with self._lifecycle_condition:
+                count = self._lifecycle_holders.get(label, 0)
+                if count <= 1:
+                    self._lifecycle_holders.pop(label, None)
+                else:
+                    self._lifecycle_holders[label] = count - 1
+                if not self._lifecycle_holders:
+                    self._lifecycle_owner = None
+                self._lifecycle_condition.notify_all()
 
     @property
     def engine(self) -> sqlalchemy.Engine:
@@ -252,12 +276,22 @@ class Database:
 
         :return: None.
         """
-        with self._dispose_lock:
+        with self._lifecycle_condition:
             if self._disposed:
                 return
+            if self._lifecycle_holders and self._lifecycle_owner == threading.get_ident():
+                raise RuntimeError("cannot dispose from within an active bulk context")
             self._disposed = True
             self._lifecycle_generation += 1
             callbacks, self._dispose_callbacks = self._dispose_callbacks, []
+            next_warning = time.monotonic() + _DISPOSE_WAIT_WARNING_SECONDS
+            while self._lifecycle_holders:
+                remaining = max(0.0, next_warning - time.monotonic())
+                self._lifecycle_condition.wait(timeout=remaining)
+                if self._lifecycle_holders and time.monotonic() >= next_warning:
+                    holders = ", ".join(f"{name} ({count})" for name, count in sorted(self._lifecycle_holders.items()))
+                    _LOGGER.warning("database disposal is waiting for in-flight lifecycle guard holder(s): %s", holders)
+                    next_warning = time.monotonic() + _DISPOSE_WAIT_WARNING_SECONDS
         for callback in callbacks:
             try:
                 callback()

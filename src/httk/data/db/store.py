@@ -619,6 +619,7 @@ class SqlStore:
         on_progress: Callable[[int, int], None] | None = None,
         workers: int = 1,
         finalize: Literal["auto", "parity", "deferred"] = "auto",
+        track_sids: bool = True,
     ) -> "BulkIngest":
         """Return a context manager that appends a stream of objects into this store.
 
@@ -668,6 +669,7 @@ class SqlStore:
             on_progress=on_progress,
             workers=workers,
             finalize=finalize,
+            track_sids=track_sids,
         )
 
     def ensure_tables(self, *classes: type) -> None:
@@ -860,7 +862,10 @@ class SqlStore:
             yield
             return
         assert self._lease_lifecycle_generation is not None
-        with self._database.lifecycle_guard(self._lease_lifecycle_generation):
+        with self._database.lifecycle_guard(
+            self._lease_lifecycle_generation,
+            holder=f"{type(self).__name__} {self._write_profile} mutation",
+        ):
             yield
 
     def _release_degraded_lease(self, generation: int) -> None:

@@ -193,6 +193,11 @@ class _WorkerConfig:
     chunk_size: int
     shard_dir: str
     backend: str  # "duckdb" or "sqlite"
+    track_sids: bool = True
+    # Deferred Parquet builds persist auxiliary root/dispatch/diagnostic data
+    # alongside record rows.  Parity merge deliberately keeps its established
+    # in-memory manifest protocol.
+    spill_deferred_auxiliary: bool = False
 
 
 @dataclass
@@ -287,6 +292,62 @@ class _ParquetShardWriter:
 
     def finalize(self) -> dict[str, Any]:
         return dict(self._files)
+
+    def write_roots(self, rows: list[dict[str, Any]]) -> None:
+        """Persist top-level roots instead of retaining them in a manifest."""
+        if not rows:
+            return
+        schema = self._pa.schema(
+            [
+                self._pa.field("token", self._pa.int64()),
+                self._pa.field("tbl", self._pa.string()),
+                self._pa.field("stage_sid", self._pa.int64()),
+            ]
+        )
+        data = {field.name: self._pa.array([row[field.name] for row in rows], type=field.type) for field in schema}
+        path = os.path.join(self._dir, f"w{self._worker_index}_roots_{self._sequence}.parquet")
+        self._sequence += 1
+        self._pq.write_table(self._pa.table(data, schema=schema), path)
+        self._files.setdefault("_httk_roots", []).append(path)
+
+    def _write_auxiliary(self, name: str, schema: Any, rows: list[dict[str, Any]]) -> None:
+        """Write one bounded auxiliary batch into the Parquet stage."""
+        if not rows:
+            return
+        data = {field.name: self._pa.array([row[field.name] for row in rows], type=field.type) for field in schema}
+        path = os.path.join(self._dir, f"w{self._worker_index}_{name}_{self._sequence}.parquet")
+        self._sequence += 1
+        self._pq.write_table(self._pa.table(data, schema=schema), path)
+        self._files.setdefault(name, []).append(path)
+
+    def write_dispatch(self, rows: list[dict[str, Any]]) -> None:
+        """Persist deferred dispatch payloads rather than returning a manifest list."""
+        self._write_auxiliary(
+            "_httk_dispatch_payload",
+            self._pa.schema(
+                [
+                    self._pa.field("dispatch_name", self._pa.string()),
+                    self._pa.field("content_id", self._pa.string()),
+                    self._pa.field("column", self._pa.string()),
+                    self._pa.field("block_sid", self._pa.int64()),
+                ]
+            ),
+            rows,
+        )
+
+    def write_nan_content(self, rows: list[dict[str, Any]]) -> None:
+        """Persist NaN conflict diagnostics rather than returning a manifest set."""
+        self._write_auxiliary(
+            "_httk_nan_content",
+            self._pa.schema(
+                [
+                    self._pa.field("table_name", self._pa.string()),
+                    self._pa.field("content_id", self._pa.string()),
+                    self._pa.field("field_name", self._pa.string()),
+                ]
+            ),
+            rows,
+        )
 
 
 class _SqliteShardWriter:
@@ -410,7 +471,7 @@ class _DuckdbStageWriter:
 
 
 def _make_writer(store: SqlStore, worker_index: int, config: _WorkerConfig) -> Any:
-    if config.backend == "duckdb":
+    if config.backend in {"duckdb", "parquet", "clickhousedb"}:
         return _ParquetShardWriter(store, worker_index, config.shard_dir)
     if config.backend == "duckdb-stage":
         return _DuckdbStageWriter(store, worker_index, config.shard_dir)
@@ -433,6 +494,7 @@ class _WorkerEncoder:
 
     def __init__(self, store: SqlStore, worker_index: int, config: _WorkerConfig) -> None:
         self._store = store
+        self._config = config
         self._chunk_size = config.chunk_size
         self._writer = _make_writer(store, worker_index, config)
         self._base = _worker_base(worker_index)
@@ -442,10 +504,24 @@ class _WorkerEncoder:
         self._content_index: dict[str, dict[str, int]] = {}
         self._value_index: dict[str, dict[tuple[Any, ...], int]] = {}
         self._token_sid: dict[int, tuple[str, int]] = {}
+        self._root_rows: list[dict[str, Any]] = []
         self._dispatch: list[_DispatchRow] = []
+        self._dispatch_payload: list[dict[str, Any]] = []
         self._tables: set[str] = set()
         self._nan_content: set[tuple[str, str, str]] = set()
+        self._nan_rows: list[dict[str, Any]] = []
         self._since_flush = 0
+
+    @property
+    def _deduplicate_in_worker(self) -> bool:
+        """Whether this encoder needs in-memory keys to preserve public provisional sids.
+
+        Parquet deferred finalization has an occurrence sidecar and does the
+        content/by-value collapse set-wise.  With ``track_sids=False`` callers
+        have explicitly opted out of stable in-ingest provisional identities,
+        so retaining one client key per record would only defeat bounded mode.
+        """
+        return self._config.track_sids or self._config.backend != "parquet"
 
     # -- encoding
 
@@ -457,18 +533,30 @@ class _WorkerEncoder:
         table_name = resolve_schema(record_type).table_name
         family = self._store._family_for_backing(record_type)
         if family is not None and len(family.records) > 1:
-            self._dispatch.append(
-                _DispatchRow(
-                    dispatch_name=entry_dispatch_table_name(family.name),
-                    key=projection.content_id(record_type, obj),
-                    column=backing_dispatch_column_name(family.record_names[family.records.index(record_type)]),
-                    all_columns=tuple(backing_dispatch_column_name(name) for name in family.record_names),
-                    ref_table=table_name,
-                    block_sid=sid,
-                    family_name=family.name,
-                )
+            dispatch = _DispatchRow(
+                dispatch_name=entry_dispatch_table_name(family.name),
+                key=projection.content_id(record_type, obj),
+                column=backing_dispatch_column_name(family.record_names[family.records.index(record_type)]),
+                all_columns=tuple(backing_dispatch_column_name(name) for name in family.record_names),
+                ref_table=table_name,
+                block_sid=sid,
+                family_name=family.name,
             )
-        self._token_sid[token] = (table_name, sid)
+            if self._config.spill_deferred_auxiliary:
+                self._dispatch_payload.append(
+                    {
+                        "dispatch_name": dispatch.dispatch_name,
+                        "content_id": dispatch.key,
+                        "column": dispatch.column,
+                        "block_sid": dispatch.block_sid,
+                    }
+                )
+            else:
+                self._dispatch.append(dispatch)
+        if self._config.track_sids or not self._config.spill_deferred_auxiliary:
+            self._token_sid[token] = (table_name, sid)
+        if self._config.spill_deferred_auxiliary:
+            self._root_rows.append({"token": token, "tbl": table_name, "stage_sid": sid})
         self._since_flush += 1
         if self._since_flush >= self._chunk_size:
             self._flush()
@@ -502,7 +590,7 @@ class _WorkerEncoder:
         key: str | None = None
         if schema.dedup == "content_id":
             key = projection.content_id(record_type, source)
-            if dedup_content:
+            if dedup_content and self._deduplicate_in_worker:
                 existing = self._content_index.setdefault(table_name, {}).get(key)
                 if existing is not None:
                     return existing
@@ -514,9 +602,10 @@ class _WorkerEncoder:
 
         if schema.dedup == "by_value":
             value_tuple = tuple(sorted(values.items()))
-            existing = self._value_index.setdefault(table_name, {}).get(value_tuple)
-            if existing is not None:
-                return existing
+            if self._deduplicate_in_worker:
+                existing = self._value_index.setdefault(table_name, {}).get(value_tuple)
+                if existing is not None:
+                    return existing
 
         sid = self._next_sid[table_name]
         if sid - self._base >= _SID_BLOCK:
@@ -533,10 +622,13 @@ class _WorkerEncoder:
                 if isinstance(candidate, float) and math.isnan(candidate):
                     # Report every NaN field (not just the first): the merge picks
                     # the schema-order-first among them, deterministically.
-                    self._nan_content.add((table_name, key, field_name))
-            if dedup_content:
+                    if self._config.spill_deferred_auxiliary:
+                        self._nan_rows.append({"table_name": table_name, "content_id": key, "field_name": field_name})
+                    else:
+                        self._nan_content.add((table_name, key, field_name))
+            if dedup_content and self._deduplicate_in_worker:
                 self._content_index[table_name][key] = sid
-        elif schema.dedup == "by_value":
+        elif schema.dedup == "by_value" and self._deduplicate_in_worker:
             self._value_index[table_name][tuple(sorted(values.items()))] = sid
         self._buffer(table_name, row)
 
@@ -577,6 +669,14 @@ class _WorkerEncoder:
             if rows:
                 self._writer.write(table_name, rows)
                 rows.clear()
+        if self._root_rows:
+            self._writer.write_roots(self._root_rows)
+            self._root_rows.clear()
+        if self._config.spill_deferred_auxiliary:
+            self._writer.write_dispatch(self._dispatch_payload)
+            self._dispatch_payload.clear()
+            self._writer.write_nan_content(self._nan_rows)
+            self._nan_rows.clear()
         self._since_flush = 0
 
     def finish(self) -> _WorkerManifest:
@@ -655,7 +755,16 @@ class ParallelController:
     queue carries each worker's manifest (or exception) back.
     """
 
-    def __init__(self, store: SqlStore, *, workers: int, chunk_size: int, backend: str) -> None:
+    def __init__(
+        self,
+        store: SqlStore,
+        *,
+        workers: int,
+        chunk_size: int,
+        backend: str,
+        track_sids: bool = True,
+        spill_deferred_auxiliary: bool = False,
+    ) -> None:
         import multiprocessing
 
         if workers > _MAX_WORKERS:
@@ -664,7 +773,13 @@ class ParallelController:
         self._workers = workers
         self._context = multiprocessing.get_context("fork")
         self._temp = tempfile.TemporaryDirectory(prefix="httk_bulk_", dir=_shard_parent_dir(store))
-        self._config = _WorkerConfig(chunk_size=chunk_size, shard_dir=self._temp.name, backend=backend)
+        self._config = _WorkerConfig(
+            chunk_size=chunk_size,
+            shard_dir=self._temp.name,
+            backend=backend,
+            track_sids=track_sids,
+            spill_deferred_auxiliary=spill_deferred_auxiliary,
+        )
         self._queues: list[Any] = [self._context.Queue(maxsize=_QUEUE_MAXSIZE) for _ in range(workers)]
         self._result_queue: Any = self._context.Queue()
         self._processes: list[Any] = []
@@ -930,6 +1045,8 @@ class _Merger:
         files_by_table: dict[str, list[str]] = {}
         for manifest in self._manifests:
             for table_name, files in manifest.shards.items():
+                if table_name == "_httk_roots":
+                    continue
                 files_by_table.setdefault(table_name, []).extend(files)
         for table_name, files in files_by_table.items():
             if not files:

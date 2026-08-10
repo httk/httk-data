@@ -575,14 +575,14 @@ def test_clickhouse_fsck_is_refused_in_every_mode(
 
 
 @pytest.mark.parametrize("finalize", ["parity", "auto", "deferred"])
-def test_clickhouse_bulk_boundary(clickhouse_database: Database, finalize: str) -> None:
+def test_clickhouse_bulk_profile_selection(clickhouse_database: Database, finalize: str) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     if finalize == "parity":
-        expected = RuntimeError
+        with pytest.raises(RuntimeError, match="deferred-only"):
+            store.bulk_ingest(finalize=finalize).__enter__()
     else:
-        expected = NotImplementedError
-    with pytest.raises(expected), store.bulk_ingest(finalize=finalize):
-        pass
+        with store.bulk_ingest(finalize=finalize) as bulk:
+            assert bulk._finalize_profile == "deferred"
 
 
 def test_clickhouse_bulk_into_nonempty_store_is_refused(clickhouse_database: Database) -> None:

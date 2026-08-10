@@ -5,6 +5,7 @@ objects.  This module is the adapter boundary for ClickHouse's physical types,
 MergeTree sorting keys, system catalogue, and KeeperMap metadata protocol.
 """
 
+import contextlib
 import datetime
 import json
 import threading
@@ -36,13 +37,321 @@ __all__ = [
     "install_connection_guards",
     "keeper_database_uuid",
     "keeper_metadata_path",
+    "load_parquet_stages",
+    "null_safe_difference",
     "release_lease",
     "stamp_store_metadata",
+    "swap_finalizer_map",
+    "validate_bulk_tables",
     "validate_metadata_table",
+    "verify_bulk_integrity",
     "verify_clickhouse_connection",
     "verify_lease",
     "write_ingest_marker",
 ]
+
+
+class ClickHouseUncertainInsertError(RuntimeError):
+    """The client lost the acknowledgement for an Arrow stage insert."""
+
+
+class ClickHouseBulkIntegrityError(RuntimeError):
+    """A metadata-derived ClickHouse bulk invariant was violated."""
+
+
+def _q(name: str) -> str:
+    """Quote an identifier owned by the storage protocol."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+def null_safe_difference(left: str, right: str) -> str:
+    """The ClickHouse S9 comparator (true precisely when values differ)."""
+    return f"(xor(isNull({left}), isNull({right})) OR ifNull({left} != {right}, false))"
+
+
+def _stage_table(source: sqlalchemy.Table, name: str) -> sqlalchemy.Table:
+    """Clone record metadata for a disposable MergeTree stage relation."""
+    metadata = sqlalchemy.MetaData()
+    stage = source.to_metadata(metadata, name=name)
+    # Stage rows retain the ordinary ``sid`` spelling.  It is their stage sid,
+    # and ``_order_by`` deliberately gives it the deterministic MergeTree key.
+    stage.info["_httk_stage"] = True
+    return stage
+
+
+def _client_for_url(url: sqlalchemy.URL) -> Any:
+    """Build the separate Arrow-loading client with the G0 join setting."""
+    import clickhouse_connect
+
+    if not url.host:
+        raise RuntimeError("ClickHouse client-stream staging requires a URL host")
+    client = clickhouse_connect.get_client(
+        host=url.host,
+        port=url.port or 8123,
+        username=url.username or "default",
+        password=url.password or "",
+        database=url.database or "default",
+        settings={"join_use_nulls": 1},
+    )
+    value = client.query("SELECT getSetting('join_use_nulls')").result_rows
+    if not value or not _setting_enabled(value[0][0]):
+        client.close()
+        raise RuntimeError("ClickHouse Arrow loader could not enforce join_use_nulls=1")
+    return client
+
+
+def load_parquet_stages(store: Any, manifests: list[Any]) -> dict[str, str]:
+    """Create and stream every Parquet shard into local ClickHouse stage tables.
+
+    Every shard is verified by its before/after row count.  This makes a
+    transport retry or a response lost after send observable before the next
+    shard is admitted.
+    """
+    try:
+        from pyarrow import parquet
+    except ImportError as error:  # pragma: no cover - P3 dependency gate
+        raise ImportError("ClickHouse bulk_ingest needs pyarrow for Parquet staging") from error
+
+    files: dict[str, list[str]] = {}
+    for manifest in manifests:
+        for table, paths in manifest.shards.items():
+            if isinstance(paths, list):
+                files.setdefault(table, []).extend(str(path) for path in paths)
+    stage_names = {table: f"_httk_stage_{table}" for table in files}
+    engine = store._database.engine
+    with engine.begin() as connection:
+        for table, stage_name in stage_names.items():
+            if table == "_httk_roots":
+                connection.execute(
+                    sqlalchemy.text(
+                        f"CREATE TABLE {_q(stage_name)} (token Int64, tbl String, stage_sid Int64) "
+                        "ENGINE = MergeTree ORDER BY stage_sid"
+                    )
+                )
+            elif table == "_httk_dispatch_payload":
+                connection.execute(
+                    sqlalchemy.text(
+                        f"CREATE TABLE {_q(stage_name)} "
+                        "(dispatch_name String, content_id String, column String, block_sid Int64) "
+                        "ENGINE = MergeTree ORDER BY (dispatch_name, content_id)"
+                    )
+                )
+            elif table == "_httk_nan_content":
+                connection.execute(
+                    sqlalchemy.text(
+                        f"CREATE TABLE {_q(stage_name)} "
+                        "(table_name String, content_id String, field_name String) "
+                        "ENGINE = MergeTree ORDER BY (table_name, content_id)"
+                    )
+                )
+            else:
+                connection.execute(sqlalchemy.schema.CreateTable(_stage_table(store._table(table), stage_name)))
+
+    client = _client_for_url(engine.url)
+    try:
+        for table, paths in files.items():
+            for path in paths:
+                arrow = parquet.read_table(path)
+                rows = arrow.num_rows
+                before = int(client.query(f"SELECT count() FROM {_q(stage_names[table])}").result_rows[0][0])
+                try:
+                    client.insert_arrow(stage_names[table], arrow)
+                except BaseException as error:
+                    after = int(client.query(f"SELECT count() FROM {_q(stage_names[table])}").result_rows[0][0])
+                    if after == before + rows:
+                        continue
+                    if after != before:
+                        raise ClickHouseUncertainInsertError(
+                            f"ClickHouse Arrow stage insert has ambiguous row count for {table!r}"
+                        ) from error
+                    try:
+                        client.insert_arrow(stage_names[table], arrow)
+                    except BaseException as retry_error:
+                        after = int(client.query(f"SELECT count() FROM {_q(stage_names[table])}").result_rows[0][0])
+                        if after == before + rows:
+                            continue
+                        raise ClickHouseUncertainInsertError(
+                            f"ClickHouse Arrow stage retry has ambiguous row count for {table!r}"
+                        ) from retry_error
+                after = int(client.query(f"SELECT count() FROM {_q(stage_names[table])}").result_rows[0][0])
+                if after != before + rows:
+                    raise ClickHouseUncertainInsertError(
+                        f"ClickHouse Arrow stage insert changed {table!r} by {after - before}, expected {rows}"
+                    )
+    except ClickHouseUncertainInsertError:
+        raise
+    except BaseException as error:
+        raise RuntimeError(f"ClickHouse Arrow stage insert failed cleanly: {error}") from error
+    finally:
+        client.close()
+    return stage_names
+
+
+def swap_finalizer_map(finalizer: Any, table: str, candidate: str) -> None:
+    """Atomically replace a finalizer map and update its bookkeeping.
+
+    ClickHouse has no transactional UPDATE protocol for this use.  The
+    candidate is checked for the same stage key cardinality, renamed over the
+    old name in one RENAME statement, and the retired relation is dropped.
+    Keeping the public map name stable means every already-constructed query
+    continues to address the current map.
+    """
+    old = finalizer.maps[table]
+    retired = f"{old}_retired"
+    connection = finalizer.connection
+    old_count = int(connection.execute(sqlalchemy.text(f"SELECT count(*) FROM {_q(old)}")).scalar_one())
+    new_count = int(connection.execute(sqlalchemy.text(f"SELECT count(*) FROM {_q(candidate)}")).scalar_one())
+    if old_count != new_count:
+        raise RuntimeError(f"ClickHouse finalizer map swap for {table!r} changed stage-key cardinality")
+    finalizer.ingest._before_clickhouse_map_swap(table, "before-rename")
+    connection.execute(sqlalchemy.text(f"RENAME TABLE {_q(old)} TO {_q(retired)}, {_q(candidate)} TO {_q(old)}"))
+    # The rename is durable.  Make cleanup bookkeeping reflect both live
+    # relations before exposing the post-rename fault seam.
+    with contextlib.suppress(ValueError):
+        finalizer.objects.remove(candidate)
+    if retired not in finalizer.objects:
+        finalizer.objects.append(retired)
+    finalizer.ingest._before_clickhouse_map_swap(table, "after-rename")
+    finalizer.ingest._before_clickhouse_map_swap(table, "before-drop")
+    connection.execute(sqlalchemy.text(f"DROP TABLE IF EXISTS {_q(retired)}"))
+    exists = connection.execute(
+        sqlalchemy.text("SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = :name"),
+        {"name": retired},
+    ).scalar_one()
+    if exists:
+        raise RuntimeError(f"ClickHouse finalizer map swap for {table!r} did not remove retired map")
+    with contextlib.suppress(ValueError):
+        finalizer.objects.remove(retired)
+    finalizer.ingest._before_clickhouse_map_swap(table, "after-drop")
+
+
+def validate_bulk_tables(connection: sqlalchemy.Connection, tables: list[sqlalchemy.Table]) -> None:
+    """Validate ClickHouse's non-enforcing physical and logical constraints."""
+    for table in tables:
+        name = table.name
+        info = connection.execute(
+            sqlalchemy.text(
+                "SELECT engine, sorting_key, primary_key FROM system.tables "
+                "WHERE database = currentDatabase() AND name = :name"
+            ),
+            {"name": name},
+        ).one_or_none()
+        if "sid" in table.c:
+            expected_key = "sid"
+        elif "content_id" in table.c:
+            expected_key = "content_id"
+        else:
+            index_columns = [column.name for column in table.columns if column.name.endswith("_index")]
+            parent_columns = [column.name for column in table.columns if column.name.endswith("_sid")]
+            expected_key = ",".join(parent_columns[:1] + index_columns[:1])
+        canonical = lambda value: str(value).replace("`", "").replace('"', "").replace(" ", "").strip("()")
+        if (
+            info is None
+            or str(info[0]) != "MergeTree"
+            or canonical(info[1]) != expected_key
+            or canonical(info[2]) != expected_key
+        ):
+            raise RuntimeError(f"ClickHouse bulk physical validation failed for {name!r}: MergeTree sorting key")
+        actual = connection.execute(
+            sqlalchemy.text(
+                "SELECT name, type, default_kind, default_expression FROM system.columns "
+                "WHERE database = currentDatabase() AND table = :table ORDER BY position"
+            ),
+            {"table": name},
+        ).all()
+        expected = [
+            (column.name, str(_ch_type(column).compile(dialect=connection.dialect)), "", "") for column in table.columns
+        ]
+        normalized = [
+            (str(column), str(type_name), str(kind or ""), str(expression or ""))
+            for column, type_name, kind, expression in actual
+        ]
+        if normalized != expected:
+            raise RuntimeError(
+                f"ClickHouse bulk physical validation failed for {name!r}: column types/nullability/defaults"
+            )
+        extras = (
+            connection.execute(
+                sqlalchemy.text(
+                    "SELECT name FROM system.data_skipping_indices WHERE database = currentDatabase() AND table = :name"
+                ),
+                {"name": name},
+            )
+            .scalars()
+            .all()
+        )
+        if extras:
+            raise RuntimeError(f"ClickHouse bulk physical validation failed for {name!r}: unexpected indexes")
+
+
+def verify_bulk_integrity(connection: sqlalchemy.Connection, tables: list[sqlalchemy.Table]) -> None:
+    """Run the SQLAlchemy-metadata-derived logical constraints ClickHouse cannot enforce."""
+    for table in tables:
+        name = _q(table.name)
+        columns = {column.name for column in table.columns}
+        if "sid" in columns:
+            duplicate = connection.execute(
+                sqlalchemy.text(f"SELECT sid FROM {name} GROUP BY sid HAVING count() > 1 LIMIT 1")
+            ).first()
+            count, low, high = connection.execute(
+                sqlalchemy.text(f"SELECT count(), min(sid), max(sid) FROM {name}")
+            ).one()
+            if duplicate is not None or (count and (int(low) != 1 or int(high) != int(count))):
+                raise ClickHouseBulkIntegrityError(
+                    f"ClickHouse bulk integrity failed for {table.name!r}: sid uniqueness/density"
+                )
+            if "content_id" in columns:
+                duplicate = connection.execute(
+                    sqlalchemy.text(f"SELECT content_id FROM {name} GROUP BY content_id HAVING count() > 1 LIMIT 1")
+                ).first()
+                if duplicate is not None:
+                    raise ClickHouseBulkIntegrityError(
+                        f"ClickHouse bulk integrity failed for {table.name!r}: content_id uniqueness"
+                    )
+            if "_httk_role" in columns:
+                invalid = connection.execute(
+                    sqlalchemy.text(f"SELECT 1 FROM {name} WHERE _httk_role NOT IN (0, 1) LIMIT 1")
+                ).first()
+                if invalid is not None:
+                    raise ClickHouseBulkIntegrityError(
+                        f"ClickHouse bulk integrity failed for {table.name!r}: _httk_role domain"
+                    )
+        unique_sets = {
+            tuple(column.name for column in constraint.columns)
+            for constraint in table.constraints
+            if isinstance(constraint, sqlalchemy.UniqueConstraint)
+        }
+        unique_sets.add(tuple(column.name for column in table.primary_key.columns))
+        unique_sets.update(tuple(column.name for column in index.columns) for index in table.indexes if index.unique)
+        is_dispatch = "sid" not in columns and "content_id" in columns
+        unique_sets.update((column.name,) for column in table.columns if column.unique)
+        for unique_columns in unique_sets:
+            if not unique_columns:
+                continue
+            predicate = " AND ".join(f"{_q(column)} IS NOT NULL" for column in unique_columns)
+            grouping = ", ".join(_q(column) for column in unique_columns)
+            duplicate = connection.execute(
+                sqlalchemy.text(
+                    f"SELECT 1 FROM {name} WHERE {predicate} GROUP BY {grouping} HAVING count() > 1 LIMIT 1"
+                )
+            ).first()
+            if duplicate is not None:
+                raise ClickHouseBulkIntegrityError(
+                    f"ClickHouse bulk integrity failed for {table.name!r}: unique {unique_columns!r}"
+                )
+        # Entry dispatch relations have a content-id key and nullable backing
+        # sid columns.  Metadata supplies the exact-one check as a named CHECK.
+        if is_dispatch:
+            backing = [column for column in columns if column.endswith("_sid")]
+            if backing:
+                expression = " + ".join(f"if({_q(column)} IS NULL, 0, 1)" for column in backing)
+                invalid = connection.execute(
+                    sqlalchemy.text(f"SELECT 1 FROM {name} WHERE ({expression}) != 1 LIMIT 1")
+                ).first()
+                if invalid is not None:
+                    raise ClickHouseBulkIntegrityError(
+                        f"ClickHouse bulk integrity failed for {table.name!r}: dispatch exactly-one"
+                    )
 
 
 def _keeper_engine(path: str, *, primary_key: str = "key") -> Any:
@@ -589,23 +898,33 @@ def validate_metadata_table(connection: sqlalchemy.Connection) -> None:
     expected_engine = f"KeeperMap('{expected_path}') PRIMARY KEY key"
     rows = connection.execute(
         sqlalchemy.text(
-            "SELECT engine, engine_full FROM system.tables WHERE database = currentDatabase() AND name = :name"
+            "SELECT engine, engine_full, primary_key FROM system.tables "
+            "WHERE database = currentDatabase() AND name = :name"
         ),
         {"name": "_httk_store_metadata"},
     ).all()
-    if len(rows) != 1 or str(rows[0][0]) != "KeeperMap" or str(rows[0][1]) != expected_engine:
+    if (
+        len(rows) != 1
+        or str(rows[0][0]) != "KeeperMap"
+        or str(rows[0][1]) != expected_engine
+        or str(rows[0][2]).replace("`", "").replace('"', "").strip() != "key"
+    ):
         raise RuntimeError(
             f"ClickHouse metadata table _httk_store_metadata failed physical validation: expected {expected_engine}"
         )
     columns = connection.execute(
         sqlalchemy.text(
-            "SELECT name, type FROM system.columns "
+            "SELECT name, type, default_kind, default_expression FROM system.columns "
             "WHERE database = currentDatabase() AND table = :table ORDER BY position"
         ),
         {"table": "_httk_store_metadata"},
     ).all()
-    expected_columns = [("key", "String"), ("value", "String")]
-    if [(str(name), str(type_name)) for name, type_name in columns] != expected_columns:
+    expected_columns = [("key", "String", "", ""), ("value", "String", "", "")]
+    actual_columns = [
+        (str(name), str(type_name), str(default_kind or ""), str(default_expression or ""))
+        for name, type_name, default_kind, default_expression in columns
+    ]
+    if actual_columns != expected_columns:
         raise RuntimeError(
             "ClickHouse metadata table _httk_store_metadata failed physical validation: "
             f"expected columns {expected_columns!r}"

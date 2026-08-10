@@ -41,6 +41,53 @@ os.environ.setdefault("HTTK_DUCKDB_MEMORY_LIMIT", _duckdb_test_memory_limit())
 
 from httk.data.db import Database, SqlStore
 
+
+@pytest.fixture(autouse=True)
+def _fail_loudly_for_abandoned_bulk_contexts(monkeypatch):
+    """Clean up and fail a test that abandoned a successfully entered bulk context.
+
+    Database disposal must still wait for a legitimate long finalizer.  A test
+    that bypasses ``__exit__`` is different: release its local ownership before
+    fixture teardown so the failure is reported instead of turning into a
+    deadlock in ``Database.dispose()``.
+    """
+    from httk.data.db.bulk import BulkIngest
+
+    entered: list[BulkIngest] = []
+    original_enter = BulkIngest.__enter__
+
+    def tracked_enter(bulk: BulkIngest):
+        result = original_enter(bulk)
+        entered.append(bulk)
+        return result
+
+    monkeypatch.setattr(BulkIngest, "__enter__", tracked_enter)
+    yield
+    abandoned = [
+        bulk
+        for bulk in entered
+        if bulk._store._bulk_active or bulk._bulk_lifecycle_guard is not None or bulk._bulk_lock_held
+    ]
+    cleanup_errors: list[BaseException] = []
+    for bulk in abandoned:
+        try:
+            if bulk._entered and not bulk._closed:
+                bulk.__exit__(RuntimeError, RuntimeError("test abandoned bulk context"), None)
+        except BaseException as error:
+            cleanup_errors.append(error)
+        finally:
+            bulk._release_connection(bulk._connection)
+            bulk._connection = None
+            bulk._close_workers()
+            bulk._release_bulk_ownership()
+            bulk._store._release_bulk_context()
+    if abandoned:
+        detail = ", ".join(type(bulk._store).__name__ for bulk in abandoned)
+        if cleanup_errors:
+            detail += f" (cleanup errors: {cleanup_errors!r})"
+        raise AssertionError("test left claimed bulk_ingest context(s): " + detail)
+
+
 _PYTHONPATH = os.environ.get("PYTHONPATH")
 if _PYTHONPATH:
     os.environ["PYTHONPATH"] = os.pathsep.join(

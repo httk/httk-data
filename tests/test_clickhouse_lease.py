@@ -126,65 +126,114 @@ def test_clickhouse_dispose_releases_exact_lease(clickhouse_p2_database: Databas
 
 
 def test_clickhouse_concurrent_bulk_admission_refuses_second_context(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from httk.data.db.bulk import BulkIngest
+
     store = SqlStore(clickhouse_p2_database, entry_records={})
-    barrier = threading.Barrier(2)
+    first_claimed = threading.Event()
+    release_first = threading.Event()
     errors: list[BaseException] = []
-    successes = []
+    first_error: list[BaseException] = []
 
-    def enter_bulk() -> None:
-        barrier.wait(timeout=10)
-        bulk = store.bulk_ingest(finalize="deferred")
+    def hold_first_claim(_: BulkIngest) -> None:
+        if first_claimed.is_set():
+            return
+        first_claimed.set()
+        if not release_first.wait(timeout=10):
+            raise AssertionError("timed out waiting to release the first bulk admission")
+        raise _P2InjectedCrash("release first bulk admission")
+
+    monkeypatch.setattr(BulkIngest, "_after_bulk_context_claim", hold_first_claim)
+
+    def enter_first() -> None:
         try:
-            bulk.__enter__()
+            store.bulk_ingest(finalize="deferred").__enter__()
         except BaseException as error:
-            errors.append(error)
-        else:
-            successes.append(bulk)
+            first_error.append(error)
 
-    threads = [threading.Thread(target=enter_bulk) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=20)
-        assert not thread.is_alive()
-    for bulk in successes:
-        bulk.__exit__(None, None, None)
-    assert not successes
-    assert sum(isinstance(error, NotImplementedError) for error in errors) == 1
-    assert sum(isinstance(error, RuntimeError) and "already has an open" in str(error) for error in errors) == 1
+    first = threading.Thread(target=enter_first)
+    first.start()
+    try:
+        assert first_claimed.wait(timeout=10)
+        with pytest.raises(RuntimeError, match="already has an open") as error:
+            store.bulk_ingest(finalize="deferred").__enter__()
+        errors.append(error.value)
+        assert len(errors) == 1
+        assert isinstance(errors[0], RuntimeError)
+        assert "already has an open" in str(errors[0])
+    finally:
+        release_first.set()
+        first.join(timeout=20)
+        assert not first.is_alive()
+    assert len(first_error) == 1
+    assert isinstance(first_error[0], _P2InjectedCrash)
+
+
+def test_clickhouse_bulk_entry_cleanup_failure_releases_admission_and_mutex(
+    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A secondary entry-cleanup failure cannot strand the bulk ownership."""
+    from httk.data.db.bulk import BulkIngest
+
+    store = SqlStore(clickhouse_p2_database, entry_records={})
+
+    def fail_scan(_: BulkIngest, __) -> set[str]:
+        raise _P2InjectedCrash("scan failed")
+
+    def fail_cleanup(_: BulkIngest) -> None:
+        raise _P2InjectedCrash("cleanup failed")
+
+    monkeypatch.setattr(BulkIngest, "_scan_store", fail_scan)
+    monkeypatch.setattr(BulkIngest, "_clean_up_after_failure", fail_cleanup)
+    with pytest.raises(_P2InjectedCrash, match="cleanup failed"):
+        store.bulk_ingest(finalize="deferred").__enter__()
+    assert not store._bulk_active
+    assert store._mutation_lock.acquire(blocking=False)
+    store._mutation_lock.release()
 
 
 def test_clickhouse_bulk_boundary_leaves_lease_and_marker_for_crash_recovery(
     clickhouse_p2_database: Database,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
-    with pytest.raises(NotImplementedError, match="implemented in P3"):
-        store.bulk_ingest(finalize="deferred").__enter__()
-    values = _metadata(clickhouse_p2_database)
-    assert json.loads(values["lease"])["token"] == json.loads(values["ingest_state"])["token"]
-    source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
-    fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
+    bulk = store.bulk_ingest(finalize="deferred")
+    bulk.__enter__()
     try:
-        with pytest.raises(StoreUnderConstructionError):
-            SqlStore(fresh_database)
+        values = _metadata(clickhouse_p2_database)
+        assert json.loads(values["lease"])["token"] == json.loads(values["ingest_state"])["token"]
+        source_url = sqlalchemy.engine.make_url(os.environ["HTTK_TEST_CLICKHOUSE_URI"])
+        fresh_database = _fresh_database(source_url, clickhouse_p2_database.engine.url.database)
+        try:
+            with pytest.raises(StoreUnderConstructionError):
+                SqlStore(fresh_database)
+        finally:
+            fresh_database.dispose()
+        with clickhouse_p2_database.engine.begin() as connection:
+            clear_ingest_marker(connection, values["ingest_state"])
     finally:
-        fresh_database.dispose()
-    with clickhouse_p2_database.engine.begin() as connection:
-        clear_ingest_marker(connection, values["ingest_state"])
+        bulk._release_connection(bulk._connection)
+        bulk._connection = None
+        bulk._release_bulk_ownership()
+        store._release_bulk_context()
 
 
 def test_clickhouse_preexisting_marker_survives_new_bulk_attempt(
     clickhouse_p2_database: Database,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
-    with pytest.raises(NotImplementedError, match="implemented in P3"):
-        store.bulk_ingest(finalize="deferred").__enter__()
-    prior_marker = _metadata(clickhouse_p2_database)["ingest_state"]
-    with pytest.raises(Exception, match="Node exists"):
-        store.bulk_ingest(finalize="deferred").__enter__()
-    assert _metadata(clickhouse_p2_database)["ingest_state"] == prior_marker
+    bulk = store.bulk_ingest(finalize="deferred")
+    bulk.__enter__()
+    try:
+        prior_marker = _metadata(clickhouse_p2_database)["ingest_state"]
+        with pytest.raises(RuntimeError, match="already has an open"):
+            store.bulk_ingest(finalize="deferred").__enter__()
+        assert _metadata(clickhouse_p2_database)["ingest_state"] == prior_marker
+    finally:
+        bulk._release_connection(bulk._connection)
+        bulk._connection = None
+        bulk._release_bulk_ownership()
+        store._release_bulk_context()
 
 
 def test_clickhouse_crash_after_lease_before_marker_keeps_lease_until_dispose(
@@ -359,8 +408,9 @@ def test_clickhouse_interrupted_mutex_acquire_unwinds_bulk_admission(
 
 
 def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    from httk.data.db import engine as engine_module
     from httk.data.db.bulk import BulkIngest
 
     entered = threading.Event()
@@ -370,6 +420,7 @@ def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
     dispose_done = threading.Event()
     errors: list[BaseException] = []
 
+    monkeypatch.setattr(engine_module, "_DISPOSE_WAIT_WARNING_SECONDS", 0.05)
     monkeypatch.setattr(BulkIngest, "_clickhouse_p3_boundary", lambda _: None)
 
     def finalizer(_: BulkIngest) -> None:
@@ -401,6 +452,7 @@ def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
     dispose_thread.start()
     assert dispose_started.wait(timeout=10)
     assert not dispose_done.wait(timeout=0.2)
+    assert any("in-flight lifecycle guard holder" in record.message for record in caplog.records)
     release_finalizer.set()
     bulk_thread.join(timeout=20)
     dispose_thread.join(timeout=20)
@@ -409,6 +461,33 @@ def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
     assert not errors
     assert dispose_done.is_set()
     assert "lease" not in _metadata(clickhouse_p2_database)
+
+
+def test_clickhouse_dispose_from_lifecycle_owner_fails_without_waiting(clickhouse_p2_database: Database) -> None:
+    """Disposal from an owned lifecycle guard fails instead of self-deadlocking."""
+    done = threading.Event()
+    errors: list[BaseException] = []
+
+    def dispose_from_guard() -> None:
+        try:
+            with clickhouse_p2_database.lifecycle_guard(
+                clickhouse_p2_database.lifecycle_generation,
+                holder="self-dispose probe",
+            ):
+                clickhouse_p2_database.dispose()
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            done.set()
+
+    probe = threading.Thread(target=dispose_from_guard, daemon=True)
+    probe.start()
+    assert done.wait(timeout=10)
+    probe.join(timeout=1)
+    assert not probe.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], RuntimeError)
+    assert "cannot dispose from within an active bulk context" in str(errors[0])
 
 
 def test_clickhouse_interrupted_release_is_exact_and_idempotent(

@@ -14,10 +14,6 @@ from typing import Annotated, ClassVar
 import pytest
 import sqlalchemy
 from httk.core.storage import IdentitySkip, StorageInfo, content_id
-from httk.data.db.layout import StoreUnderConstructionError, actual_schema_objects
-from httk.data.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
-from httk.data.store_common import EntryMetadataConflictError
-
 from test_db_bulk import (
     Author,
     BulkCalcA,
@@ -36,6 +32,10 @@ from test_db_bulk import (
     _table_stats,
     make_sample,
 )
+
+from httk.data.db.layout import StoreUnderConstructionError, actual_schema_objects
+from httk.data.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
+from httk.data.store_common import EntryMetadataConflictError
 
 # These modules fork their own worker processes; the loadgroup scheduler
 # keeps them on one xdist worker so their memory use never stacks.
@@ -79,7 +79,7 @@ class MutualValueA:
     __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="bulk_deferred_mutual_a", dedup="by_value")
 
     value: int
-    link: "MutualValueB | None" = None
+    link: MutualValueB | None = None
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ class RecursiveTree:
     __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="bulk_deferred_recursive_tree")
 
     name: str
-    children: list["RecursiveTree"]
+    children: list[RecursiveTree]
 
 
 @dataclass(frozen=True)
@@ -473,7 +473,7 @@ def test_deferred_crash_window_marker_rejects_reopen(store_factory):
         # Deliberately bypass __exit__: this is the pre-marker-clear crash window.
         bulk._release_connection(bulk._connection)
         bulk._connection = None
-        store._bulk_active = False
+        store._release_bulk_context()
         with pytest.raises(StoreUnderConstructionError):
             store_factory.reopen(store)
     finally:
@@ -516,3 +516,17 @@ def test_duckdb_serial_csv_stage_round_trips_edge_values(store_factory):
     assert store_factory.reopen(store).fetch(CsvStageRecord, bulk.resolved_sid(CsvStageRecord, sid)) == value
     with _database_of(store).engine.connect() as connection:
         assert not any(name.startswith("_httk_deferred_") for name in actual_schema_objects(connection))
+
+
+@pytest.mark.extended
+def test_deferred_track_sids_false_keeps_logical_result_without_resolution(store_factory):
+    """The bounded-memory mode drops only the optional public sid contract."""
+    store = store_factory()
+    _require_bulk(store)
+    value = Author("untracked", 2026)
+    with store.bulk_ingest(finalize="deferred", track_sids=False) as bulk:
+        provisional = bulk.save(value)
+    with pytest.raises(RuntimeError, match="track_sids=False"):
+        bulk.resolved_sid(Author, provisional)
+    with _database_of(store).engine.connect() as connection:
+        assert connection.execute(sqlalchemy.text("SELECT count(*) FROM bulk_author")).scalar_one() == 1

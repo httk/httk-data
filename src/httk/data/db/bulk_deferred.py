@@ -39,6 +39,8 @@ class DeferredFinalizer:
         self.objects: list[str] = []
         self.finalize_timings: dict[str, float] = {}
         self._final_by_stage: dict[str, dict[int, int]] = {}
+        self.root_stage: str | None = None
+        self.root_occurrences: str | None = None
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -52,6 +54,8 @@ class DeferredFinalizer:
         self._timed("load", self._load_real_tables)
         self._timed("resolved_sids", self._populate_returned_sids)
         self._timed("dispatch", self._rebuild_dispatch)
+        if self.connection.dialect.name == "clickhousedb":
+            self.ingest._after_clickhouse_projection()
 
     def _timed(self, name: str, operation: Any) -> None:
         started = time.perf_counter()
@@ -81,14 +85,27 @@ class DeferredFinalizer:
         return f"_httk_deferred_{kind}_{table}"
 
     def _create_view(self, name: str, query: str) -> None:
-        self.connection.execute(sqlalchemy.text(f'CREATE TEMP VIEW {self._q(name)} AS {query}'))
+        if self.connection.dialect.name == "clickhousedb":
+            self.connection.execute(sqlalchemy.text(f'CREATE VIEW {self._q(name)} AS {query}'))
+        else:
+            self.connection.execute(sqlalchemy.text(f'CREATE TEMP VIEW {self._q(name)} AS {query}'))
         self.objects.append(name)
 
     def _create_table(self, name: str, query: str) -> None:
-        self.connection.execute(sqlalchemy.text(f'CREATE TEMP TABLE {self._q(name)} AS {query}'))
+        if self.connection.dialect.name == "clickhousedb":
+            # ClickHouse has no connection-local temporary CTAS relations.
+            # ``tuple()`` is the neutral key for maps/finals whose projected
+            # shape has no stage sid; stage tables themselves use ``sid``.
+            self.connection.execute(
+                sqlalchemy.text(f'CREATE TABLE {self._q(name)} ENGINE = MergeTree ORDER BY tuple() AS {query}')
+            )
+        else:
+            self.connection.execute(sqlalchemy.text(f'CREATE TEMP TABLE {self._q(name)} AS {query}'))
         self.objects.append(name)
 
     def _index_relation(self, name: str, *columns: str, unique: bool = False) -> None:
+        if not self.store.backend_facts.supports_adhoc_indexes:
+            return
         suffix = "_".join(columns)
         index = f"{name}_{suffix}_idx"
         unique_sql = "UNIQUE " if unique else ""
@@ -103,6 +120,11 @@ class DeferredFinalizer:
         """Expose every shard relation as one read-only logical stage view."""
         sources: dict[str, list[str]] = {}
         backend = self.connection.dialect.name
+        if backend == "clickhousedb":
+            self.stage_views.update(self.ingest._clickhouse_stage_tables)
+            self.objects.extend(self.ingest._clickhouse_stage_tables.values())
+            self.root_stage = self.stage_views.pop("_httk_roots", None)
+            return
         if backend == "duckdb":
             parquet: dict[str, list[str]] = {}
             duckdb_stages: list[tuple[str, list[str]]] = []
@@ -142,6 +164,7 @@ class DeferredFinalizer:
             view = self._temp_name("stage", table)
             self._create_view(view, " UNION ALL ".join(f"SELECT * FROM {relation}" for relation in relations))
             self.stage_views[table] = view
+        self.root_stage = self.stage_views.pop("_httk_roots", None)
 
     # ------------------------------------------------------------------ maps and conflict scan
 
@@ -191,22 +214,32 @@ class DeferredFinalizer:
                 self._index_relation(candidate, "stage_sid", unique=True)
                 self._index_relation(candidate, "canonical_sid")
                 map_name = self.maps[table]
+                comparator = "old_map.canonical_sid IS DISTINCT FROM candidate_map.canonical_sid"
+                if self.connection.dialect.name == "clickhousedb":
+                    from httk.data.db.clickhouse import null_safe_difference
+
+                    comparator = null_safe_difference("old_map.canonical_sid", "candidate_map.canonical_sid")
                 different = self.connection.execute(
                     sqlalchemy.text(
                         f"SELECT 1 FROM {self._q(map_name)} AS old_map JOIN {self._q(candidate)} AS candidate_map "
                         "ON old_map.stage_sid = candidate_map.stage_sid "
-                        "WHERE old_map.canonical_sid IS DISTINCT FROM candidate_map.canonical_sid LIMIT 1"
+                        f"WHERE {comparator} LIMIT 1"
                     )
                 ).first()
                 if different is not None:
-                    self.connection.execute(
-                        sqlalchemy.text(
-                            f"UPDATE {self._q(map_name)} AS old_map SET canonical_sid = "
-                            f"(SELECT candidate_map.canonical_sid FROM {self._q(candidate)} AS candidate_map "
-                            "WHERE candidate_map.stage_sid = old_map.stage_sid)"
+                    if self.store.backend_facts.finalize_map_maintenance == "swap":
+                        from httk.data.db.clickhouse import swap_finalizer_map
+
+                        swap_finalizer_map(self, table, candidate)
+                    else:
+                        self.connection.execute(
+                            sqlalchemy.text(
+                                f"UPDATE {self._q(map_name)} AS old_map SET canonical_sid = "
+                                f"(SELECT candidate_map.canonical_sid FROM {self._q(candidate)} AS candidate_map "
+                                "WHERE candidate_map.stage_sid = old_map.stage_sid)"
+                            )
                         )
-                    )
-                    self._drop(candidate)
+                        self._drop(candidate)
                     changed = True
                 else:
                     self._drop(candidate)
@@ -238,12 +271,39 @@ class DeferredFinalizer:
             return
         from httk.data.db.bulk_parallel import _Merger
 
-        nan = self._nan_by_content()
+        nan_stage = self.stage_views.get("_httk_nan_content")
+        nan = {} if nan_stage is not None else self._nan_by_content()
         for table, schema in self.parents.items():
             if schema.dedup != "content_id" or table not in self.maps:
                 continue
             reported = nan.get(table, {})
-            if reported:
+            if nan_stage is not None:
+                duplicate = self.connection.execute(
+                    sqlalchemy.text(
+                        f"SELECT s.{self._q(CONTENT_ID_COLUMN)} FROM {self._q(self.stage_views[table])} s "
+                        f"JOIN {self._q(nan_stage)} n ON n.table_name = :table "
+                        f"AND n.content_id = s.{self._q(CONTENT_ID_COLUMN)} "
+                        f"GROUP BY s.{self._q(CONTENT_ID_COLUMN)} HAVING count(DISTINCT s.{self._q(SID_COLUMN)}) > 1 LIMIT 1"
+                    ),
+                    {"table": table},
+                ).first()
+                if duplicate is not None:
+                    fields = set(
+                        self.connection.execute(
+                            sqlalchemy.text(
+                                f"SELECT DISTINCT field_name FROM {self._q(nan_stage)} "
+                                "WHERE table_name = :table AND content_id = :content_id"
+                            ),
+                            {"table": table, "content_id": duplicate[0]},
+                        ).scalars()
+                    )
+                    compare = _Merger._metadata_compare_columns(schema)
+                    field = next((field for _column, field in compare if field in fields), schema.cls.__name__)
+                    raise EntryMetadataConflictError(
+                        f"metadata conflict for {schema.cls.__name__}.{field}: content id {duplicate[0]!r} occurs with "
+                        "a NaN identity-excluded value that never equals itself"
+                    )
+            elif reported:
                 duplicate = self.connection.execute(
                     sqlalchemy.text(
                         f"SELECT {self._q(CONTENT_ID_COLUMN)} FROM {self._q(self.stage_views[table])} "
@@ -321,17 +381,30 @@ class DeferredFinalizer:
     def _make_survivors(self) -> None:
         self.survivors: dict[str, str] = {}
         roots = self._temp_name("roots", "rows")
-        self._create_table(roots, "SELECT CAST(NULL AS TEXT) AS tbl, CAST(NULL AS INTEGER) AS stage_sid WHERE 0")
-        root_rows = [
-            {"tbl": table, "stage_sid": sid}
-            for manifest in self.manifests
-            for table, sid in manifest.token_sid.values()
-            if table in self.maps
-        ]
-        if root_rows:
+        root_empty = "SELECT CAST(NULL AS TEXT) AS tbl, CAST(NULL AS INTEGER) AS stage_sid WHERE 0"
+        if self.connection.dialect.name == "clickhousedb":
+            root_empty = "SELECT CAST('' AS String) AS tbl, toInt64(0) AS stage_sid WHERE 0"
+        self._create_table(roots, root_empty)
+        self.root_occurrences = roots
+        if self.root_stage is not None:
             self.connection.execute(
-                sqlalchemy.text(f"INSERT INTO {self._q(roots)} (tbl, stage_sid) VALUES (:tbl, :stage_sid)"), root_rows
+                sqlalchemy.text(
+                    f"INSERT INTO {self._q(roots)} (tbl, stage_sid) "
+                    f"SELECT tbl, stage_sid FROM {self._q(self.root_stage)}"
+                )
             )
+        else:
+            root_rows = [
+                {"tbl": table, "stage_sid": sid}
+                for manifest in self.manifests
+                for table, sid in manifest.token_sid.values()
+                if table in self.maps
+            ]
+            if root_rows:
+                self.connection.execute(
+                    sqlalchemy.text(f"INSERT INTO {self._q(roots)} (tbl, stage_sid) VALUES (:tbl, :stage_sid)"),
+                    root_rows,
+                )
         self._index_relation(roots, "tbl", "stage_sid")
         for component in self.graph.reachability_scc_order():
             cyclic = len(component) > 1 or any(
@@ -468,6 +541,18 @@ class DeferredFinalizer:
     def _insert_parent(self, table: str) -> None:
         real = self.store._table(table)
         expressions, joins = self._projection_columns(table, "s", "m", "f")
+        if "_httk_role" in real.c:
+            role = "role_occurrences"
+            assert self.root_occurrences is not None
+            table_literal = table.replace("'", "''")
+            joins.append(
+                f"LEFT JOIN (SELECT m2.canonical_sid, MAX(1) AS role "
+                f"FROM {self._q(self.root_occurrences)} r2 JOIN {self._q(self.maps[table])} m2 "
+                f"ON r2.stage_sid = m2.stage_sid WHERE r2.tbl = '{table_literal}' "
+                f"GROUP BY m2.canonical_sid) {role} ON {role}.canonical_sid = m.canonical_sid"
+            )
+            role_index = [column.name for column in real.columns].index("_httk_role")
+            expressions[role_index] = f"COALESCE({role}.role, 0)"
         columns = ", ".join(self._q(column.name) for column in real.columns)
         statement = (
             f"INSERT INTO {self._q(table)} ({columns}) SELECT {', '.join(expressions)} "
@@ -546,32 +631,67 @@ class DeferredFinalizer:
     def _rebuild_dispatch(self) -> None:
         from httk.data.store_common import EntryDispatchIntegrityError
 
+        payload_stage = self.stage_views.get("_httk_dispatch_payload")
         grouped: dict[str, list[Any]] = {}
-        for manifest in self.manifests:
-            for row in manifest.dispatch:
-                grouped.setdefault(row.dispatch_name, []).append(row)
-        for dispatch_name, rows in grouped.items():
+        if payload_stage is None:
+            # SQLite/DuckDB-native serial stages retain this list because the
+            # serial duplicate-return contract needs their in-memory indexes.
+            for manifest in self.manifests:
+                for row in manifest.dispatch:
+                    grouped.setdefault(row.dispatch_name, []).append(row)
+            dispatches = ((name, rows) for name, rows in grouped.items())
+        else:
+            dispatches = (
+                (self._dispatch_name(family), None)
+                for family in self.store.layout.families
+                if self.connection.execute(
+                    sqlalchemy.text(f"SELECT 1 FROM {self._q(payload_stage)} WHERE dispatch_name = :name LIMIT 1"),
+                    {"name": self._dispatch_name(family)},
+                ).first()
+                is not None
+            )
+        for dispatch_name, rows in dispatches:
             real = self.store._table(dispatch_name)
             stage = self._temp_name("dispatch", dispatch_name)
             columns = ", ".join(self._q(column.name) for column in real.columns)
             self._create_table(stage, f"SELECT {columns} FROM {self._q(dispatch_name)} WHERE 0")
-            payload: list[dict[str, Any]] = []
-            for row in rows:
-                built: dict[str, Any] = {"content_id": row.key}
-                for column in row.all_columns:
-                    built[column] = None
-                built[row.column] = row.block_sid
-                payload.append(built)
-            self.connection.execute(
-                sqlalchemy.insert(
-                    sqlalchemy.Table(
-                        stage,
-                        sqlalchemy.MetaData(),
-                        *[sqlalchemy.Column(column.name, column.type) for column in real.columns],
-                    )
-                ),
-                payload,
-            )
+            if payload_stage is None:
+                payload: list[dict[str, Any]] = []
+                assert rows is not None
+                for row in rows:
+                    built: dict[str, Any] = {"content_id": row.key}
+                    for column in row.all_columns:
+                        built[column] = None
+                    built[row.column] = row.block_sid
+                    payload.append(built)
+                self.connection.execute(
+                    sqlalchemy.insert(
+                        sqlalchemy.Table(
+                            stage,
+                            sqlalchemy.MetaData(),
+                            *[sqlalchemy.Column(column.name, column.type) for column in real.columns],
+                        )
+                    ),
+                    payload,
+                )
+            else:
+                payload_columns = []
+                for column in real.columns:
+                    if column.name == CONTENT_ID_COLUMN:
+                        payload_columns.append(f"p.content_id AS {self._q(column.name)}")
+                    elif column.name.endswith("_sid"):
+                        payload_columns.append(
+                            f"CASE WHEN p.column = '{column.name}' THEN p.block_sid ELSE NULL END AS {self._q(column.name)}"
+                        )
+                    else:
+                        raise RuntimeError(f"deferred dispatch {dispatch_name!r} has unexpected column {column.name!r}")
+                self.connection.execute(
+                    sqlalchemy.text(
+                        f"INSERT INTO {self._q(stage)} ({columns}) SELECT {', '.join(payload_columns)} "
+                        f"FROM {self._q(payload_stage)} p WHERE p.dispatch_name = :name"
+                    ),
+                    {"name": dispatch_name},
+                )
             projected, joins = self._dispatch_projection(dispatch_name, stage)
             distinct = self._temp_name("dispatch_rows", dispatch_name)
             self._create_view(
@@ -630,6 +750,8 @@ class DeferredFinalizer:
         return expressions, joins
 
     def _populate_returned_sids(self) -> None:
+        if not self.ingest._track_sids:
+            return
         for table, map_name in self.maps.items():
             rows = self.connection.execute(
                 sqlalchemy.text(

@@ -15,6 +15,7 @@ import math
 import os
 import queue as queue_mod
 import signal
+import tempfile
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, ClassVar
@@ -455,6 +456,36 @@ def test_parallel_nan_metadata_conflicts(store_factory):
         bulk.save(FloatMeta("k", math.nan))  # token 0 -> worker 0
         bulk.save(FloatMeta("k", math.nan))  # token 1 -> worker 1
     assert not _has_application_rows(store, _database_of(store))
+
+
+@pytest.mark.parametrize("worker_index", [0, 1])
+def test_parquet_untracked_worker_does_not_retain_dedup_indexes(worker_index):
+    """Untracked Parquet staging delegates all deduplication to the set-wise finalizer."""
+    pytest.importorskip("pyarrow")
+    from httk.data.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
+
+    database = Database.duckdb()
+    try:
+        store = SqlStore(database, entry_records={})
+        with tempfile.TemporaryDirectory() as shard_dir:
+            encoder = _WorkerEncoder(
+                store,
+                worker_index,
+                _WorkerConfig(
+                    chunk_size=1_000,
+                    shard_dir=shard_dir,
+                    backend="parquet",
+                    track_sids=False,
+                    spill_deferred_auxiliary=True,
+                ),
+            )
+            for index in range(100):
+                encoder.save(index, Author(f"content-{index}", 1900 + index), None)
+                encoder.save(100 + index, ByValParent(index, []), None)
+            assert sum(map(len, encoder._content_index.values())) == 0
+            assert sum(map(len, encoder._value_index.values())) == 0
+    finally:
+        database.dispose()
 
 
 def test_parallel_child_values_and_references_match_serial(store_factory):

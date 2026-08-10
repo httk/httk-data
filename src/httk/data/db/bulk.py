@@ -144,7 +144,14 @@ _AUTO_REBUILD_DIVISOR = 4
 
 
 class _SerialDeferredStage:
-    """Own a dependency-free serial stage directory and its worker encoder."""
+    """Own a dependency-free serial stage directory and its worker encoder.
+
+    Non-Parquet serial stages intentionally retain their identity/dispatch
+    indexes: returning the same sid for a duplicate is part of the serial
+    ``save()`` contract, so that retention is contract-inherent and bounded by
+    the serial use-case.  The Parquet scale path spills all non-contract
+    auxiliary occurrence data instead.
+    """
 
     def __init__(self, temporary_directory: tempfile.TemporaryDirectory[str], encoder: Any) -> None:
         self._temporary_directory = temporary_directory
@@ -154,8 +161,7 @@ class _SerialDeferredStage:
     def save(self, token: int, obj: Any, as_record: type | None) -> int:
         # _WorkerEncoder deliberately exposes the assigned occurrence sid via
         # its token map, while retaining every metadata-bearing duplicate.
-        self._encoder.save(token, obj, as_record)
-        return self._encoder._token_sid[token][1]
+        return self._encoder.save(token, obj, as_record)
 
     def finish(self) -> Any:
         if self._finished is None:
@@ -199,6 +205,7 @@ class BulkIngest:
     :param on_progress: An optional ``(records_buffered_total, rows_flushed_total)`` callback invoked after each flush.
     :param workers: The number of worker processes; ``1`` (the default) is the serial path, ``>1`` encodes in parallel and merges shards.
     :param finalize: The finalization profile: ``"auto"`` selects the deferred finalizer on a fresh supported store for serial ingestion and the parity merge otherwise; ``"parity"`` and ``"deferred"`` force the respective profile.
+    :param track_sids: Retain the per-save provisional-to-final sid mapping.  Disable it for bounded-memory offline builds when callers do not need :meth:`resolved_sid`.
     """
 
     def __init__(
@@ -211,6 +218,7 @@ class BulkIngest:
         on_progress: Callable[[int, int], None] | None = None,
         workers: int = 1,
         finalize: Literal["auto", "parity", "deferred"] = "auto",
+        track_sids: bool = True,
     ) -> None:
         if chunk_size < 1:
             raise ValueError("chunk_size must be a positive integer")
@@ -233,6 +241,7 @@ class BulkIngest:
         self._workers = workers
         self._parallel = workers > 1
         self._requested_finalize = finalize
+        self._track_sids = track_sids
         self._finalize_profile = "parity"
         self._deferred = False
         # Parallel-mode state (unused on the serial path).
@@ -272,6 +281,7 @@ class BulkIngest:
         self._bulk_lock_held = False
         self._bulk_lifecycle_guard: Any = None
         self._preserve_clickhouse_fence = False
+        self._clickhouse_stage_tables: dict[str, str] = {}
 
         # Encoder bookkeeping, keyed by table name.
         self._next_sid: dict[str, int] = {}
@@ -317,6 +327,11 @@ class BulkIngest:
                 "the ingest owns its own spanning transaction"
             )
         store._claim_bulk_context()
+        try:
+            self._after_bulk_context_claim()
+        except BaseException:
+            store._release_bulk_context()
+            raise
         if store.write_profile == "bulk-fenced":
             try:
                 store._mutation_lock.acquire()
@@ -329,9 +344,10 @@ class BulkIngest:
                 self._bulk_lifecycle_guard.__enter__()
             except BaseException:
                 self._bulk_lifecycle_guard = None
-                store._mutation_lock.release()
-                self._bulk_lock_held = False
-                store._release_bulk_context()
+                try:
+                    self._release_bulk_ownership()
+                finally:
+                    store._release_bulk_context()
                 raise
         connection = None
         try:
@@ -371,14 +387,18 @@ class BulkIngest:
             connection = store._database.engine.connect()
             transaction = None if self._deferred else connection.begin()
         except BaseException:
-            if connection is not None:
-                self._release_connection(connection)
-            self._close_workers()
-            if not self._preserve_clickhouse_fence:
-                self._clean_up_after_failure()
-                self._clear_marker_after_failure()
-            self._release_bulk_ownership()
-            store._release_bulk_context()
+            try:
+                if connection is not None:
+                    self._release_connection(connection)
+                self._close_workers()
+                if not self._preserve_clickhouse_fence:
+                    self._clean_up_after_failure()
+                    self._clear_marker_after_failure()
+            finally:
+                try:
+                    self._release_bulk_ownership()
+                finally:
+                    store._release_bulk_context()
             raise
         self._transaction = transaction
         self._connection = connection
@@ -386,22 +406,27 @@ class BulkIngest:
             if self._parallel:
                 self._require_empty_store(connection)
         except BaseException:
-            if transaction is not None:
-                transaction.rollback()
-            self._release_connection(connection)
-            self._close_workers()
-            self._clean_up_after_failure()
-            self._clear_marker_after_failure()
-            self._release_bulk_ownership()
-            store._release_bulk_context()
+            try:
+                if transaction is not None:
+                    transaction.rollback()
+                self._release_connection(connection)
+                self._close_workers()
+                self._clean_up_after_failure()
+                self._clear_marker_after_failure()
+            finally:
+                try:
+                    self._release_bulk_ownership()
+                finally:
+                    store._release_bulk_context()
             raise
         self._entered = True
         return self
 
     def _clickhouse_p3_boundary(self) -> None:
-        """Stop ClickHouse bulk entry after P2 fencing and before P3 work."""
-        self._preserve_clickhouse_fence = True
-        raise NotImplementedError("ClickHouse deferred bulk ingestion is implemented in P3")
+        """P2's durable fence has been acquired; P3 continues with Parquet staging."""
+
+    def _after_bulk_context_claim(self) -> None:
+        """Test seam after atomic admission and before any lifecycle ownership."""
 
     def _acquire_clickhouse_lease(self) -> None:
         """Durably acquire the ClickHouse lease before the marker operation."""
@@ -419,6 +444,12 @@ class BulkIngest:
         from deferred finalization.
         """
         requested = self._requested_finalize
+        if self._store.backend_facts.stage_load == "client-stream":
+            if requested == "parity":
+                raise RuntimeError("ClickHouse bulk_ingest is deferred-only; finalize='parity' is not supported")
+            self._finalize_profile = "deferred"
+            self._deferred = True
+            return
         override = type(self._store).bulk_ingest_finalize_default
         if requested == "auto" and override != "auto":
             requested = override
@@ -483,18 +514,23 @@ class BulkIngest:
         from httk.data.db.bulk_parallel import ParallelController
 
         backend = self._store._database.engine.dialect.name
-        if backend == "duckdb":
+        if self._store.backend_facts.parallel_shard_format == "parquet":
             try:
                 import importlib
 
                 importlib.import_module("pyarrow")
             except ImportError as error:
                 raise ImportError(
-                    "bulk_ingest(workers>1) on a DuckDB store needs pyarrow; "
+                    "bulk_ingest(workers>1) with Parquet staging needs pyarrow; "
                     "install the 'httk-data[parallel]' extra to use it"
                 ) from error
         self._controller = ParallelController(
-            self._store, workers=self._workers, chunk_size=self._chunk_size, backend=backend
+            self._store,
+            workers=self._workers,
+            chunk_size=self._chunk_size,
+            backend=("parquet" if self._store.backend_facts.parallel_shard_format == "parquet" else backend),
+            track_sids=self._track_sids,
+            spill_deferred_auxiliary=(self._deferred and self._store.backend_facts.parallel_shard_format == "parquet"),
         )
         self._controller.start()
 
@@ -547,10 +583,20 @@ class BulkIngest:
                 if exc_type is None:
                     try:
                         self._deferred_finalize()
-                    except BaseException:
+                    except BaseException as error:
+                        # An Arrow response can be lost after the server has
+                        # accepted a shard.  Retaining its nonce marker is the
+                        # only safe recovery; never replay that ambiguous load.
+                        from httk.data.db.clickhouse import ClickHouseBulkIntegrityError, ClickHouseUncertainInsertError
+
+                        if isinstance(
+                            error, (ClickHouseUncertainInsertError, ClickHouseBulkIntegrityError)
+                        ) or not isinstance(error, Exception):
+                            self._preserve_clickhouse_fence = True
                         self._release_connection(connection)
                         self._clean_up_after_failure()
-                        self._clear_marker_after_failure()
+                        if not self._preserve_clickhouse_fence:
+                            self._clear_marker_after_failure()
                         raise
                     self._release_connection(connection)
                     self._clear_ingest_marker()
@@ -589,28 +635,38 @@ class BulkIngest:
             self._clean_up_after_failure()
             self._clear_marker_after_failure()
         finally:
-            self._release_connection(connection)  # idempotent: no-op if already released
-            if self._serial_stage is not None:
-                self._serial_stage.close()
-                self._serial_stage = None
-            self._close_workers()
-            self._connection = None
-            self._transaction = None
-            self._release_bulk_ownership()
             try:
-                self._before_bulk_context_release()
+                self._release_connection(connection)  # idempotent: no-op if already released
             finally:
-                store._release_bulk_context()
+                try:
+                    if self._serial_stage is not None:
+                        self._serial_stage.close()
+                finally:
+                    self._serial_stage = None
+                    try:
+                        self._close_workers()
+                    finally:
+                        self._connection = None
+                        self._transaction = None
+                        try:
+                            try:
+                                self._release_bulk_ownership()
+                            finally:
+                                self._before_bulk_context_release()
+                        finally:
+                            store._release_bulk_context()
 
     def _release_bulk_ownership(self) -> None:
         """Release the in-memory bulk mutex and lifecycle guard, never the lease."""
         guard = self._bulk_lifecycle_guard
         self._bulk_lifecycle_guard = None
-        if guard is not None:
-            guard.__exit__(None, None, None)
-        if self._bulk_lock_held:
-            self._store._mutation_lock.release()
-            self._bulk_lock_held = False
+        try:
+            if guard is not None:
+                guard.__exit__(None, None, None)
+        finally:
+            if self._bulk_lock_held:
+                self._bulk_lock_held = False
+                self._store._mutation_lock.release()
 
     def _write_ingest_marker(self) -> None:
         """Commit ``ingest_state=bulk-ingest`` before an empty-store mutation."""
@@ -645,6 +701,24 @@ class BulkIngest:
 
     def _before_clickhouse_marker_clear(self) -> None:
         """Fault seam immediately before the exact ClickHouse marker delete."""
+
+    def _before_clickhouse_map_swap(self, table: str, boundary: str) -> None:
+        """Fault seam at each durable ClickHouse map-rename boundary."""
+
+    def _after_clickhouse_stage_load(self) -> None:
+        """Fault seam after all Arrow stage inserts and before finalization."""
+
+    def _after_clickhouse_projection(self) -> None:
+        """Fault seam after durable projection and before working-table cleanup."""
+
+    def _after_clickhouse_cleanup(self) -> None:
+        """Fault seam after stage/working cleanup and before physical validation."""
+
+    def _before_clickhouse_integrity_verification(self) -> None:
+        """Raw-connection test seam before metadata-derived integrity checks."""
+
+    def _after_clickhouse_physical_validation(self) -> None:
+        """Fault seam after physical validation and before marker clear."""
 
     def _before_bulk_context_release(self) -> None:
         """Fault seam while admission remains closed during teardown."""
@@ -848,8 +922,19 @@ class BulkIngest:
         self._deferred_top_types.add(record_type)
         if self._serial_stage is None:
             temp = tempfile.TemporaryDirectory(prefix="httk_deferred_")
-            stage_backend = "duckdb-stage" if self._store._database.engine.dialect.name == "duckdb" else "sqlite"
-            config = _WorkerConfig(chunk_size=self._chunk_size, shard_dir=temp.name, backend=stage_backend)
+            stage_format = self._store.backend_facts.serial_stage_format
+            stage_backend = (
+                "duckdb-stage"
+                if stage_format == "duckdb-attach"
+                else ("parquet" if stage_format == "parquet" else "sqlite")
+            )
+            config = _WorkerConfig(
+                chunk_size=self._chunk_size,
+                shard_dir=temp.name,
+                backend=stage_backend,
+                track_sids=self._track_sids,
+                spill_deferred_auxiliary=(self._deferred and stage_format == "parquet"),
+            )
             self._serial_stage = _SerialDeferredStage(temp, _WorkerEncoder(self._store, 0, config))
         token = self._serial_next_token
         self._serial_next_token += 1
@@ -860,23 +945,25 @@ class BulkIngest:
         # for the common no-collapse case, while resolved_sid remains the
         # authoritative adapter after a collapse.
         public_sid = stage_sid - (1 << 26)
-        schema = resolve_schema(record_type)
-        if schema.dedup == "content_id":
-            key = content_id(obj, as_record=record_type)
-            public_sid = self._serial_public_content.get((table_name, key))
-            if public_sid is None:
-                public_sid = self._serial_public_next.get(table_name, 1)
-                self._serial_public_next[table_name] = public_sid + 1
-                self._serial_public_content[(table_name, key)] = public_sid
-        elif schema.dedup == "by_value":
-            value_key = self._serial_by_value_key(record_type, obj)
-            public_sid = self._serial_public_value.get((table_name, value_key))
-            if public_sid is None:
-                public_sid = self._serial_public_next.get(table_name, 1)
-                self._serial_public_next[table_name] = public_sid + 1
-                self._serial_public_value[(table_name, value_key)] = public_sid
-        self._serial_public_stage_sid.setdefault((table_name, public_sid), stage_sid)
-        self._returned_sids.add((table_name, public_sid))
+        if self._track_sids:
+            schema = resolve_schema(record_type)
+            if schema.dedup == "content_id":
+                key = content_id(obj, as_record=record_type)
+                public_sid = self._serial_public_content.get((table_name, key))
+                if public_sid is None:
+                    public_sid = self._serial_public_next.get(table_name, 1)
+                    self._serial_public_next[table_name] = public_sid + 1
+                    self._serial_public_content[(table_name, key)] = public_sid
+            elif schema.dedup == "by_value":
+                value_key = self._serial_by_value_key(record_type, obj)
+                public_sid = self._serial_public_value.get((table_name, value_key))
+                if public_sid is None:
+                    public_sid = self._serial_public_next.get(table_name, 1)
+                    self._serial_public_next[table_name] = public_sid + 1
+                    self._serial_public_value[(table_name, value_key)] = public_sid
+        if self._track_sids:
+            self._serial_public_stage_sid.setdefault((table_name, public_sid), stage_sid)
+            self._returned_sids.add((table_name, public_sid))
         self._records_total += 1
         return public_sid
 
@@ -918,6 +1005,8 @@ class BulkIngest:
         """
         if not self._final_sids_ready:
             raise RuntimeError("resolved_sid is only available after the bulk_ingest context has exited cleanly")
+        if not self._track_sids:
+            raise RuntimeError("resolved_sid is unavailable because bulk_ingest(track_sids=False) did not retain sids")
         table_name = resolve_schema(record_type).table_name
         if (table_name, sid) not in self._returned_sids:
             raise KeyError((record_type, sid))
@@ -948,7 +1037,8 @@ class BulkIngest:
         table_name = resolve_schema(record_type).table_name
         token = self._next_token
         self._next_token += 1
-        self._returned_sids.add((table_name, token))
+        if self._track_sids:
+            self._returned_sids.add((table_name, token))
         self._records_total += 1
         assert self._controller is not None
         self._controller.dispatch(token, obj, as_record)
@@ -1263,7 +1353,9 @@ class BulkIngest:
             started = time.perf_counter()
             manifests = [] if self._serial_stage is None else [self._serial_stage.finish()]
             self.finalize_timings["stage_finish"] = time.perf_counter() - started
-        transaction = self._connection.begin()
+        transaction = None if self._connection.dialect.name == "clickhousedb" else self._connection.begin()
+        finalizer: Any = None
+        finalizer_cleaned = False
         try:
             # Register and create schema-faithful ordinary tables only now,
             # after staging is complete.  There are no physical FKs, so table
@@ -1272,6 +1364,12 @@ class BulkIngest:
             for record_type in sorted(self._deferred_top_types, key=lambda value: resolve_schema(value).table_name):
                 self._ensure_tables(record_type)
             self.finalize_timings["ddl"] = time.perf_counter() - started
+            if self._store.backend_facts.stage_load == "client-stream":
+                from httk.data.db.clickhouse import load_parquet_stages
+
+                self._clickhouse_stage_tables = load_parquet_stages(self._store, manifests)
+                self._staging_tables.update(self._clickhouse_stage_tables.values())
+                self._after_clickhouse_stage_load()
             from httk.data.db.bulk_deferred import DeferredFinalizer
 
             finalizer = DeferredFinalizer(self, manifests)
@@ -1297,17 +1395,37 @@ class BulkIngest:
                 self.finalize_timings["indexes"] = time.perf_counter() - started
                 started = time.perf_counter()
                 self._assert_counts()
+                if self._connection.dialect.name == "clickhousedb":
+                    self._before_clickhouse_integrity_verification()
+                    from httk.data.db.clickhouse import verify_bulk_integrity
+
+                    verify_bulk_integrity(self._connection, [self._store._table(name) for name in self._created])
+                # ClickHouse working and stage relations are durable tables.
+                # They must be gone before physical validation and marker clear.
+                finalizer.cleanup()
+                finalizer_cleaned = True
+                self._after_clickhouse_cleanup()
+                self._validate_deferred_staging_cleared()
                 self._validate_deferred_physical()
+                if self._connection.dialect.name == "clickhousedb":
+                    from httk.data.db.clickhouse import validate_metadata_table
+
+                    # Validate the KeeperMap shape in this same durable
+                    # pre-marker-clear pass, not merely while opening a store.
+                    validate_metadata_table(self._connection)
+                self._after_clickhouse_physical_validation()
                 self.finalize_timings["validation"] = time.perf_counter() - started
             finally:
-                finalizer.cleanup()
+                if not finalizer_cleaned:
+                    finalizer.cleanup()
                 self.finalize_timings.update(finalizer.finalize_timings)
-            self._validate_deferred_staging_cleared()
             started = time.perf_counter()
-            transaction.commit()
+            if transaction is not None:
+                transaction.commit()
             self.finalize_timings["commit"] = time.perf_counter() - started
         except BaseException:
-            transaction.rollback()
+            if transaction is not None:
+                transaction.rollback()
             raise
 
     def _serial_conflict_message(self, message: str) -> str:
@@ -1355,8 +1473,12 @@ class BulkIngest:
             table = self._store._table(name)
             if self._connection.dialect.name == "sqlite":
                 self._validate_deferred_sqlite_table(name, table)
-            else:
+            elif self._connection.dialect.name == "duckdb":
                 self._validate_deferred_duckdb_table(name, table)
+            else:
+                from httk.data.db.clickhouse import validate_bulk_tables
+
+                validate_bulk_tables(self._connection, [table])
 
     def _validate_deferred_staging_cleared(self) -> None:
         """Ensure temporary finalizer relations did not escape its cleanup."""
@@ -1623,6 +1745,23 @@ class BulkIngest:
 
     def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:
         """Abort (never commit) if any dispatched task did not come back encoded in a worker manifest."""
+        # Deferred Parquet stages carry one root row per submitted task.  Count
+        # those sidecars directly, avoiding a second O(N) Python token set on
+        # the scale path (``token_sid`` itself is retained only when the public
+        # resolved_sid contract requested it).
+        if any("_httk_roots" in manifest.shards for manifest in manifests):
+            roots = 0
+            for manifest in manifests:
+                for path in manifest.shards.get("_httk_roots", ()):
+                    from pyarrow.parquet import ParquetFile
+
+                    roots += ParquetFile(path).metadata.num_rows
+            if roots != self._records_total:
+                raise RuntimeError(
+                    "bulk_ingest lost tasks between dispatch and deferred finalize: "
+                    f"expected {self._records_total} roots, found {roots}"
+                )
+            return
         dispatched = {token for _table, token in self._returned_sids}
         encoded: set[int] = set()
         for manifest in manifests:
