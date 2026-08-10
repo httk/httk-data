@@ -11,13 +11,13 @@ from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import QueryLiteralError, StorageInfo, StoredPropertyProjection
 
-from httk.data.db import (
+from httk.store.db import (
     Database,
     SqlStore,
     StoredPropertySqlConfigurationError,
     stored_property_sql_plan,
 )
-from httk.data.query.optimade_filters import FilterTranslationError
+from httk.store.query.optimade_filters import FilterTranslationError
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 

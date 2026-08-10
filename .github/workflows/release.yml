@@ -74,9 +74,9 @@ jobs:
 
       - name: Test the built wheel in isolation
         run: |
-          python -m venv /tmp/httk-data-wheel-test
-          /tmp/httk-data-wheel-test/bin/python -m pip install --no-deps dist/*.whl
-          /tmp/httk-data-wheel-test/bin/python -c "import httk.data"
+          python -m venv /tmp/httk-store-wheel-test
+          /tmp/httk-store-wheel-test/bin/python -m pip install --no-deps dist/*.whl
+          /tmp/httk-store-wheel-test/bin/python -c "import httk.store"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/httk-data
+      url: https://test.pypi.org/p/httk-store
     permissions:
       id-token: write
 
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/httk-data
+      url: https://pypi.org/p/httk-store
     permissions:
       id-token: write
 

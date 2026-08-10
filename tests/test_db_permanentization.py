@@ -11,9 +11,9 @@ from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import IdentitySkip, StorageInfo
 from sqlalchemy import event
 
-from httk.data.db import Database, EntryMetadataConflictError, SqlStore, StorageLayoutUpgradeRequiredError
-from httk.data.db.mapping import entry_dispatch_table_name
-from httk.data.db.store import _DegradedWriteCrash
+from httk.store.db import Database, EntryMetadataConflictError, SqlStore, StorageLayoutUpgradeRequiredError
+from httk.store.db.mapping import entry_dispatch_table_name
+from httk.store.db.store import _DegradedWriteCrash
 
 
 @dataclass(frozen=True)

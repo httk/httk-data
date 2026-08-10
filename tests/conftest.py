@@ -8,7 +8,7 @@ directory, not against the directory pytest was started in.
 
 It matters whenever a repository is tested straight from a source checkout
 rather than from an install — the sibling httk repositories are developed that
-way, with invocations such as ``PYTHONPATH=src:../httk-data/src pytest``. Left
+way, with invocations such as ``PYTHONPATH=src:../httk-store/src pytest``. Left
 alone, those relative entries would resolve against the temporary directory in
 the child process and point at nothing, so every example would fail to import
 its own package: a false failure that says nothing about the example.
@@ -49,7 +49,7 @@ def _duckdb_test_memory_limit() -> str:
 
 os.environ.setdefault("HTTK_DUCKDB_MEMORY_LIMIT", _duckdb_test_memory_limit())
 
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +61,7 @@ def _fail_loudly_for_abandoned_bulk_contexts(monkeypatch):
     fixture teardown so the failure is reported instead of turning into a
     deadlock in ``Database.dispose()``.
     """
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     entered: list[BulkIngest] = []
     original_enter = BulkIngest.__enter__
@@ -168,7 +168,7 @@ class _StoreFactory:
             declaration = entry_records if entry_records is not None else {}
             store = SqlStore(database, entry_records=declaration)
         else:
-            from httk.data.mongo import MongoDatabase, MongoStore
+            from httk.store.mongo import MongoDatabase, MongoStore
 
             name = f"httk_behavior_{uuid.uuid4().hex}"
             assert self._mongo_client is not None
@@ -188,7 +188,7 @@ class _StoreFactory:
         if original is not store:
             raise ValueError("store was not created by this store_factory")
         if self._backend == "mongo":
-            from httk.data.mongo import MongoDatabase, MongoStore
+            from httk.store.mongo import MongoDatabase, MongoStore
 
             assert self._mongo_client is not None
             mongo_database = MongoDatabase(self._mongo_client, database.database.name, transactions="never")
@@ -217,7 +217,7 @@ def store_factory(store_backend):
 @pytest.fixture
 def mongo_test_database(mongo_test_client):
     """Yield a fresh live MongoDB database when the test URI is configured."""
-    from httk.data.mongo import MongoDatabase
+    from httk.store.mongo import MongoDatabase
 
     name = f"httk_test_{uuid.uuid4().hex}"
     database = MongoDatabase(mongo_test_client, name)

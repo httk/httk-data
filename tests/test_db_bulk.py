@@ -18,8 +18,8 @@ from httk.core import FracScalar, FracVector
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import IdentitySkip, Indexed, Shape, StorageInfo, content_id
 
-from httk.data.db.mapping import CONTENT_ID_COLUMN
-from httk.data.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
+from httk.store.db.mapping import CONTENT_ID_COLUMN
+from httk.store.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
 
 # --------------------------------------------------------------------- record classes
 
@@ -399,7 +399,7 @@ def test_bulk_dispatch_conflicting_backing_raises(store_factory, monkeypatch):
     _require_bulk(store)
     # Force both backings to share a dispatch content id to provoke the conflict.
     shared = content_id(BulkCalcA("alpha", 1))
-    monkeypatch.setattr("httk.data.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
+    monkeypatch.setattr("httk.store.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
     with pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"), store.bulk_ingest() as bulk:
         bulk.save(BulkCalcA("alpha", 1))
         bulk.save(BulkCalcB("beta", "kind-b"))
@@ -432,7 +432,7 @@ def test_bulk_failure_leaves_no_tables_or_rows(store_factory):
         bulk.save(ValidatedRecord(-1))  # validator raises here
 
     with _database_of(store).engine.connect() as connection:
-        from httk.data.db.layout import actual_table_names
+        from httk.store.db.layout import actual_table_names
 
         present = {name for name in actual_table_names(connection) if not name.startswith("_httk_")}
     assert present == set()
@@ -460,7 +460,7 @@ def test_bulk_then_ordinary_save_continues_sids(store_factory):
 
 def _physical_counts(database) -> dict[str, int]:
     """Row counts of the physically present, non-marker tables of a database."""
-    from httk.data.db.layout import actual_table_names
+    from httk.store.db.layout import actual_table_names
 
     counts: dict[str, int] = {}
     with database.engine.connect() as connection:
@@ -700,7 +700,7 @@ def test_bulk_incremental_dispatch_conflicting_backing_raises(store_factory, mon
     store.save(BulkCalcA("alpha", 1))
     before = _physical_counts(_database_of(store))
     shared = content_id(BulkCalcA("alpha", 1))
-    monkeypatch.setattr("httk.data.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
+    monkeypatch.setattr("httk.store.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
     with pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"), store.bulk_ingest() as bulk:
         bulk.save(BulkCalcB("beta", "kind-b"))  # same (forced) content id, different backing
     assert _physical_counts(_database_of(store)) == before

@@ -1,9 +1,9 @@
-"""Structural-conformance tests for the store/searcher query protocols (httk.data.query)."""
+"""Structural-conformance tests for the store/searcher query protocols (httk.store.query)."""
 
 from collections.abc import Iterator
 from typing import Any
 
-from httk.data import (
+from httk.store import (
     CountUnavailableError,
     MultipleResultsError,
     NoResultError,
@@ -152,7 +152,7 @@ def test_comparison_operators_reachable_by_getattr_convention():
 
 
 def test_query_errors_are_neutral_and_sql_compatibility_exports_are_identical():
-    from httk.data import db
+    from httk.store import db
 
     assert db.NoResultError is NoResultError
     assert db.MultipleResultsError is MultipleResultsError

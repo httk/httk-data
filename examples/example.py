@@ -1,6 +1,6 @@
 """Serving records and validating them against their OPTIMADE definitions
 
-This is the smallest useful tour of *httk-data*: the two capabilities that need
+This is the smallest useful tour of *httk-store*: the two capabilities that need
 no database at all. A **provider** takes data you already have and answers the
 neutral `httk.core.EntryProvider` contract about it; **validation** checks
 concrete values against the OPTIMADE property definitions that describe them.
@@ -46,14 +46,14 @@ point the failures below illustrate: OPTIMADE's `references.year` is a
 a mistake that is easy to make, and easy to catch here.
 
 For storing and querying data in a database rather than holding it in memory,
-see the other examples, which build on `httk.data.db`.
+see the other examples, which build on `httk.store.db`.
 """
 
 from typing import Any
 
 from httk.core import Reference, RelatedEntry, standard_entry_type
 
-from httk.data import (
+from httk.store import (
     PropertyValidationError,
     ReferenceEntryProvider,
     validate_property,

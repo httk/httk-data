@@ -2,7 +2,7 @@
 
 Once frozen dataclasses are stored (see the *storable records* example), you
 query them with `store.searcher()`. The DSL is deliberately not SQL and not an
-ORM: it is a small backend-agnostic protocol (`httk.data.query`) that the SQL
+ORM: it is a small backend-agnostic protocol (`httk.store.query`) that the SQL
 layer implements and that other stores — including *httk-serve*'s in-memory
 reference store — implement identically, so the same query program runs
 unchanged against either.
@@ -71,8 +71,8 @@ from typing import Any, ClassVar
 
 from httk.core.storage import StorageInfo
 
-from httk.data.db import Database, SqlStore
-from httk.data.query import Searcher, SearchVariable
+from httk.store.db import Database, SqlStore
+from httk.store.query import Searcher, SearchVariable
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
 

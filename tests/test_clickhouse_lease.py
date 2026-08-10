@@ -9,16 +9,16 @@ import sqlalchemy
 from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
-from httk.data.db import Database, SqlStore
-from httk.data.db import clickhouse as clickhouse_adapter
-from httk.data.db.clickhouse import (
+from httk.store.db import Database, SqlStore
+from httk.store.db import clickhouse as clickhouse_adapter
+from httk.store.db.clickhouse import (
     acquire_lease,
     clear_ingest_marker,
     release_lease,
     verify_lease,
     write_ingest_marker,
 )
-from httk.data.db.layout import StoreUnderConstructionError
+from httk.store.db.layout import StoreUnderConstructionError
 
 
 class _P2InjectedCrash(BaseException):
@@ -126,7 +126,7 @@ def test_clickhouse_dispose_releases_exact_lease(clickhouse_p2_database: Databas
 def test_clickhouse_concurrent_bulk_admission_refuses_second_context(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     store = SqlStore(clickhouse_p2_database, entry_records={})
     first_claimed = threading.Event()
@@ -172,7 +172,7 @@ def test_clickhouse_bulk_entry_cleanup_failure_releases_admission_and_mutex(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A secondary entry-cleanup failure cannot strand the bulk ownership."""
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     store = SqlStore(clickhouse_p2_database, entry_records={})
 
@@ -237,7 +237,7 @@ def test_clickhouse_preexisting_marker_survives_new_bulk_attempt(
 def test_clickhouse_crash_after_lease_before_marker_keeps_lease_until_dispose(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     def crash(_: BulkIngest) -> None:
         raise _P2InjectedCrash("after lease")
@@ -307,7 +307,7 @@ def test_clickhouse_marker_residue_rejects_fresh_open_after_marker_write(
 def test_clickhouse_interrupted_marker_clear_leaves_fail_closed_residue(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     monkeypatch.setattr(BulkIngest, "_clickhouse_p3_boundary", lambda _: None)
     monkeypatch.setattr(BulkIngest, "_deferred_finalize", lambda _: None)
@@ -337,7 +337,7 @@ def test_clickhouse_p2_clean_exit_glue_clears_marker_but_keeps_lifecycle_lease(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Prove P2 marker/lease glue; P3 must prove a real durable clean exit."""
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     monkeypatch.setattr(BulkIngest, "_clickhouse_p3_boundary", lambda _: None)
     monkeypatch.setattr(BulkIngest, "_deferred_finalize", lambda _: None)
@@ -352,7 +352,7 @@ def test_clickhouse_p2_clean_exit_glue_clears_marker_but_keeps_lifecycle_lease(
 def test_clickhouse_teardown_keeps_bulk_admission_closed_until_ownership_release(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     teardown_started = threading.Event()
     second_finished = threading.Event()
@@ -408,8 +408,8 @@ def test_clickhouse_interrupted_mutex_acquire_unwinds_bulk_admission(
 def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
     clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    from httk.data.db import engine as engine_module
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db import engine as engine_module
+    from httk.store.db.bulk import BulkIngest
 
     entered = threading.Event()
     finalizer_started = threading.Event()

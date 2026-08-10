@@ -13,7 +13,7 @@ from httk.core import (
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, StoredPropertyProjection, content_id
 
-from httk.data.db import (
+from httk.store.db import (
     Database,
     DuplicateEntryIdError,
     SqlSearcher,
@@ -21,8 +21,8 @@ from httk.data.db import (
     StoredEntryFederation,
     StoredEntrySource,
 )
-from httk.data.query.optimade_filters import FilterTranslationError
-from httk.data.store_common import EntryStore
+from httk.store.query.optimade_filters import FilterTranslationError
+from httk.store.store_common import EntryStore
 
 CALCULATIONS_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 _RESPONSES: list[str] = []

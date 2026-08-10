@@ -1,12 +1,12 @@
-"""SQLite end-to-end tests for OPTIMADE-filter querying over stored classes (httk.data.db.optimade)."""
+"""SQLite end-to-end tests for OPTIMADE-filter querying over stored classes (httk.store.db.optimade)."""
 
 from dataclasses import dataclass
 from fractions import Fraction
 
 import pytest
 
-from httk.data.db import Database, SqlStore, optimade_filter_searcher
-from httk.data.query.optimade_filters import FilterTranslationError
+from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.query.optimade_filters import FilterTranslationError
 
 
 @dataclass(frozen=True)

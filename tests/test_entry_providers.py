@@ -1,4 +1,4 @@
-"""Tests for httk-data's in-memory entry providers and their registration."""
+"""Tests for httk-store's in-memory entry providers and their registration."""
 
 import datetime
 
@@ -16,7 +16,7 @@ from httk.core import (
 from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
 
-from httk.data import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider, validate_record
+from httk.store import CalculationEntryProvider, FileEntryProvider, ReferenceEntryProvider, validate_record
 
 # --- provider round trips -----------------------------------------------------
 
@@ -114,23 +114,23 @@ def test_relationships_keys_normalized_to_str() -> None:
 
 
 def test_data_providers_registered() -> None:
-    # With httk-data importable, importing httk.core discovers the entry tier
-    # and registers the four providers under their "data-*" names.
+    # With httk-store importable, importing httk.core discovers the entry tier
+    # and registers the four providers under their "store-*" names.
     import httk.core  # noqa: F401  (imported for its discovery side effect)
 
     assert {
-        "data-references",
-        "data-files",
-        "data-calculations",
-        "data-db-store",
+        "store-references",
+        "store-files",
+        "store-calculations",
+        "store-db-store",
     } <= set(known_entry_providers())
 
 
 def test_registered_factories_resolve_and_build() -> None:
     for name, entry_type in (
-        ("data-references", "references"),
-        ("data-files", "files"),
-        ("data-calculations", "calculations"),
+        ("store-references", "references"),
+        ("store-files", "files"),
+        ("store-calculations", "calculations"),
     ):
         factory = resolve_callable(entry_providers.require(name).handler)
         provider = factory({})

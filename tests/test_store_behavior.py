@@ -30,7 +30,7 @@ from httk.core.storage import (
     stored_property,
 )
 
-from httk.data.store_common import EntryMetadataConflictError
+from httk.store.store_common import EntryMetadataConflictError
 
 
 @dataclass(frozen=True)

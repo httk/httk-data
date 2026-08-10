@@ -7,9 +7,9 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo
 
-from httk.data.mongo import MongoStore
-from httk.data.mongo.mapping import METADATA_COLLECTION
-from httk.data.storage_layout import StorageLayoutUpgradeRequiredError
+from httk.store.mongo import MongoStore
+from httk.store.mongo.mapping import METADATA_COLLECTION
+from httk.store.storage_layout import StorageLayoutUpgradeRequiredError
 
 
 class MongoLayoutFamily:

@@ -1,6 +1,6 @@
 # MongoDB storage in detail
 
-`httk.data.mongo` stores the same plain frozen dataclasses as the SQL layer,
+`httk.store.mongo` stores the same plain frozen dataclasses as the SQL layer,
 but uses MongoDB's document model: one document per record, embedded child
 arrays, and links to referenced records in their own collections. It exposes
 the same neutral `Store`/`Searcher` protocols, entry-family dispatch, stored
@@ -21,12 +21,12 @@ not hide the MongoDB-specific limits documented in
 The backend is optional:
 
 ```bash
-python -m pip install "httk-data[mongodb]"
+python -m pip install "httk-store[mongodb]"
 ```
 
-This installs `pymongo>=4.6`. Importing `httk.data` itself does not require
+This installs `pymongo>=4.6`. Importing `httk.store` itself does not require
 PyMongo; importing a MongoDB backend name without the extra raises an
-`ImportError` naming `httk-data[mongodb]`.
+`ImportError` naming `httk-store[mongodb]`.
 
 ## Connecting and choosing a deployment
 
@@ -35,7 +35,7 @@ replica set is the recommended deployment, including a single-node replica
 set for a development or CI database:
 
 ```python
-from httk.data.mongo import MongoDatabase, MongoStore
+from httk.store.mongo import MongoDatabase, MongoStore
 
 uri = "mongodb://127.0.0.1:27017/?replicaSet=httk2rs"
 with MongoDatabase.connect(uri, database="materials", transactions="require") as database:
@@ -202,7 +202,7 @@ optimization.
 
 ## Entry providers and federation
 
-`httk.data.mongo.StoreEntryProvider` serves configured entry families or
+`httk.store.mongo.StoreEntryProvider` serves configured entry families or
 concrete backing records through the neutral `httk.core.EntryProvider`
 contract. Family entries use the Mongo stored-property plan, and relationship
 links can be declared with the same provider-facing concepts as the SQL

@@ -4,7 +4,7 @@ DuckDB binds statement parameters through its native extension, which probes
 ``import pandas`` roughly once per bound value. CPython does not cache a *failed*
 import, so when pandas is absent every probe re-runs the full ``sys.path`` finder
 search (profiled at ~14x slower for a 50k-row ``executemany``).
-:meth:`~httk.data.db.engine.Database.duckdb` installs the standard ``None``
+:meth:`~httk.store.db.engine.Database.duckdb` installs the standard ``None``
 failed-import sentinel to short-circuit that search.
 
 The pinned test interpreter HAS pandas, so the absence path is exercised by
@@ -19,7 +19,7 @@ import sys
 import pytest
 import sqlalchemy
 
-from httk.data.db import Database
+from httk.store.db import Database
 
 _MISSING = object()
 
@@ -66,7 +66,7 @@ def test_duckdb_executemany_probes_pandas_at_most_once():
 def test_duckdb_installs_pandas_absence_sentinel(monkeypatch):
     """When pandas is unimportable, a None sys.modules sentinel is installed once and blocks re-search."""
     _require_duckdb()
-    import httk.data.db.engine as engine_module
+    import httk.store.db.engine as engine_module
 
     # Simulate pandas being absent (the pinned venv has it): drop it from
     # sys.modules and make find_spec report it missing; restore on teardown.
@@ -103,7 +103,7 @@ def test_duckdb_installs_pandas_absence_sentinel(monkeypatch):
 def test_duckdb_leaves_installed_pandas_untouched(monkeypatch):
     """When pandas is importable, no sentinel is planted and any prior entry is preserved."""
     _require_duckdb()
-    import httk.data.db.engine as engine_module
+    import httk.store.db.engine as engine_module
 
     saved = sys.modules.pop("pandas", _MISSING)
     try:

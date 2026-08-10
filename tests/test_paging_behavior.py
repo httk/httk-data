@@ -6,7 +6,7 @@ from functools import cmp_to_key
 import pytest
 from clickhouse_read_support import bulk_store
 
-from httk.data import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
+from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 

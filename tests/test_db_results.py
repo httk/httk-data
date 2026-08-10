@@ -10,7 +10,7 @@ import pytest
 import sqlalchemy
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
-from httk.data.db import (
+from httk.store.db import (
     Database,
     ExpiredCursorRowError,
     MultipleResultsError,
@@ -198,7 +198,7 @@ def test_cursor_proxy_is_a_reused_unhashable_expiring_view(store):
 
 
 def test_column_iteration_does_not_hydrate_records(store, monkeypatch):
-    import httk.data.db.results as results_module
+    import httk.store.db.results as results_module
 
     calls = 0
     original = results_module.RowHydrator.row

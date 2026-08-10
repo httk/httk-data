@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from httk.data.mongo import MongoDatabase
+from httk.store.mongo import MongoDatabase
 
 
 @pytest.mark.usefixtures("mongo_test_database")

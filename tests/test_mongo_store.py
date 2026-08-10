@@ -9,10 +9,10 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import Skip, StorageInfo, content_id, stored_property
 
-from httk.data.db.schema import resolve_schema
-from httk.data.mongo import MongoDatabase, MongoStore, RecordTooLargeError
-from httk.data.mongo.mapping import collection_name_for, entry_dispatch_table_name
-from httk.data.store_common import EntryDispatchIntegrityError
+from httk.store.db.schema import resolve_schema
+from httk.store.mongo import MongoDatabase, MongoStore, RecordTooLargeError
+from httk.store.mongo.mapping import collection_name_for, entry_dispatch_table_name
+from httk.store.store_common import EntryDispatchIntegrityError
 
 
 @dataclass(frozen=True)

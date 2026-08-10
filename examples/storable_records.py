@@ -1,11 +1,11 @@
 """Storing frozen dataclasses in a database, exactly
 
-`httk.data.db` stores **plain frozen dataclasses**. There is no base class to
+`httk.store.db` stores **plain frozen dataclasses**. There is no base class to
 inherit, no metaclass, no ORM session: any frozen dataclass whose field types
 resolve is storable, and the vocabulary that fine-tunes how it is stored lives
 in *httk-core* (`Indexed`, `Unique`, `Skip`, `Shape`, `StorageInfo`,
 `stored_property`) so that a domain module can declare storable classes without
-depending on httk-data at all.
+depending on httk-store at all.
 
 This example declares one such class and then does, in order, the five things
 you actually do with a store.
@@ -73,7 +73,7 @@ from typing import Annotated, ClassVar
 from httk.core import FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, content_id, stored_property
 
-from httk.data.db import Database, SqlStore, resolve_schema
+from httk.store.db import Database, SqlStore, resolve_schema
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
 

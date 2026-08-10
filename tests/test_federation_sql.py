@@ -5,8 +5,8 @@ from fractions import Fraction
 
 import pytest
 
-from httk.data import FederatedStore, MultipleResultsError, UnsupportedQueryError
-from httk.data.db import Database, SqlStore
+from httk.store import FederatedStore, MultipleResultsError, UnsupportedQueryError
+from httk.store.db import Database, SqlStore
 
 
 @dataclass(frozen=True)

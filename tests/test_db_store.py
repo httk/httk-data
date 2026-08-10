@@ -15,8 +15,8 @@ import sqlalchemy
 from httk.core import FracScalar, FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 
-from httk.data.db import Database, SqlStore, resolve_schema
-from httk.data.db.mapping import sqlalchemy_metadata, table_for
+from httk.store.db import Database, SqlStore, resolve_schema
+from httk.store.db.mapping import sqlalchemy_metadata, table_for
 
 
 @dataclass(frozen=True)
@@ -429,7 +429,7 @@ def _subprocess_env() -> dict[str, str]:
 
 
 def test_plain_import_does_not_import_sqlalchemy():
-    code = "import httk.data.db\nimport sys\nassert 'sqlalchemy' not in sys.modules, 'sqlalchemy was imported'"
+    code = "import httk.store.db\nimport sys\nassert 'sqlalchemy' not in sys.modules, 'sqlalchemy was imported'"
     subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
 
 
@@ -443,11 +443,11 @@ def test_missing_sqlalchemy_raises_import_error_naming_extra():
         "            raise ModuleNotFoundError(f'No module named {fullname!r}', name=fullname)\n"
         "        return None\n"
         "sys.meta_path.insert(0, Block())\n"
-        "import httk.data.db\n"
+        "import httk.store.db\n"
         "try:\n"
-        "    httk.data.db.Database\n"
+        "    httk.store.db.Database\n"
         "except ImportError as error:\n"
-        "    assert 'httk-data[db]' in str(error), error\n"
+        "    assert 'httk-store[db]' in str(error), error\n"
         "else:\n"
         "    raise SystemExit('expected an ImportError')\n"
     )

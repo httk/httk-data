@@ -3,7 +3,7 @@
 import pytest
 from httk.core import EntryTypeDefinition, PropertyDefinition, load_entry_type_definition, standard_entry_type
 
-from httk.data import portable_query_capabilities, portable_query_fields
+from httk.store import portable_query_capabilities, portable_query_fields
 
 
 @pytest.mark.parametrize("name", ("references", "files", "calculations"))

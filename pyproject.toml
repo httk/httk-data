@@ -3,7 +3,7 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "httk-data"
+name = "httk-store"
 version = "0.2.0"
 description = "httk₂ module for data management: entry providers, property-definition validation, and database storage."
 readme = "README.md"
@@ -34,9 +34,9 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://httk.org"
-Documentation = "https://docs.httk.org/httk-data/"
-Repository = "https://github.com/httk/httk-data"
-Issues = "https://github.com/httk/httk-data/issues"
+Documentation = "https://docs.httk.org/httk-store/"
+Repository = "https://github.com/httk/httk-store"
+Issues = "https://github.com/httk/httk-store/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -61,11 +61,11 @@ release = [
   "build>=1.2",
   "twine>=6.0",
 ]
-default = ["httk-data[db]"]
+default = ["httk-store[db]"]
 db = ["sqlalchemy>=2.0,<3"]
-duckdb = ["httk-data[db]", "duckdb_engine>=0.13", "duckdb>=1.0"]
+duckdb = ["httk-store[db]", "duckdb_engine>=0.13", "duckdb>=1.0"]
 # clickhouse-connect 1.6.0 was probed for G0/P5; keep the compatible major range.
-clickhouse = ["httk-data[db]", "clickhouse-connect>=1.6,<2"]
+clickhouse = ["httk-store[db]", "clickhouse-connect>=1.6,<2"]
 parallel = ["pyarrow>=15"]
 mongodb = ["pymongo>=4.6"]
 
@@ -77,8 +77,8 @@ where = ["src"]
 namespaces = true
 
 [tool.setuptools.package-data]
-"httk.data" = ["py.typed"]
-"httk.registry.entries.data" = ["py.typed"]
+"httk.store" = ["py.typed"]
+"httk.registry.entries.store" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -31,7 +31,7 @@ docs-lock:
 # (network target; the lock installation and build are intentionally transparent).
 docs-lock-check: docs-clean
 	@set -eu; \
-	check_dir=$$(mktemp -d "${TMPDIR:-/tmp}/httk-data-docs-lock-check.XXXXXX"); \
+	check_dir=$$(mktemp -d "${TMPDIR:-/tmp}/httk-store-docs-lock-check.XXXXXX"); \
 	trap 'rm -rf "$$check_dir"' EXIT; \
 	env -u PYTHONPATH -u PYTHONHOME $(PYTHON) -m venv "$$check_dir/venv"; \
 	env -u PYTHONPATH -u PYTHONHOME "$$check_dir/venv/bin/python" -m pip install -r docs/requirements.lock; \
@@ -41,7 +41,7 @@ docs-lock-check: docs-clean
 		"$$check_dir/venv/bin/python" -m sphinx -E -a -b html -W --keep-going docs "$$check_dir/html"
 
 dist-clean:
-	rm -rf build $(DIST_DIR) src/httk_data.egg-info
+	rm -rf build $(DIST_DIR) src/httk_store.egg-info
 
 clean: docs-clean dist-clean
 	find . -name "*.pyc" -print0 | xargs -0 rm -f

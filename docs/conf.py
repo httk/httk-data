@@ -7,8 +7,8 @@ from pathlib import Path
 from sphinx.deprecation import RemovedInSphinx10Warning
 warnings.filterwarnings("ignore", category=RemovedInSphinx10Warning)
 
-project = "httk-data"
-author = "The httk-data AUTHORS"
+project = "httk-store"
+author = "The httk-store AUTHORS"
 copyright = f"{date.today().year}, {author}"
 
 extensions = [
@@ -83,7 +83,7 @@ html_theme_options = {
 # so docs builds need no network access; link targets still point at the live
 # sites. Refresh the committed inventories with `make docs-inventories`.
 #
-# httk-data builds on public httk-core objects (it serves httk-core's record
+# httk-store builds on public httk-core objects (it serves httk-core's record
 # models through the httk.core.EntryProvider contract and validates httk-core
 # PropertyDefinitions), so cross-project references resolve against the published
 # httk documentation site. The base URL comes from the DOCS_BASE_URL Makefile

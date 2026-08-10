@@ -1,4 +1,4 @@
-"""Tests for StoreEntryProvider (httk.data.db.entry_provider): definitions, records, relationships."""
+"""Tests for StoreEntryProvider (httk.store.db.entry_provider): definitions, records, relationships."""
 
 import contextlib
 import datetime
@@ -18,8 +18,8 @@ from httk.core import (
 )
 from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
 
-from httk.data.db import Database, SqlStore, StoreEntryProvider
-from httk.data.validation import validate_record
+from httk.store.db import Database, SqlStore, StoreEntryProvider
+from httk.store.validation import validate_record
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 

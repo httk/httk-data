@@ -1,8 +1,8 @@
 [site]
-slug = "httk-data"
-repository-url = "https://github.com/httk/httk-data"
+slug = "httk-store"
+repository-url = "https://github.com/httk/httk-store"
 main-branch = "main"
-import-roots = ["httk/data", "httk/registry"]
+import-roots = ["httk/store", "httk/registry"]
 
 [[internal-dependency]]
 distribution = "httk-core"

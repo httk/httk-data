@@ -1,12 +1,12 @@
 # Database storage
 
-`httk.data.db` stores **plain frozen dataclasses** in a relational database
+`httk.store.db` stores **plain frozen dataclasses** in a relational database
 (SQLite or DuckDB), makes them queryable through a backend-agnostic search
 DSL, and serves them through the neutral `httk.core.EntryProvider` contract —
 no SQLAlchemy types in the public API, no base class to inherit:
 
 ```python
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 db = Database.sqlite("results.sqlite")
 store = SqlStore(db, entry_records={})   # first open declares the store

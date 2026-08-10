@@ -5,7 +5,7 @@ filter string** — the query language of the OPTIMADE API, as it arrives in a
 URL — and returns a searcher over the stored rows of `cls`. It is the bridge
 between the text a user (or a remote client) writes and the search DSL of the
 *searching* example: the filter is parsed by httk-core's OPTIMADE grammar,
-translated by `httk.data.query.optimade_filters` against a handler table derived from
+translated by `httk.store.query.optimade_filters` against a handler table derived from
 the class's storage schema, and executed as an ordinary search. Each match
 is available as the friendly `searcher.results().scalars()` stream.
 
@@ -67,9 +67,9 @@ with category `"not-implemented"`.
 from dataclasses import dataclass
 from fractions import Fraction
 
-from httk.data.db import Database, SqlStore, optimade_filter_searcher
-from httk.data.query import Searcher
-from httk.data.query.optimade_filters import FilterTranslationError
+from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.query import Searcher
+from httk.store.query.optimade_filters import FilterTranslationError
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
 

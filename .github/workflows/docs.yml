@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Resolve the site staging directory
-        run: echo "SITE_DIR=$RUNNER_TEMP/httk-data-docs-site" >> "$GITHUB_ENV"
+        run: echo "SITE_DIR=$RUNNER_TEMP/httk-store-docs-site" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
         with:
@@ -40,7 +40,7 @@ jobs:
             PYTHONPATH="$RUNNER_TEMP/dep-httk-core/src" python -m httk.core.docs filter-lock \
               --lock docs/requirements.lock \
               --out "$RUNNER_TEMP/dev-requirements.txt" \
-              --self-distribution httk-data
+              --self-distribution httk-store
             pip install -r "$RUNNER_TEMP/dev-requirements.txt"
           else
             # Bootstrap is intentionally dev-only: releases remain hard-gated
@@ -104,7 +104,7 @@ jobs:
             fi
             python -m httk.core.docs compose \
               --site "$SITE_DIR" --build docs/_build/html --dev \
-              --slug httk-data --url https://docs.httk.org/httk-data \
+              --slug httk-store --url https://docs.httk.org/httk-store \
               --source-commit "$SOURCE_COMMIT"
             python -m httk.core.docs commit-site \
               --site "$SITE_DIR" --repo "$GITHUB_WORKSPACE" \

@@ -1,7 +1,7 @@
 # Migrating from httk v1 in detail
 
 The database layer of httk v1 (`httk.db`, with `httk.db.backend.Sqlite` and
-`httk.db.store.SqlStore`) and the storage layer of *httk₂* (`httk.data.db`, see
+`httk.db.store.SqlStore`) and the storage layer of *httk₂* (`httk.store.db`, see
 {doc}`db`) solve the same problem, and the shape of a query survives the port
 almost unchanged: open a searcher, bind classes to variables, add conditions,
 declare outputs, iterate. What changed is how a class is declared storable, and
@@ -124,7 +124,7 @@ from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
 from httk.core.storage import Indexed, StorageInfo
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 
 @dataclass(frozen=True)
@@ -210,7 +210,7 @@ from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
 from httk.core.storage import Indexed, StorageInfo, stored_property
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from httk.data import (
+from httk.store import (
     CountUnavailableError,
     FederatedSourceError,
     FederatedStore,

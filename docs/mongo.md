@@ -1,16 +1,16 @@
 # MongoDB storage
 
-`httk.data.mongo` stores the same plain frozen dataclasses as the SQL layer in
+`httk.store.mongo` stores the same plain frozen dataclasses as the SQL layer in
 MongoDB's document model: one document per record, embedded child arrays, and
 the same neutral `Store`/`Searcher` protocols, entry-family dispatch, and
 entry-provider surface as `SqlStore`.
 
 ```bash
-python -m pip install "httk-data[mongodb]"
+python -m pip install "httk-store[mongodb]"
 ```
 
 ```python
-from httk.data.mongo import MongoDatabase, MongoStore
+from httk.store.mongo import MongoDatabase, MongoStore
 
 uri = "mongodb://127.0.0.1:27017/?replicaSet=httk2rs"
 with MongoDatabase.connect(uri, database="materials") as database:

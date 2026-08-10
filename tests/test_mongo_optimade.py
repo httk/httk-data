@@ -5,8 +5,8 @@ from fractions import Fraction
 
 import pytest
 
-from httk.data.mongo import MongoStore, optimade_filter_searcher
-from httk.data.query.optimade_filters import FilterTranslationError
+from httk.store.mongo import MongoStore, optimade_filter_searcher
+from httk.store.query.optimade_filters import FilterTranslationError
 
 
 @dataclass(frozen=True)

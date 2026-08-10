@@ -1,4 +1,4 @@
-# Releasing `httk-data`
+# Releasing `httk-store`
 
 Releases are built and published by GitHub Actions. PyPI authentication uses
 Trusted Publishing, so the repository does not need a stored PyPI API token.
@@ -13,9 +13,9 @@ Trusted Publishing, so the repository does not need a stored PyPI API token.
    also recommended.
 3. On PyPI, add a pending GitHub Trusted Publisher with these values:
 
-   - PyPI project name: `httk-data`
+   - PyPI project name: `httk-store`
    - Owner: `httk`
-   - Repository: `httk-data`
+   - Repository: `httk-store`
    - Workflow: `release.yml`
    - Environment: `pypi`
 
@@ -84,16 +84,16 @@ When the workflow run has completed (approving the
 in a fresh environment:
 
 ```console
-python -m venv /tmp/httk-data-test
-/tmp/httk-data-test/bin/python -m pip install \
+python -m venv /tmp/httk-store-test
+/tmp/httk-store-test/bin/python -m pip install \
   --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple/ httk-data==0.1.0
-/tmp/httk-data-test/bin/python -c "import httk.data"
+  --extra-index-url https://pypi.org/simple/ httk-store==0.1.0
+/tmp/httk-store-test/bin/python -c "import httk.store"
 ```
 
-Replace `0.1.0` with the version being tested. Unlike `httk-core`, `httk-data`
+Replace `0.1.0` with the version being tested. Unlike `httk-core`, `httk-store`
 has a runtime dependency (`httk-core`), so `--no-deps` is not appropriate here:
-`import httk.data` pulls in `httk.core` at import time. The
+`import httk.store` pulls in `httk.core` at import time. The
 `--extra-index-url` lets pip resolve that dependency (once it is published to the
 real PyPI) while the package under test comes from TestPyPI.
 
@@ -103,7 +103,7 @@ real PyPI) while the package under test comes from TestPyPI.
 2. Push the commit and create a GitHub release whose tag is `v` followed by the
    package version, for example `v0.1.0`.
 3. Publish the GitHub release and approve the protected `pypi` environment.
-4. Verify the release from a fresh environment with `pip install httk-data`.
+4. Verify the release from a fresh environment with `pip install httk-store`.
 
 The workflow rejects a Git tag that does not match `project.version`, rebuilds
 the distributions from the tagged source, checks them, and publishes them via

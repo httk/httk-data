@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from httk.data.store_common import SaveProjection
+from httk.store.store_common import SaveProjection
 
 
 @dataclass(frozen=True)

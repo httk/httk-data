@@ -11,7 +11,7 @@ import pytest
 import sqlalchemy
 from httk.core.storage import IdentitySkip, StorageInfo, stored_property
 
-from httk.data.db import Database, EntryMetadataConflictError, SqlStore
+from httk.store.db import Database, EntryMetadataConflictError, SqlStore
 
 _calls: dict[tuple[str, int], int] = {}
 

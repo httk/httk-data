@@ -14,8 +14,8 @@ import sqlalchemy
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
-from httk.data import storage_layout
-from httk.data.db import (
+from httk.store import storage_layout
+from httk.store.db import (
     STORAGE_PROTOCOL_VERSION,
     BackendFacts,
     Database,
@@ -23,7 +23,7 @@ from httk.data.db import (
     StorageLayoutUpgradeRequiredError,
     StoreUnderConstructionError,
 )
-from httk.data.db.layout import (
+from httk.store.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
     actual_schema_objects,
@@ -33,7 +33,7 @@ from httk.data.db.layout import (
     expected_metadata,
     normalize_entry_records,
 )
-from httk.data.db.mapping import entry_dispatch_table_name
+from httk.store.db.mapping import entry_dispatch_table_name
 
 
 class LayoutFamily:
@@ -174,14 +174,14 @@ def test_declaration_json_stamp_is_byte_stable() -> None:
 
 
 def test_storage_layout_import_does_not_import_sqlalchemy() -> None:
-    code = "import httk.data.storage_layout\nimport sys\nassert 'sqlalchemy' not in sys.modules"
+    code = "import httk.store.storage_layout\nimport sys\nassert 'sqlalchemy' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True, env=dict(os.environ))
 
 
 def test_common_save_and_paging_imports_do_not_import_sqlalchemy() -> None:
     code = (
-        "import httk.data.store_common\n"
-        "import httk.data.query.paging_tokens\n"
+        "import httk.store.store_common\n"
+        "import httk.store.query.paging_tokens\n"
         "import sys\n"
         "assert 'sqlalchemy' not in sys.modules"
     )

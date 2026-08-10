@@ -26,11 +26,11 @@ from test_db_bulk_deferred import (
 )
 from test_db_bulk_parallel import TwoFloatMeta
 
-from httk.data.db import Database, SqlStore
-from httk.data.db.bulk import BulkIngest
-from httk.data.db.clickhouse import ClickHouseBulkIntegrityError
-from httk.data.db.layout import StoreUnderConstructionError
-from httk.data.store_common import EntryMetadataConflictError
+from httk.store.db import Database, SqlStore
+from httk.store.db.bulk import BulkIngest
+from httk.store.db.clickhouse import ClickHouseBulkIntegrityError
+from httk.store.db.layout import StoreUnderConstructionError
+from httk.store.store_common import EntryMetadataConflictError
 
 
 @contextmanager
@@ -362,7 +362,7 @@ class _DisconnectingLoader:
 @pytest.mark.parametrize("lands", [True, False], ids=["accepted", "not-landed"])
 def test_clickhouse_loader_disconnect_is_exactly_once(clickhouse_bulk_database, monkeypatch, target, lands):
     """Count verification neither replays accepted parent/child/root shards nor loses a rejected one."""
-    from httk.data.db import clickhouse
+    from httk.store.db import clickhouse
 
     uri = clickhouse_bulk_database.engine.url
     corpus = [OptionalChildRoundTrip("row", ["child"])]
@@ -467,7 +467,7 @@ def test_clickhouse_map_swap_boundaries_preserve_marker_and_clean_relations(
 def test_duckdb_manifest_roots_and_parquet_spilled_roots_keep_the_same_orphans(monkeypatch):
     """The root-sidecar scale path preserves the legacy manifest-root survivor set."""
     pytest.importorskip("duckdb_engine")
-    from httk.data.db.bulk_parallel import ParallelController
+    from httk.store.db.bulk_parallel import ParallelController
 
     stream = [
         PrivateNoneParent("same", [NoneRec("kept")]),

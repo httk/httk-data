@@ -1,11 +1,11 @@
-"""Tests for httk-data's offline JSON-Schema property/record validation."""
+"""Tests for httk-store's offline JSON-Schema property/record validation."""
 
 import jsonschema
 import pytest
 from httk.core import PropertyDefinition, load_entry_type_definition, standard_entry_type
 
-from httk.data import PropertyValidationError, validate_property, validate_record
-from httk.data.validation import _validator_schema
+from httk.store import PropertyValidationError, validate_property, validate_record
+from httk.store.validation import _validator_schema
 
 REFERENCES = standard_entry_type("references")
 

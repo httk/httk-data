@@ -1,16 +1,16 @@
-# *httk-data*
+# *httk-store*
 
-This site documents specifically the *httk-data* module. For the full
+This site documents specifically the *httk-store* module. For the full
 documentation of *httk₂* as a whole, see [docs.httk.org](https://docs.httk.org).
 
-*httk-data* is a [*httk₂*](https://github.com/httk/httk2) module for **data
+*httk-store* is a [*httk₂*](https://github.com/httk/httk2) module for **data
 management**. It is the *capability* layer built on the stdlib-only *contracts
 and models* in *httk-core*: it serves httk-core's record models through the
 neutral `httk.core.EntryProvider` contract, validates values against their
 OPTIMADE property definitions with `jsonschema`, and provides the database
-storage layer `httk.data.db` — relational storage and querying of plain frozen
-dataclasses over SQLite or DuckDB (via the `httk-data[db]` /
-`httk-data[duckdb]` extras).
+storage layer `httk.store.db` — relational storage and querying of plain frozen
+dataclasses over SQLite or DuckDB (via the `httk-store[db]` /
+`httk-store[duckdb]` extras).
 
 ```{admonition} Quick links
 :class: tip
@@ -32,8 +32,8 @@ onward to it in the **Details** section of the sidebar.
 
 Preferably work in a Python virtual environment, then do:
 ```bash
-git clone https://github.com/httk/httk-data
-cd httk-data
+git clone https://github.com/httk/httk-store
+cd httk-store
 python -m pip install -e .
 ```
 
@@ -41,7 +41,7 @@ python -m pip install -e .
 
 ```python
 from httk.core import standard_entry_type
-from httk.data import ReferenceEntryProvider, validate_record
+from httk.store import ReferenceEntryProvider, validate_record
 
 # Serve a bibliographic reference through the entry-provider contract.
 provider = ReferenceEntryProvider({"ref-1": {"title": "A study", "year": "2021"}})

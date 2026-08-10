@@ -1,13 +1,13 @@
 # Federated stores
 
-`FederatedStore` presents two or more existing `httk.data.Store` instances as
+`FederatedStore` presents two or more existing `httk.store.Store` instances as
 one read-only, source-major union. It is a data-management capability in
-*httk-data*: it has no dependency on a serving protocol or on *httk-serve*.
+*httk-store*: it has no dependency on a serving protocol or on *httk-serve*.
 
 ```python
 from contextlib import ExitStack
 
-from httk.data import FederatedStore
+from httk.store import FederatedStore
 
 with ExitStack() as stack:
     first = stack.enter_context(open_first_store())

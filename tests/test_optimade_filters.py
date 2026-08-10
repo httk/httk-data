@@ -1,4 +1,4 @@
-"""Tests for the generic OPTIMADE filter translation (httk.data.query.optimade_filters)."""
+"""Tests for the generic OPTIMADE filter translation (httk.store.query.optimade_filters)."""
 
 from collections.abc import Iterator
 from typing import Any
@@ -7,8 +7,8 @@ import pytest
 from httk.core.optimade import parse_optimade_filter
 from httk.core.report import collect_reports
 
-from httk.data.query import SearchResult
-from httk.data.query.optimade_filters import (
+from httk.store.query import SearchResult
+from httk.store.query.optimade_filters import (
     FilterTranslationError,
     filter_searcher,
     format_value,

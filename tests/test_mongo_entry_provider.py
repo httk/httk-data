@@ -11,8 +11,8 @@ from httk.core import EntryTypeDefinition, FracVector, RelatedEntry
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
 
-from httk.data.mongo import MongoStore, StoreEntryProvider
-from httk.data.validation import validate_record
+from httk.store.mongo import MongoStore, StoreEntryProvider
+from httk.store.validation import validate_record
 
 
 @dataclass(frozen=True)

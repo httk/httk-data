@@ -51,9 +51,9 @@ from test_db_bulk import (
 # These modules fork their own worker processes; the loadgroup scheduler
 # keeps them on one xdist worker so their memory use never stacks.
 pytestmark = pytest.mark.xdist_group("bulk-heavy")
-from httk.data.db import Database, SqlStore
-from httk.data.db.layout import METADATA_TABLE_NAME, actual_schema_objects
-from httk.data.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
+from httk.store.db import Database, SqlStore
+from httk.store.db.layout import METADATA_TABLE_NAME, actual_schema_objects
+from httk.store.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
 
 CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 
@@ -281,7 +281,7 @@ def test_parallel_dispatch_conflicting_backing_raises(store_factory, monkeypatch
     _require_bulk(store)
     # Force every content id to collide (the workers inherit this patch through fork).
     shared = content_id(BulkCalcA("alpha", 1))
-    monkeypatch.setattr("httk.data.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
+    monkeypatch.setattr("httk.store.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
     with pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"), store.bulk_ingest(workers=2) as bulk:
         bulk.save(BulkCalcA("alpha", 1))
         bulk.save(BulkCalcB("beta", "kind-b"))  # same forced dispatch content id, different backing
@@ -462,7 +462,7 @@ def test_parallel_nan_metadata_conflicts(store_factory):
 def test_parquet_untracked_worker_does_not_retain_dedup_indexes(worker_index):
     """Untracked Parquet staging delegates all deduplication to the set-wise finalizer."""
     pytest.importorskip("pyarrow")
-    from httk.data.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
+    from httk.store.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
 
     database = Database.duckdb()
     try:
@@ -611,7 +611,7 @@ def test_parallel_equal_fraction_metadata_deduplicates(store_factory):
 
 def test_parallel_finish_aborts_on_dead_worker_with_full_queue(store_factory, monkeypatch):
     """A worker killed with a saturated queue cannot deadlock the stop-sentinel send; the ingest aborts."""
-    from httk.data.db import bulk_parallel
+    from httk.store.db import bulk_parallel
 
     monkeypatch.setattr(bulk_parallel, "_QUEUE_MAXSIZE", 2)
     store = store_factory()
@@ -661,7 +661,7 @@ def test_parallel_healthy_manifest_survives_full_queue_health_poll(store_factory
     """A worker that reported and exited during sentinel delivery keeps its manifest (not discarded nor read as a crash)."""
     import time
 
-    from httk.data.db import bulk_parallel
+    from httk.store.db import bulk_parallel
 
     store = store_factory()
     _require_bulk(store)

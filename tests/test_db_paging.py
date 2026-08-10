@@ -9,9 +9,9 @@ from functools import cmp_to_key
 import pytest
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
-from httk.data import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
-from httk.data.db import Database, SqlStore
-from httk.data.db.paging import _decode_continuation, _encode_continuation
+from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
+from httk.store.db import Database, SqlStore
+from httk.store.db.paging import _decode_continuation, _encode_continuation
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
@@ -198,7 +198,7 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
     first = result.page(size=2, order_by=order)
     assert first.next is not None
     fingerprint = result._page_fingerprint(result._page_keys(order))
-    from httk.data.db.paging import _decode_continuation
+    from httk.store.db.paging import _decode_continuation
 
     cursor = _decode_continuation(first.next, fingerprint=fingerprint, anchors=1)
     statement, _raw_width = result._page_statement(result._page_keys(order), cursor, 2)

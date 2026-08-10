@@ -9,8 +9,8 @@ from httk.core import FracScalar, FracVector, SurdScalar
 from httk.core.schema_check import check_record_matches_definition
 from httk.core.storage import Shape
 
-from httk.data.db import resolve_schema
-from httk.data.db.entry_provider import _fulltype_of, auto_definition
+from httk.store.db import resolve_schema
+from httk.store.db.entry_provider import _fulltype_of, auto_definition
 
 
 @dataclass(frozen=True)

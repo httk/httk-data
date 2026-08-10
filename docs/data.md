@@ -1,16 +1,16 @@
 # Data management
 
-*httk-data* is the **data-management capability layer** of *httk₂*. httk-core
+*httk-store* is the **data-management capability layer** of *httk₂*. httk-core
 defines the neutral `httk.core.EntryProvider` contract, the OPTIMADE
 property/entry-type definition model, and the stdlib-only record dataclasses
 (`Reference`, `File`, `Calculation`) — but ships no concrete providers and no
-third-party dependencies. httk-data provides capabilities built on those
+third-party dependencies. httk-store provides capabilities built on those
 models:
 
 - **entry providers** that serve the record models through the provider
   contract,
 - **property-definition validation** on `jsonschema`, and
-- the **database storage layer** `httk.data.db` (see {doc}`db`), which stores
+- the **database storage layer** `httk.store.db` (see {doc}`db`), which stores
   plain frozen dataclasses relationally and serves them through the same
   provider contract.
 
@@ -26,7 +26,7 @@ mappings).
 
 ```python
 from httk.core import Reference
-from httk.data import ReferenceEntryProvider
+from httk.store import ReferenceEntryProvider
 
 provider = ReferenceEntryProvider(
     {
@@ -52,10 +52,10 @@ assert records[0]["type"] == "references"
 ### Discovery through the registry
 
 The three providers self-register when `httk.core` discovers the module, under
-the names `data-references`, `data-files`, and `data-calculations` (the
+the names `store-references`, `store-files`, and `store-calculations` (the
 database-backed provider of {doc}`db` registers alongside them as
-`data-db-store`). A serving module (such as *httk-serve*) can therefore
-find them through the registry without importing httk-data directly:
+`store-db-store`). A serving module (such as *httk-serve*) can therefore
+find them through the registry without importing httk-store directly:
 
 ```python
 import httk.core
@@ -64,18 +64,18 @@ from httk.core._plugins import resolve_callable
 from httk.core.register import entry_providers
 
 registered = set(known_entry_providers())
-assert {"data-references", "data-files", "data-calculations"} <= registered
+assert {"store-references", "store-files", "store-calculations"} <= registered
 
 # The registered value is a lazy factory reference; resolve and instantiate it:
-factory = resolve_callable(entry_providers.require("data-references").handler)
+factory = resolve_callable(entry_providers.require("store-references").handler)
 provider = factory({"ref-1": {"title": "A study"}})
 assert list(provider.entry_types()) == ["references"]
 ```
 
 To actually serve these providers over HTTP as an OPTIMADE API, hand them to
 *httk-serve*'s `adapter_from_providers` (see that module's documentation).
-*httk-data* does not depend on *httk-serve*: the provider handoff uses the
-httk-core contract, while *httk-serve* also consumes *httk-data*'s neutral
+*httk-store* does not depend on *httk-serve*: the provider handoff uses the
+httk-core contract, while *httk-serve* also consumes *httk-store*'s neutral
 query and store APIs.
 
 ## Validation
@@ -90,7 +90,7 @@ offline.
 
 ```python
 from httk.core import standard_entry_type
-from httk.data import validate_property, validate_record
+from httk.store import validate_property, validate_record
 
 references = standard_entry_type("references")
 
@@ -118,7 +118,7 @@ cause:
 
 ```python
 from httk.core import standard_entry_type
-from httk.data import PropertyValidationError, validate_property, validate_record
+from httk.store import PropertyValidationError, validate_property, validate_record
 
 references = standard_entry_type("references")
 
@@ -145,6 +145,6 @@ except PropertyValidationError as exc:
 ## Database-backed serving
 
 The entry providers above are in-memory. To store records in a database and
-serve them the same way, see {doc}`db`: `httk.data.db.SqlStore` stores plain
+serve them the same way, see {doc}`db`: `httk.store.db.SqlStore` stores plain
 frozen dataclasses in SQLite or DuckDB, and `StoreEntryProvider` (registered
-as `data-db-store`) serves them through the identical provider contract.
+as `store-db-store`) serves them through the identical provider contract.

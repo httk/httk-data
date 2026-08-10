@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from httk.data.db.schema import resolve_schema
-from httk.data.mongo import MongoStore, StoreLockedError
-from httk.data.mongo.leases import LeaseLostError, LeaseTiming, acquire_fsck, acquire_writer
-from httk.data.mongo.mapping import METADATA_COLLECTION, collection_name_for
+from httk.store.db.schema import resolve_schema
+from httk.store.mongo import MongoStore, StoreLockedError
+from httk.store.mongo.leases import LeaseLostError, LeaseTiming, acquire_fsck, acquire_writer
+from httk.store.mongo.mapping import METADATA_COLLECTION, collection_name_for
 
 
 @dataclass(frozen=True)

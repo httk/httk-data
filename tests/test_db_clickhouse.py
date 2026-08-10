@@ -10,9 +10,9 @@ import sqlalchemy
 from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
-from httk.data.db import Database, SqlStore
-from httk.data.db import clickhouse as clickhouse_adapter
-from httk.data.db.clickhouse import (
+from httk.store.db import Database, SqlStore
+from httk.store.db import clickhouse as clickhouse_adapter
+from httk.store.db.clickhouse import (
     actual_columns,
     bootstrap_fence,
     ensure_bootstrap_table,
@@ -21,10 +21,10 @@ from httk.data.db.clickhouse import (
     validate_metadata_table,
     verify_clickhouse_connection,
 )
-from httk.data.db.layout import STORAGE_PROTOCOL_VERSION, actual_schema_objects
-from httk.data.db.mapping import table_for
-from httk.data.db.schema import resolve_schema
-from httk.data.db.store import StorageLayoutUpgradeRequiredError
+from httk.store.db.layout import STORAGE_PROTOCOL_VERSION, actual_schema_objects
+from httk.store.db.mapping import table_for
+from httk.store.db.schema import resolve_schema
+from httk.store.db.store import StorageLayoutUpgradeRequiredError
 
 
 class _RecordingConnection:
@@ -272,7 +272,7 @@ def test_clickhouse_url_settings_merge_and_failed_open_verification(clickhouse_d
 
 
 def test_clickhouse_pool_checkout_rechecks_poisoned_connection(clickhouse_database: Database, monkeypatch) -> None:
-    import httk.data.db.clickhouse as clickhouse_adapter
+    import httk.store.db.clickhouse as clickhouse_adapter
 
     original_verify = clickhouse_adapter._raw_verify
     monkeypatch.setattr(clickhouse_adapter, "_raw_verify", lambda _: ("26.8.1.1028", 0))
@@ -321,7 +321,7 @@ def test_clickhouse_pool_size_one_fence_uses_caller_connection(clickhouse_databa
 def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
     clickhouse_database: Database, monkeypatch
 ) -> None:
-    import httk.data.db.clickhouse as clickhouse_adapter
+    import httk.store.db.clickhouse as clickhouse_adapter
 
     source_url = clickhouse_database.engine.url
     admin = sqlalchemy.create_engine(source_url.set(database="default"))
@@ -443,7 +443,7 @@ def test_clickhouse_drop_recreate_scopes_keeper_metadata_by_new_uuid(clickhouse_
 
 
 def test_clickhouse_stale_release_cannot_delete_replacement_token(clickhouse_database: Database) -> None:
-    import httk.data.db.clickhouse as clickhouse_adapter
+    import httk.store.db.clickhouse as clickhouse_adapter
 
     bootstrap = clickhouse_adapter._bootstrap_table()
     with clickhouse_database.engine.begin() as connection:
@@ -497,7 +497,7 @@ def test_clickhouse_bootstrap_contention_and_exact_release(clickhouse_database: 
 
 
 def test_clickhouse_stale_bootstrap_residue_has_manual_recovery(clickhouse_database: Database) -> None:
-    import httk.data.db.clickhouse as clickhouse_adapter
+    import httk.store.db.clickhouse as clickhouse_adapter
 
     bootstrap = clickhouse_adapter._bootstrap_table()
     with clickhouse_database.engine.begin() as connection:

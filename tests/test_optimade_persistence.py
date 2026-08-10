@@ -14,7 +14,7 @@ from httk.core.optimade import (
     ReferenceView,
 )
 
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 PAGE_TEXT = '''{
   "jsonapi": {"version": "1.1"},

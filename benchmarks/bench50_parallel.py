@@ -99,7 +99,7 @@ def _expected_table_counts(stream: list[object]) -> dict[str, int]:
     """Return expected unique content-ID rows by physical table."""
     from httk.core.storage import content_id
 
-    from httk.data.db.schema import resolve_schema
+    from httk.store.db.schema import resolve_schema
 
     expected: dict[str, set[str]] = {}
     for value in stream:
@@ -114,7 +114,7 @@ def _clickhouse_database(uri: str) -> Iterator[object]:
     """Yield a fresh database with the deployment bootstrap check used by fixtures."""
     import sqlalchemy
 
-    from httk.data.db import Database
+    from httk.store.db import Database
 
     source = sqlalchemy.engine.make_url(uri)
     if source.drivername.split("+")[0] != "clickhousedb":
@@ -166,7 +166,7 @@ def _measure_clickhouse_stream_load() -> Iterator[list[dict[str, object]]]:
     ``load_parquet_stages`` issues one ``insert_arrow`` call per stage shard,
     so each successful call is reported as one client-streamed shard.
     """
-    from httk.data.db import clickhouse
+    from httk.store.db import clickhouse
 
     measurements: list[dict[str, object]] = []
     original = clickhouse._client_for_url
@@ -208,7 +208,7 @@ def _verify_counts(store: object, database: object, stream: list[object], materi
     """Verify material and every content-addressed physical-table count."""
     import sqlalchemy
 
-    from httk.data.db.mapping import CONTENT_ID_COLUMN
+    from httk.store.db.mapping import CONTENT_ID_COLUMN
 
     expected_counts = _expected_table_counts(stream)
     with database.engine.connect() as connection:  # type: ignore[attr-defined]
@@ -239,7 +239,7 @@ def _point_lookup_seconds(connection: object, table: object, ids: list[str]) -> 
     """Return elapsed time for one content-ID point lookup per supplied ID."""
     import sqlalchemy
 
-    from httk.data.db.mapping import CONTENT_ID_COLUMN
+    from httk.store.db.mapping import CONTENT_ID_COLUMN
 
     started = time.perf_counter()
     for content_id in ids:
@@ -255,7 +255,7 @@ def _bloom_lookup_benchmark(store: object, database: object, lookups: int) -> di
     """Compare content-ID lookups before/after a benchmark-only Bloom index."""
     import sqlalchemy
 
-    from httk.data.db.mapping import CONTENT_ID_COLUMN
+    from httk.store.db.mapping import CONTENT_ID_COLUMN
 
     candidates = [
         table
@@ -307,7 +307,7 @@ def _build(
     track_sids: bool,
     bloom_lookups: int,
 ) -> dict[str, object]:
-    from httk.data.db import Database, SqlStore
+    from httk.store.db import Database, SqlStore
 
     @contextmanager
     def build_database() -> Iterator[object]:

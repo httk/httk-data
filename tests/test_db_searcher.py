@@ -1,4 +1,4 @@
-"""Tests for the query DSL (httk.data.db.searcher): operators, joins, set semantics, parity."""
+"""Tests for the query DSL (httk.store.db.searcher): operators, joins, set semantics, parity."""
 
 import gc
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core import FracVector
 from httk.core.storage import Shape, StorageInfo
 
-from httk.data.db import Database, SchemaError, SqlStore
+from httk.store.db import Database, SchemaError, SqlStore
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
@@ -300,7 +300,7 @@ def test_true_handler_filter_matches_rows_with_a_null_scalar(store):
     # End to end through the OPTIMADE translation: `IS KNOWN` on a property the
     # handler table declares always-known routes through true_handler, and must
     # match even though the underlying column is NULL for every row.
-    from httk.data.query.optimade_filters import filter_searcher
+    from httk.store.query.optimade_filters import filter_searcher
 
     searcher = filter_searcher(
         store,

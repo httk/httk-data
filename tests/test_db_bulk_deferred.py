@@ -33,9 +33,9 @@ from test_db_bulk import (
     make_sample,
 )
 
-from httk.data.db.layout import StoreUnderConstructionError, actual_schema_objects
-from httk.data.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
-from httk.data.store_common import EntryMetadataConflictError
+from httk.store.db.layout import StoreUnderConstructionError, actual_schema_objects
+from httk.store.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
+from httk.store.store_common import EntryMetadataConflictError
 
 # These modules fork their own worker processes; the loadgroup scheduler
 # keeps them on one xdist worker so their memory use never stacks.
@@ -355,7 +355,7 @@ def test_sqlite_deferred_columns_named_check_ingest_without_a_check_constraint(s
 
 def test_sqlite_check_clause_parser_detects_a_real_mismatch():
     """A genuine CHECK expression still compares unequal after extraction."""
-    from httk.data.db.bulk import BulkIngest
+    from httk.store.db.bulk import BulkIngest
 
     actual = BulkIngest._sqlite_check_clauses('CREATE TABLE x (checksum TEXT, checked INTEGER, CHECK (checked > 0))')
     assert actual == [BulkIngest._physical_check("checked > 0")]

@@ -1,6 +1,6 @@
 # Database storage in detail
 
-`httk.data.db` is the database storage layer of *httk₂*: it stores **plain
+`httk.store.db` is the database storage layer of *httk₂*: it stores **plain
 frozen dataclasses** in a relational database, makes them queryable through a
 backend-agnostic search DSL, and serves them through the neutral
 `httk.core.EntryProvider` contract (e.g. as an OPTIMADE API via
@@ -9,15 +9,15 @@ internally; the public API exposes no SQLAlchemy types.
 
 ## Installing
 
-The SQL layer is an optional extra (plain `import httk.data` works without it):
+The SQL layer is an optional extra (plain `import httk.store` works without it):
 
 ```bash
-python -m pip install "httk-data[db]"      # SQLite (built into Python) via sqlalchemy
-python -m pip install "httk-data[duckdb]"  # additionally the DuckDB backend
-python -m pip install "httk-data[clickhouse]"  # ClickHouse backend
+python -m pip install "httk-store[db]"      # SQLite (built into Python) via sqlalchemy
+python -m pip install "httk-store[duckdb]"  # additionally the DuckDB backend
+python -m pip install "httk-store[clickhouse]"  # ClickHouse backend
 ```
 
-Touching a SQL-backed name (such as `httk.data.db.Database`) without the extra
+Touching a SQL-backed name (such as `httk.store.db.Database`) without the extra
 installed raises an `ImportError` naming it.
 
 ## Declaring a storable class
@@ -26,7 +26,7 @@ Storability is non-intrusive: any frozen dataclass whose fields resolve is
 storable — there is no base class. The stdlib-only marker vocabulary lives in
 *httk-core* (`Indexed`, `Unique`, `Skip`, `Shape`, `StorageInfo`,
 `stored_property`), so domain modules can declare storable classes without
-depending on httk-data:
+depending on httk-store:
 
 ```python
 from dataclasses import dataclass
@@ -76,7 +76,7 @@ instances. Saving deduplicates per the class's `StorageInfo.dedup` policy
 operations into one database transaction:
 
 ```python
-from httk.data.db import Database, SqlStore
+from httk.store.db import Database, SqlStore
 
 db = Database.sqlite("example.sqlite")  # or Database.sqlite() in memory,
 store = SqlStore(db, entry_records={})  # first-time custom-record store
@@ -233,7 +233,7 @@ Do not delete values belonging to a live writer or use broad key-only deletes.
 For SQLite and DuckDB, `store.bulk_ingest()` is a faster path than a `save()`
 loop for **building a store from scratch or appending a large increment** to
 one. It returns a
-`httk.data.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
+`httk.store.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
 encoded rows with pre-assigned sids and appends them in `executemany` batches
 inside one transaction, instead of one statement round-trip and an in-database
 deduplication protocol per record. It is a near drop-in for the save loop:
@@ -264,7 +264,7 @@ Reach for it when the increment is large; for a handful of records the ordinary
 
 **Exclusive write ownership.** While a `bulk_ingest()` context is open the
 store's ordinary write path belongs to it: `save()`, `ensure_tables()`, and
-`transaction()` on the same `httk.data.db.SqlStore` raise `RuntimeError`, and a
+`transaction()` on the same `httk.store.db.SqlStore` raise `RuntimeError`, and a
 second `bulk_ingest()` context on the same store is refused. Reads from an
 already-open store remain available; a new open is rejected while an
 empty-store ingest marker is present.
@@ -302,7 +302,7 @@ to the deduplicated existing sid.
 `save()`, but it is provisional while the context is open: a record that
 deduplicates against a row the store already held is remapped to that existing
 sid at flush. After the context exits cleanly,
-`httk.data.db.bulk.BulkIngest.resolved_sid` maps any returned sid — provisional
+`httk.store.db.bulk.BulkIngest.resolved_sid` maps any returned sid — provisional
 or final — to its durable stored sid. It keys on the bare sid value, so resolve
 a returned sid against the type it was saved as (sids are allocated per table,
 and one value can recur across tables).
@@ -311,7 +311,7 @@ and one value can recur across tables).
 content-id hit compares its identity-excluded metadata against the first
 in-memory occurrence — or against the stored row for a hit against existing
 data — reproducing `save()` and raising
-`httk.data.store_common.EntryMetadataConflictError` on a conflict. Pass
+`httk.store.store_common.EntryMetadataConflictError` on a conflict. Pass
 `verify_metadata=False` to skip the comparison when the stream is
 known-consistent.
 
@@ -335,7 +335,7 @@ about 36%.
 
 **Nested conflict paths differ by prefix.** Because the bulk encoder resolves
 referenced and child records eagerly and only discovers their existing-row hits
-at flush, an `httk.data.store_common.EntryMetadataConflictError` reached through
+at flush, an `httk.store.store_common.EntryMetadataConflictError` reached through
 a `descend` field (a non-skipped reference whose target itself carries skipped
 metadata) is reported at the descendant record's own path (`"Leaf.note"`) rather
 than the ancestor field path `save()` would use (`"Root.primary.note"`). The
@@ -382,7 +382,7 @@ On DuckDB workers hand rows off as Parquet shards, so parallel mode there needs
 `pyarrow`; install it with the combined extra:
 
 ```console
-$ pip install "httk-data[duckdb,parallel]"
+$ pip install "httk-store[duckdb,parallel]"
 ```
 
 SQLite workers write one native shard database each and need no extra dependency.
@@ -402,7 +402,7 @@ while column types, keys, checks, and indexes are unchanged.
 **Provisional tokens.** Because a worker encodes each object asynchronously, the
 sid is not known when `save` returns; in parallel mode `save` returns an opaque
 token instead. After the context exits cleanly,
-`httk.data.db.bulk.BulkIngest.resolved_sid` maps each returned token to its
+`httk.store.db.bulk.BulkIngest.resolved_sid` maps each returned token to its
 durable stored sid, exactly as it maps a provisional sid on the serial path. A
 lost task (an unpicklable object, or a worker that crashed or was killed) aborts
 the ingest rather than committing a partial store, and `on_progress` is rejected
@@ -432,7 +432,7 @@ Reproduce with `benchmarks/bench50_parallel.py`.
 ## Searching
 
 `store.searcher()` opens a query through the backend-agnostic protocols in
-`httk.data.query`: bind classes to variables and add conditions. Freeze the
+`httk.store.query`: bind classes to variables and add conditions. Freeze the
 query into the user-facing lazy result set with `results()`. Variables of the
 same class self-join; reference fields chain (`v.reference.name`),
 variable-length fields support the set operations (`has_any`, `has_only`), and
@@ -477,12 +477,12 @@ when `results()` is declared; reference-path projections are supported.
 ### Continuation pages
 
 `SqlResultSet.page()` is an optional capability (described neutrally by
-`httk.data.PageableResultSetLike`), separate from the required `ResultSetLike`
+`httk.store.PageableResultSetLike`), separate from the required `ResultSetLike`
 contract. It uses a stable keyset/seek order over named **root scalar result
 projections** and returns an immutable `ResultPage`:
 
 ```python
-from httk.data import PageOrder
+from httk.store import PageOrder
 
 page = results.page(
     size=100,
@@ -556,7 +556,7 @@ This is the low-level/portable layer; SQL consumers should generally use
 
 ### Neutral portable Store profile
 
-`httk.data.Store` is intentionally a small, backend-neutral contract:
+`httk.store.Store` is intentionally a small, backend-neutral contract:
 `store.searcher()` returns a one-query `Searcher`, which binds one or more
 backend-defined targets with `variable()`, receives expressions through
 `add()`, and exposes `count()`, limit/offset, sorting, iteration, and
@@ -569,7 +569,7 @@ This profile is deliberately what a remote, read-only OPTIMADE store can
 implement too: it supports a single root endpoint, portable scalar/flat-list
 filters, named outputs, and result cardinality without making the caller
 depend on SQLAlchemy or a database dialect. Query code that only needs this
-profile should depend on `httk.data.Store`, not `SqlStore`.
+profile should depend on `httk.store.Store`, not `SqlStore`.
 
 The following are SQL-specific extensions, not portable Store requirements:
 persisting/fetching frozen dataclasses with `save()` and `fetch()`, schema and
@@ -649,15 +649,15 @@ database-specific prefix, `_httk_` by default), yields JSON-able records, and
 declares relationships for reference fields whose target class is also served:
 
 ```python
-from httk.data.db import StoreEntryProvider
+from httk.store.db import StoreEntryProvider
 
 provider = StoreEntryProvider(store, {"structures": StructureRecord, "authors": Author})
 ```
 
 Handing the provider to *httk-serve*'s `adapter_from_providers` serves the
-database as an OPTIMADE API. *httk-data* does not depend on *httk-serve*: the
+database as an OPTIMADE API. *httk-store* does not depend on *httk-serve*: the
 provider handoff uses the httk-core contract, while *httk-serve* also consumes
-*httk-data*'s neutral query and store APIs. Fields with no OPTIMADE value
+*httk-store*'s neutral query and store APIs. Fields with no OPTIMADE value
 representation (`bytes`, custom codecs) are not served, and rationals are
 served as their nearest floats. The provider is also registered (as
-`data-db-store`) for discovery through the `httk.core` registry.
+`store-db-store`) for discovery through the `httk.core` registry.

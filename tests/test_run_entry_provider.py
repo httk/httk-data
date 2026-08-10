@@ -16,9 +16,9 @@ from httk.core import (
     RunEntry,
 )
 
-from httk.data import DataRecordEntryProvider, RunEntryProvider, product_relationships, validate_record
-from httk.data.db import Database, EntryMetadataConflictError, SqlStore
-from httk.data.db.schema import resolve_schema
+from httk.store import DataRecordEntryProvider, RunEntryProvider, product_relationships, validate_record
+from httk.store.db import Database, EntryMetadataConflictError, SqlStore
+from httk.store.db.schema import resolve_schema
 
 UTC = datetime.UTC
 ENERGY_ID = "https://schemas.example.org/properties/energy"

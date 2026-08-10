@@ -10,8 +10,8 @@ import pytest
 import sqlalchemy
 from httk.core.storage import Skip, StorageInfo, content_id
 
-from httk.data.db import Database, SchemaError, SqlStore, StaleResultError, resolve_schema
-from httk.data.db.rows import RowHydrator, row_class
+from httk.store.db import Database, SchemaError, SqlStore, StaleResultError, resolve_schema
+from httk.store.db.rows import RowHydrator, row_class
 
 
 @dataclass(frozen=True)
