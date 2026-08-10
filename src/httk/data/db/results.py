@@ -289,7 +289,17 @@ class SqlResultSet:
         if self._plan._vacuous:
             return ()
         with self._plan._store._read_connection() as connection:
-            return tuple(tuple(row) for row in connection.execute(self._statement(limit=limit)).fetchall())
+            statement = self._statement(limit=limit)
+            rows = connection.execute(statement).fetchall()
+        if self._plan._store._database.engine.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import normalize_clickhouse_value
+
+            columns, _hidden = self._columns()
+            return tuple(
+                tuple(normalize_clickhouse_value(value, column.type) for value, column in zip(row, columns))
+                for row in rows
+            )
+        return tuple(tuple(row) for row in rows)
 
     def _prepare(self, rows: tuple[tuple[Any, ...], ...]) -> None:
         self._rows = rows
@@ -496,6 +506,16 @@ class SqlResultSet:
         statement, raw_width = self._page_statement(keys, decoded, size)
         with self._plan._store._read_connection() as connection:
             fetched = tuple(tuple(row) for row in connection.execute(statement).fetchall())
+        if self._plan._store._database.engine.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import normalize_clickhouse_value
+
+            fetched = tuple(
+                tuple(
+                    normalize_clickhouse_value(value, column.type)
+                    for value, column in zip(row, statement.selected_columns)
+                )
+                for row in fetched
+            )
 
         more_in_fetch_direction = len(fetched) > size
         visible = fetched[:size]
@@ -636,8 +656,11 @@ class SqlResultSet:
         statement = statement.order_by(sid.desc() if backward else sid.asc()).limit(size + 1)
         return statement, len(raw_columns)
 
-    @staticmethod
-    def _page_null_rank(column: sqlalchemy.ColumnElement[Any], order: PageOrder) -> sqlalchemy.ColumnElement[Any]:
+    def _page_null_rank(self, column: sqlalchemy.ColumnElement[Any], order: PageOrder) -> sqlalchemy.ColumnElement[Any]:
+        if self._plan._store._database.engine.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import null_order_rank
+
+            return null_order_rank(column, order.nulls, dialect_name="clickhousedb")
         null_rank = 0 if order.nulls == "first" else 1
         value_rank = 1 - null_rank
         return sqlalchemy.case((column.is_(None), null_rank), else_=value_rank)

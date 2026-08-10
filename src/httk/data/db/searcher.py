@@ -117,7 +117,7 @@ class SqlExpression:
     :param group_columns: The non-aggregated columns required by the HAVING condition.
     """
 
-    __slots__ = ("group_columns", "having_clause", "post", "set_derived", "where_clause")
+    __slots__ = ("correlation_depth", "group_columns", "having_clause", "post", "set_derived", "where_clause")
 
     def __init__(
         self,
@@ -127,6 +127,7 @@ class SqlExpression:
         post: bool = False,
         set_derived: bool = False,
         group_columns: tuple[sqlalchemy.ColumnElement[Any], ...] = (),
+        correlation_depth: int = 0,
     ) -> None:
         self.where_clause = where_clause
         """The rendering applied in WHERE position (always applied)."""
@@ -156,6 +157,7 @@ class SqlExpression:
         aggregated) and for child-table comparisons (those columns *are* the
         aggregated rows); a root-table comparison contributes its own column.
         """
+        self.correlation_depth = correlation_depth
 
     def __and__(self, other: "SqlExpression") -> "SqlExpression":
         return SqlExpression(
@@ -164,6 +166,7 @@ class SqlExpression:
             post=self.post or other.post,
             set_derived=self.set_derived or other.set_derived,
             group_columns=self.group_columns + other.group_columns,
+            correlation_depth=max(self.correlation_depth, other.correlation_depth),
         )
 
     def __or__(self, other: "SqlExpression") -> "SqlExpression":
@@ -173,6 +176,7 @@ class SqlExpression:
             post=self.post or other.post,
             set_derived=self.set_derived or other.set_derived,
             group_columns=self.group_columns + other.group_columns,
+            correlation_depth=max(self.correlation_depth, other.correlation_depth),
         )
 
     def __invert__(self) -> "SqlExpression":
@@ -191,12 +195,14 @@ class SqlExpression:
                 post=True,
                 set_derived=True,
                 group_columns=self.group_columns,
+                correlation_depth=self.correlation_depth,
             )
         return SqlExpression(
             sqlalchemy.not_(self.where_clause),
             sqlalchemy.not_(self.having_clause),
             post=self.post,
             group_columns=self.group_columns,
+            correlation_depth=self.correlation_depth,
         )
 
 
@@ -945,6 +951,15 @@ class SqlSearcher:
             # the outer cursor across a nested fetch silently truncates it after
             # the first row. (Under SQLite it merely worked by accident.)
             rows = connection.execute(statement).fetchall()
+        if self._store._database.engine.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import normalize_clickhouse_value
+
+            rows = [
+                tuple(
+                    normalize_clickhouse_value(value, output.element.type) for value, output in zip(row, self._outputs)
+                )
+                for row in rows
+            ]
         from httk.data.db.rows import RowHydrator
 
         object_indices = [index for index, output in enumerate(self._outputs) if output.target is not None]

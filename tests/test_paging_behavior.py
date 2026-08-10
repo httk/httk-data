@@ -4,8 +4,11 @@ from dataclasses import dataclass
 from functools import cmp_to_key
 
 import pytest
+from clickhouse_read_support import bulk_store
 
 from httk.data import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,23 @@ def paging_store(store_factory):
     for row in ROWS:
         store.save(row)
     return store
+
+
+@pytest.fixture(scope="module")
+def clickhouse_paging_store():
+    with bulk_store(ROWS) as store:
+        yield store
+
+
+def test_clickhouse_bulk_paging_behavior(clickhouse_paging_store):
+    result = results(clickhouse_paging_store)
+    order = (PageOrder("bucket", nulls="first"), PageOrder("score", descending=True, nulls="last"))
+    page = result.page(size=2, order_by=order)
+    found = labels(page)
+    while page.next is not None:
+        page = result.page(size=2, order_by=order, cursor=page.next)
+        found.extend(labels(page))
+    assert found == expected_labels(order)
 
 
 def results(store, *, common_only: bool = False):

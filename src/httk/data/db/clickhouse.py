@@ -7,6 +7,7 @@ MergeTree sorting keys, system catalogue, and KeeperMap metadata protocol.
 
 import contextlib
 import datetime
+import functools
 import json
 import threading
 import uuid
@@ -17,6 +18,12 @@ from typing import Any, ClassVar
 import sqlalchemy
 from sqlalchemy import event
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import operators
+from sqlalchemy.sql.elements import BinaryExpression, ColumnElement
+from sqlalchemy.sql.functions import Function
+from sqlalchemy.sql.selectable import Select
+
+from httk.data.query import UnsupportedQueryError
 
 _MIN_SERVER_VERSION = (26, 8, 1, 1028)
 _BOOTSTRAP_TABLE = "_httk_bootstrap"
@@ -27,6 +34,7 @@ _INGEST_STATE_KEY = "ingest_state"
 _BOOTSTRAP_LOCK_MESSAGE = "ClickHouse Keeper bootstrap lock is unavailable; Keeper is required"
 
 __all__ = [
+    "ClickHouseUnsupportedQueryError",
     "acquire_lease",
     "actual_columns",
     "actual_schema_objects",
@@ -38,6 +46,7 @@ __all__ = [
     "keeper_database_uuid",
     "keeper_metadata_path",
     "load_parquet_stages",
+    "null_order_rank",
     "null_safe_difference",
     "release_lease",
     "stamp_store_metadata",
@@ -51,12 +60,93 @@ __all__ = [
 ]
 
 
+@compiles(Select, "clickhousedb")
+def _compile_clickhouse_select(element: Select[Any], compiler: Any, **kwargs: Any) -> str:
+    """Render ClickHouse's offset form without accidentally combining FETCH and LIMIT."""
+
+    if element._fetch_clause is not None:
+        raise ClickHouseUnsupportedQueryError("clickhousedb does not support SQL FETCH; use LIMIT/OFFSET for paging")
+    if element._offset_clause is not None and element._limit_clause is None and element._fetch_clause is None:
+        element = element.limit(sqlalchemy.literal_column("18446744073709551615"))
+    return compiler.visit_select(element, **kwargs)
+
+
 class ClickHouseUncertainInsertError(RuntimeError):
     """The client lost the acknowledgement for an Arrow stage insert."""
 
 
 class ClickHouseBulkIntegrityError(RuntimeError):
     """A metadata-derived ClickHouse bulk invariant was violated."""
+
+
+class ClickHouseUnsupportedQueryError(UnsupportedQueryError):
+    """A ClickHouse query is outside the shipped correlated-query profile."""
+
+
+_BINARY_QUERY_FORMATS_KEY = "_httk_query_formats"
+_BINARY_QUERY_FORMATS = {"String": "bytes"}
+
+
+def _install_binary_query_format_hook() -> None:
+    """Teach the pinned clickhouse-connect DBAPI to honor per-query formats."""
+    from clickhouse_connect.dbapi import cursor as clickhouse_cursor
+
+    if getattr(clickhouse_cursor.Cursor, "_httk_binary_query_formats", False):
+        return
+    original_execute = clickhouse_cursor.Cursor.execute
+
+    @functools.wraps(original_execute)
+    def execute(self: Any, operation: str, parameters: Any = None, settings: dict[str, Any] | None = None) -> None:
+        if settings is None or _BINARY_QUERY_FORMATS_KEY not in settings:
+            return original_execute(self, operation, parameters, settings=settings)
+        settings = dict(settings)
+        query_formats = settings.pop(_BINARY_QUERY_FORMATS_KEY)
+        if not parameters and isinstance(operation, str):
+            operation = operation.replace("%%", "%")
+        query_result = self.client.query(operation, parameters, settings=settings, query_formats=query_formats)
+        self.data = query_result.result_set
+        self._rowcount = len(self.data)
+        self._summary.append(query_result.summary)
+        self._ix = 0
+        if query_result.column_names:
+            self.names = query_result.column_names
+            self.types = [item.name for item in query_result.column_types]
+
+    clickhouse_cursor.Cursor.execute = execute
+    clickhouse_cursor.Cursor._httk_binary_query_formats = True
+
+
+def _statement_selects_binary(statement: Any) -> bool:
+    columns = getattr(statement, "selected_columns", ())
+    return any(isinstance(getattr(column, "type", None), sqlalchemy.LargeBinary) for column in columns)
+
+
+def _install_binary_query_event(engine: sqlalchemy.Engine) -> None:
+    marker = "_httk_clickhouse_binary_query_event"
+    if getattr(engine, marker, False):
+        return
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _mark_binary_query(
+        _connection: Any, _cursor: Any, _statement: str, _parameters: Any, context: Any, _many: bool
+    ) -> None:
+        statement = getattr(context, "invoked_statement", None)
+        if statement is None or not _statement_selects_binary(statement):
+            return
+        options = dict(context.execution_options)
+        settings = dict(options.get("settings") or {})
+        settings[_BINARY_QUERY_FORMATS_KEY] = dict(_BINARY_QUERY_FORMATS)
+        options["settings"] = settings
+        context.execution_options = sqlalchemy.util.immutabledict(options)
+
+    setattr(engine, marker, True)
+
+
+def normalize_clickhouse_value(value: Any, type_: Any) -> Any:
+    """Decode adapter-owned String reads while preserving raw binary bytes."""
+    if isinstance(value, bytes) and not isinstance(type_, sqlalchemy.LargeBinary):
+        return value.decode("utf-8")
+    return value
 
 
 def _q(name: str) -> str:
@@ -67,6 +157,113 @@ def _q(name: str) -> str:
 def null_safe_difference(left: str, right: str) -> str:
     """The ClickHouse S9 comparator (true precisely when values differ)."""
     return f"(xor(isNull({left}), isNull({right})) OR ifNull({left} != {right}, false))"
+
+
+class _ClickHouseNullRank(ColumnElement[int]):
+    """Dialect-local rank expression with explicit NULL and NaN buckets."""
+
+    inherit_cache = True
+    type = sqlalchemy.Integer()
+
+    def __init__(self, element: ColumnElement[Any], nulls: str) -> None:
+        super().__init__()
+        self.element = element
+        self.nulls = nulls
+        self.has_nan = isinstance(element.type, sqlalchemy.Float)
+
+
+@compiles(_ClickHouseNullRank, "clickhousedb")
+def _compile_clickhouse_null_rank(element: _ClickHouseNullRank, compiler: Any, **kwargs: Any) -> str:
+    value = compiler.process(element.element, **kwargs)
+    if element.nulls == "first":
+        if element.has_nan:
+            return f"if(isNull({value}), 0, if(isNaN({value}), 2, 1))"
+        return f"if(isNull({value}), 0, 1)"
+    if element.has_nan:
+        return f"if(isNull({value}), 2, if(isNaN({value}), 1, 0))"
+    return f"if(isNull({value}), 1, 0)"
+
+
+def null_order_rank(column: ColumnElement[Any], nulls: str, *, dialect_name: str) -> ColumnElement[int]:
+    """Return a deterministic NULL/NaN rank for one result-order expression."""
+    if dialect_name == "clickhousedb":
+        return _ClickHouseNullRank(column, nulls)
+    null_rank = 0 if nulls == "first" else 1
+    value_rank = 1 - null_rank
+    return sqlalchemy.case((column.is_(None), null_rank), else_=value_rank)
+
+
+def _fraction_component(text: str, component: str) -> str:
+    """Parse one already-validated textual fraction component as Int256."""
+    del component
+    return f"toInt256({text})"
+
+
+def _fraction_text_component(argument: str, component: str) -> str:
+    """Return one fraction component as text without narrowing it first."""
+    text = f"toString({argument})"
+    index = 1 if component == "numerator" else 2
+    default = "'1'" if component == "denominator" else text
+    return f"if(position({text}, '/') = 0, {default}, splitByChar('/', {text})[{index}])"
+
+
+def _fraction_inline(arguments: list[str]) -> str:
+    """Render the G0-probed four-fraction, bounded Int256 equality."""
+    if len(arguments) != 4:
+        raise TypeError("httk_fraction_scaled_equal expects four fraction arguments")
+    text_fractions = [
+        (
+            _fraction_text_component(argument, "numerator"),
+            _fraction_text_component(argument, "denominator"),
+        )
+        for argument in arguments
+    ]
+    lengths = [
+        (
+            f"length(replaceRegexpAll({numerator}, '^[-+]', ''))",
+            f"length(replaceRegexpAll({denominator}, '^[-+]', ''))",
+        )
+        for numerator, denominator in text_fractions
+    ]
+    over_budget = " OR ".join(f"({length}) > 19" for pair in lengths for length in pair)
+    zero_denominators = " OR ".join(
+        f"(replaceRegexpAll({denominator}, '^[-+]', '') = '0')" for _numerator, denominator in text_fractions
+    )
+    fractions = [
+        (_fraction_component(numerator, "numerator"), _fraction_component(denominator, "denominator"))
+        for numerator, denominator in text_fractions
+    ]
+    left = " * ".join((fractions[0][0], fractions[1][0], fractions[2][1], fractions[3][1]))
+    right = " * ".join((fractions[2][0], fractions[3][0], fractions[0][1], fractions[1][1]))
+    return (
+        "if("
+        f"({over_budget}), throwIf(1, 'httk_fraction_scaled_equal: Int256 component exceeds 19 digits'), "
+        f"if(({zero_denominators}), throwIf(1, 'httk_fraction_scaled_equal: zero denominator'), "
+        f"(({left}) = ({right})))"
+        ")"
+    )
+
+
+@compiles(Function, "clickhousedb")
+def _compile_clickhouse_function(element: Function, compiler: Any, **kwargs: Any) -> str:
+    if element.name == "httk_fraction_scaled_equal":
+        arguments = [compiler.process(argument, **kwargs) for argument in element.clause_expr.clauses]
+        return _fraction_inline(arguments)
+    return compiler.visit_function(element, **kwargs)
+
+
+@compiles(BinaryExpression, "clickhousedb")
+def _compile_clickhouse_binary(element: BinaryExpression[Any], compiler: Any, **kwargs: Any) -> str:
+    left = compiler.process(element.left, **kwargs)
+    right = compiler.process(element.right, **kwargs)
+    if element.operator in {operators.like_op, operators.not_like_op}:
+        operator = "NOT LIKE" if element.operator is operators.not_like_op else "LIKE"
+        return f"{left} {operator} {right}"
+    if element.operator is operators.is_distinct_from:
+        return null_safe_difference(left, right)
+    if element.operator is operators.is_not_distinct_from:
+        return f"NOT {null_safe_difference(left, right)}"
+    return compiler.visit_binary(element, **kwargs)
 
 
 def _stage_table(source: sqlalchemy.Table, name: str) -> sqlalchemy.Table:
@@ -543,6 +740,8 @@ def verify_clickhouse_connection(connection: sqlalchemy.Connection) -> str:
 
 def install_connection_guards(engine: sqlalchemy.Engine) -> str:
     """Install pool checkout verification and return the first server version."""
+    _install_binary_query_format_hook()
+    _install_binary_query_event(engine)
     state = getattr(engine, "_httk_clickhouse_guard", None)
     if state is None:
         state = {"version": None, "lock": threading.Lock()}

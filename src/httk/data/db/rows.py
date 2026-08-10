@@ -62,6 +62,13 @@ class _Chunk:
         table = store._table(schema.table_name)
         with store._read_connection() as connection:
             result = connection.execute(sqlalchemy.select(table).where(table.c[SID_COLUMN].in_(sids))).fetchall()
+        if connection.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import normalize_clickhouse_value
+
+            result = [
+                tuple(normalize_clickhouse_value(value, column.type) for value, column in zip(row, table.columns))
+                for row in result
+            ]
         self.columns = {column.name: index for index, column in enumerate(table.columns)}
         for row in result:
             self.parent_rows[int(row[self.columns[SID_COLUMN]])] = tuple(row)
@@ -83,6 +90,13 @@ class _Chunk:
                 .where(table.c[parent_column].in_(self.sids))
                 .order_by(table.c[parent_column], table.c[index_column])
             ).fetchall()
+        if connection.dialect.name == "clickhousedb":
+            from httk.data.db.clickhouse import normalize_clickhouse_value
+
+            result = [
+                tuple(normalize_clickhouse_value(value, column.type) for value, column in zip(row, table.columns))
+                for row in result
+            ]
         columns = {column.name: index for index, column in enumerate(table.columns)}
         grouped: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
         for row in result:

@@ -8,6 +8,7 @@ from fractions import Fraction
 
 import pytest
 import sqlalchemy
+from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
 from httk.data.db import (
     Database,
@@ -16,6 +17,8 @@ from httk.data.db import (
     NoResultError,
     SqlStore,
 )
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @dataclass(frozen=True)
@@ -44,12 +47,17 @@ class IntRecord:
     value: int
 
 
-@pytest.fixture
-def store():
+@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM))
+def store(request):
+    records = tuple(ResultRecord(str(index), Fraction(index, 3)) for index in range(6))
+    if request.param == "clickhousedb":
+        with bulk_store(records) as value:
+            yield value
+        return
     with Database.sqlite() as database:
         value = SqlStore(database, entry_records={})
-        for index in range(6):
-            value.save(ResultRecord(str(index), Fraction(index, 3)))
+        for record in records:
+            value.save(record)
         yield value
 
 

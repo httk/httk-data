@@ -6,10 +6,13 @@ from fractions import Fraction
 from typing import Annotated, ClassVar
 
 import pytest
+from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core import FracVector
 from httk.core.storage import Shape, StorageInfo
 
 from httk.data.db import Database, SchemaError, SqlStore
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @dataclass(frozen=True)
@@ -92,9 +95,13 @@ LABELS = [
 ALL_LABELS = {label.text for label in LABELS}
 
 
-@pytest.fixture(params=["sqlite", "duckdb"])
+@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM])
 def store(request):
     """A populated store per supported dialect (duckdb skips where not installed)."""
+    if request.param == "clickhousedb":
+        with bulk_store((*RECORDS, *TAGS, *LABELS)) as sql_store:
+            yield sql_store
+        return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
         database_manager = Database.duckdb()
@@ -640,15 +647,28 @@ def test_object_outputs_survive_reconstruction_on_every_row(store):
     and never queries — hence this test saves throwaway rows and drops all
     references to them before searching.
     """
-    for index in range(4):
-        store.save(Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]))
-    gc.collect()  # drop the identity-cache entries, forcing real fetches below
+    if store._database.engine.dialect.name == "clickhousedb":
+        with bulk_store(
+            tuple(Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]) for index in range(4))
+        ) as isolated_store:
+            searcher, variable = rec_searcher(isolated_store)
+            searcher.add(variable.formula.startswith("Throwaway"))
+            assert formulas(searcher) == {f"Throwaway{index}" for index in range(4)}
+            assert searcher.count() == 4
+        return
+    manager = Database.duckdb() if store._database.engine.dialect.name == "duckdb" else Database.sqlite()
+    with manager as isolated_database:
+        isolated_store = SqlStore(isolated_database, entry_records={})
+        throwaways = [Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]) for index in range(4)]
+        for record in throwaways:
+            isolated_store.save(record)
+        gc.collect()  # drop the identity-cache entries, forcing real fetches below
 
-    searcher, variable = rec_searcher(store)
-    searcher.add(variable.formula.startswith("Throwaway"))
-    matched = formulas(searcher)
-    assert matched == {f"Throwaway{index}" for index in range(4)}
-    assert searcher.count() == 4
+        searcher, variable = rec_searcher(isolated_store)
+        searcher.add(variable.formula.startswith("Throwaway"))
+        matched = formulas(searcher)
+        assert matched == {f"Throwaway{index}" for index in range(4)}
+        assert searcher.count() == 4
 
 
 # ------------------------------------------------- child-field comparison set semantics

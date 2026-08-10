@@ -7,10 +7,13 @@ from dataclasses import dataclass
 from functools import cmp_to_key
 
 import pytest
+from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
 from httk.data import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
 from httk.data.db import Database, SqlStore
 from httk.data.db.paging import _decode_continuation, _encode_continuation
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @dataclass(frozen=True)
@@ -41,8 +44,12 @@ ROWS = (
 )
 
 
-@pytest.fixture(params=["sqlite", "duckdb"])
+@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM])
 def store(request):
+    if request.param == "clickhousedb":
+        with bulk_store(ROWS) as value:
+            yield value
+        return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
         manager = Database.duckdb()
@@ -197,7 +204,12 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
     statement, _raw_width = result._page_statement(result._page_keys(order), cursor, 2)
     assert statement._offset_clause is None
     assert statement._limit_clause is not None
-    assert "WHERE" in str(statement)
+    statement_text = (
+        str(statement.compile(dialect=store._database.engine.dialect))
+        if store._database.engine.dialect.name == "clickhousedb"
+        else str(statement)
+    )
+    assert "WHERE" in statement_text
 
     calls = 0
     original = result._plan.count

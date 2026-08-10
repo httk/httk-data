@@ -7,6 +7,7 @@ from typing import ClassVar
 
 import pytest
 import sqlalchemy
+from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import QueryLiteralError, StorageInfo, StoredPropertyProjection
 
@@ -17,6 +18,8 @@ from httk.data.db import (
     stored_property_sql_plan,
 )
 from httk.data.query.optimade_filters import FilterTranslationError
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 CALCULATIONS_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 FILES_DEFINITION = "https://schemas.optimade.org/defs/v1.2/entrytypes/optimade/files"
@@ -71,6 +74,40 @@ def _immutable_id_query(ctx, operator: str, literal: object):
         # its local FROM tree retains the parent child-target correlation.
         ratios = ctx.scope("parts").scope("ratios")
         return ctx.exists(ratios, ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))))
+    if literal == "filtered-count-nested":
+        parts = ctx.scope("parts")
+        ratios = parts.scope("ratios")
+        nested = ctx.exists(ratios, ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))))
+        return ctx.equal(ctx.count(ctx.filtered(parts, nested)), ctx.constant(0))
+    if literal == "filtered-count-value-nested":
+        parts = ctx.scope("parts")
+        ratios = parts.scope("ratios")
+        filtered = ctx.filtered(
+            parts,
+            ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))),
+        )
+        return ctx.equal(ctx.count(filtered), ctx.constant(0))
+    if literal == "filtered-count-single":
+        parts = ctx.scope("parts")
+        filtered = ctx.filtered(parts, ctx.exact_equal(parts.field("symbol"), ctx.constant("A")))
+        return ctx.equal(ctx.count(filtered), ctx.constant(1))
+    if literal == "filtered-distinct-count-nested":
+        parts = ctx.scope("parts")
+        ratios = parts.scope("ratios")
+        nested = ctx.exists(ratios, ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))))
+        filtered = ctx.filtered(parts, nested)
+        return ctx.equal(ctx.distinct_count(filtered, filtered.field("symbol")), ctx.constant(0))
+    if literal == "boolean-nested":
+        ratios = ctx.scope("parts").scope("ratios")
+        nested = ctx.exists(ratios, ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))))
+        return ctx.when_known(ctx.always_true(), nested)
+    if literal == "boolean-combinators-nested":
+        ratios = ctx.scope("parts").scope("ratios")
+        nested = ctx.exists(ratios, ctx.exact_equal(ratios.field("value"), ctx.constant(Fraction(1, 3))))
+        return ctx.and_(ctx.or_(ctx.always_true(), nested), ctx.not_(nested))
+    if literal == "unused-nested":
+        ctx.scope("parts").scope("ratios")
+        return ctx.always_true()
     if literal == "when-known":
         return ctx.when_known(
             ctx.not_(ctx.is_null(ctx.field("comment"))),
@@ -229,8 +266,15 @@ SECOND = GenericCalculationSecond(
 )
 
 
-@pytest.fixture(params=("sqlite", "duckdb"))
+@pytest.fixture(scope="module", params=("sqlite", "duckdb", CLICKHOUSE_PARAM))
 def plan(request):
+    if request.param == "clickhousedb":
+        with bulk_store(
+            (FIRST, SECOND),
+            entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
+        ) as store:
+            yield stored_property_sql_plan(store, CalculationEntry)
+        return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
         database = Database.duckdb()
@@ -279,6 +323,10 @@ def test_plan_projects_concrete_backings_and_nullable_missing_properties(plan):
     ),
 )
 def test_plan_translates_callback_operations_and_nullable_absence(plan, filter_string, expected):
+    if plan.store._database.engine.dialect.name == "clickhousedb" and filter_string == 'immutable_id = "nested"':
+        with pytest.raises(Exception, match="beyond one immediate scope"):
+            plan.filter_searchers(filter_string)
+        return
     assert {record.label for record in _records(plan.filter_searchers(filter_string))} == expected
 
 
@@ -304,10 +352,10 @@ def test_fraction_equality_compiles_against_canonical_exact_column(plan):
 def test_dialect_registers_exact_fraction_comparison_function(plan):
     with plan.store._database._engine.connect() as connection:
         equal = connection.execute(
-            sqlalchemy.text("SELECT httk_fraction_scaled_equal('1/3', '2', '2/3', '1')")
+            sqlalchemy.select(sqlalchemy.func.httk_fraction_scaled_equal("1/3", "2", "2/3", "1"))
         ).scalar_one()
         unequal = connection.execute(
-            sqlalchemy.text("SELECT httk_fraction_scaled_equal('1/3', '1', '2/3', '1')")
+            sqlalchemy.select(sqlalchemy.func.httk_fraction_scaled_equal("1/3", "1", "2/3", "1"))
         ).scalar_one()
     assert bool(equal)
     assert not bool(unequal)

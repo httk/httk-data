@@ -51,6 +51,7 @@ __all__ = [
     "STORAGE_PROTOCOL_VERSION",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "BackendFacts",  # pyright: ignore[reportUnsupportedDunderAll]
     "BulkIngest",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
+    "ClickHouseUnsupportedQueryError",  # pyright: ignore[reportUnsupportedDunderAll]
     "Database",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -84,6 +85,7 @@ _SQL_EXPORTS = {
     "STORAGE_PROTOCOL_VERSION": ".layout",
     "BackendFacts": ".layout",
     "BulkIngest": ".bulk",
+    "ClickHouseUnsupportedQueryError": ".clickhouse",
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",

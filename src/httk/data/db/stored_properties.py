@@ -86,6 +86,7 @@ class _SqlValue:
     codec: ValueCodec | None = None
     scope: "_SqlScope | None" = None
     literal: object = _NO_LITERAL
+    correlation_depth: int = 0
 
     @property
     def exact(self) -> sqlalchemy.ColumnElement[Any]:
@@ -107,19 +108,28 @@ class _SqlPredicate:
     post: bool = dataclasses.field(init=False, default=False)
     set_derived: bool = dataclasses.field(init=False, default=False)
     group_columns: tuple[sqlalchemy.ColumnElement[Any], ...] = dataclasses.field(init=False, default=())
+    correlation_depth: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "where_clause", self.clause)
         object.__setattr__(self, "having_clause", self.clause)
 
     def __and__(self, other: object) -> "_SqlPredicate":
-        return _SqlPredicate(_bool_clause(sqlalchemy.and_(self.clause, _predicate(other).clause)))
+        other_predicate = _predicate(other)
+        return _SqlPredicate(
+            _bool_clause(sqlalchemy.and_(self.clause, other_predicate.clause)),
+            correlation_depth=max(self.correlation_depth, other_predicate.correlation_depth),
+        )
 
     def __or__(self, other: object) -> "_SqlPredicate":
-        return _SqlPredicate(_bool_clause(sqlalchemy.or_(self.clause, _predicate(other).clause)))
+        other_predicate = _predicate(other)
+        return _SqlPredicate(
+            _bool_clause(sqlalchemy.or_(self.clause, other_predicate.clause)),
+            correlation_depth=max(self.correlation_depth, other_predicate.correlation_depth),
+        )
 
     def __invert__(self) -> "_SqlPredicate":
-        return _SqlPredicate(_bool_clause(sqlalchemy.not_(self.clause)))
+        return _SqlPredicate(_bool_clause(sqlalchemy.not_(self.clause)), correlation_depth=self.correlation_depth)
 
 
 @dataclass(frozen=True)
@@ -134,6 +144,8 @@ class _SqlScope:
     conditions: tuple[sqlalchemy.ColumnElement[bool], ...]
     scalar_child: FieldSpec | None = None
     singleton: bool = True
+    correlation_depth: int = 0
+    condition_depth: int = 0
 
     def field(self, name: str) -> _SqlValue:
         if self.scalar_child is not None:
@@ -217,19 +229,32 @@ class _SqlQueryContext:
         if operator == "=":
             return self.equal(left_value, right_value)
         if operator == "!=":
-            return _SqlPredicate(sqlalchemy.not_(self.equal(left_value, right_value).clause))
+            equal = self.equal(left_value, right_value)
+            return _SqlPredicate(sqlalchemy.not_(equal.clause), correlation_depth=equal.correlation_depth)
         if (
             left_value.exact_element is not None or right_value.exact_element is not None
         ) and not _exact_ordering_uses_float_companion(left_value, right_value):
             raise QueryLiteralError("ordering an exact stored value is not implemented")
         if operator == "<":
-            return _SqlPredicate(_bool_clause(left_value.element < right_value.element))
+            clause = _SqlPredicate(_bool_clause(left_value.element < right_value.element))
+            return dataclasses.replace(
+                clause, correlation_depth=max(left_value.correlation_depth, right_value.correlation_depth)
+            )
         if operator == "<=":
-            return _SqlPredicate(_bool_clause(left_value.element <= right_value.element))
+            clause = _SqlPredicate(_bool_clause(left_value.element <= right_value.element))
+            return dataclasses.replace(
+                clause, correlation_depth=max(left_value.correlation_depth, right_value.correlation_depth)
+            )
         if operator == ">":
-            return _SqlPredicate(_bool_clause(left_value.element > right_value.element))
+            clause = _SqlPredicate(_bool_clause(left_value.element > right_value.element))
+            return dataclasses.replace(
+                clause, correlation_depth=max(left_value.correlation_depth, right_value.correlation_depth)
+            )
         if operator == ">=":
-            return _SqlPredicate(_bool_clause(left_value.element >= right_value.element))
+            clause = _SqlPredicate(_bool_clause(left_value.element >= right_value.element))
+            return dataclasses.replace(
+                clause, correlation_depth=max(left_value.correlation_depth, right_value.correlation_depth)
+            )
         if operator in {"CONTAINS", "STARTS", "ENDS"}:
             literal = getattr(right_value.element, "value", None)
             if not isinstance(literal, str):
@@ -240,27 +265,33 @@ class _SqlQueryContext:
                 "STARTS": f"{escaped}%",
                 "ENDS": f"%{escaped}",
             }[operator]
-            return _SqlPredicate(_bool_clause(left_value.element.like(pattern, escape="\\")))
+            clause = _SqlPredicate(_bool_clause(left_value.element.like(pattern, escape="\\")))
+            return dataclasses.replace(
+                clause, correlation_depth=max(left_value.correlation_depth, right_value.correlation_depth)
+            )
         raise StoredPropertySqlConfigurationError(f"unsupported stored-property comparison operator {operator!r}")
 
     def equal(self, left: _SqlValue, right: _SqlValue) -> _SqlPredicate:
         left_value, right_value = _codec_literals(_value(left), _value(right))
+        depth = max(left_value.correlation_depth, right_value.correlation_depth)
         if _is_null(left_value.element) or _is_null(right_value.element):
             value = right_value.element if _is_null(left_value.element) else left_value.element
-            return _SqlPredicate(_bool_clause(value.is_(None)))
+            return _SqlPredicate(_bool_clause(value.is_(None)), correlation_depth=depth)
         if left_value.exact_element is not None or right_value.exact_element is not None:
             return self.exact_equal(left_value, right_value)
-        return _SqlPredicate(_bool_clause(left_value.element == right_value.element))
+        return _SqlPredicate(_bool_clause(left_value.element == right_value.element), correlation_depth=depth)
 
     def exact_equal(self, left: _SqlValue, right: _SqlValue) -> _SqlPredicate:
         left_value, right_value = _codec_literals(_value(left), _value(right))
+        depth = max(left_value.correlation_depth, right_value.correlation_depth)
         if _is_null(left_value.element) or _is_null(right_value.element):
             value = right_value.element if _is_null(left_value.element) else left_value.element
-            return _SqlPredicate(_bool_clause(value.is_(None)))
-        return _SqlPredicate(_bool_clause(left_value.exact == right_value.exact))
+            return _SqlPredicate(_bool_clause(value.is_(None)), correlation_depth=depth)
+        return _SqlPredicate(_bool_clause(left_value.exact == right_value.exact), correlation_depth=depth)
 
     def is_null(self, value: _SqlValue) -> _SqlPredicate:
-        return _SqlPredicate(_bool_clause(_value(value).element.is_(None)))
+        value = _value(value)
+        return _SqlPredicate(_bool_clause(value.element.is_(None)), correlation_depth=value.correlation_depth)
 
     def exists(self, scope: _SqlScope, predicate: _SqlPredicate) -> _SqlPredicate:
         target = _scope(scope)
@@ -273,11 +304,20 @@ class _SqlQueryContext:
             .where(*conditions, nested_condition)
             .correlate(*target.ancestors)
         )
-        return _SqlPredicate(_bool_clause(sqlalchemy.exists(statement)))
+        return _SqlPredicate(
+            _bool_clause(sqlalchemy.exists(statement)),
+            correlation_depth=max(1, target.correlation_depth, condition.correlation_depth + 1),
+        )
 
     def filtered(self, scope: _SqlScope, predicate: _SqlPredicate) -> _SqlScope:
         target = _scope(scope)
-        return dataclasses.replace(target, conditions=(*target.conditions, _predicate(predicate).clause))
+        predicate = _predicate(predicate)
+        return dataclasses.replace(
+            target,
+            conditions=(*target.conditions, predicate.clause),
+            correlation_depth=max(target.correlation_depth, predicate.correlation_depth),
+            condition_depth=max(target.condition_depth, predicate.correlation_depth),
+        )
 
     def count(self, scope: _SqlScope) -> _SqlValue:
         target = _scope(scope)
@@ -288,7 +328,10 @@ class _SqlQueryContext:
             .where(*conditions)
             .correlate(*target.ancestors)
         )
-        return _SqlValue(statement.scalar_subquery())
+        return _SqlValue(
+            statement.scalar_subquery(),
+            correlation_depth=max(1, target.correlation_depth, target.condition_depth),
+        )
 
     def distinct_count(self, scope: _SqlScope, value: _SqlValue) -> _SqlValue:
         target = _scope(scope)
@@ -302,7 +345,10 @@ class _SqlQueryContext:
             .where(*conditions)
             .correlate(*target.ancestors)
         )
-        return _SqlValue(statement.scalar_subquery())
+        return _SqlValue(
+            statement.scalar_subquery(),
+            correlation_depth=max(1, target.correlation_depth, selected.correlation_depth, target.condition_depth),
+        )
 
     def scaled_exact_equal(
         self,
@@ -311,6 +357,12 @@ class _SqlQueryContext:
         right: _SqlValue,
         right_factor: _SqlValue,
     ) -> _SqlPredicate:
+        depth = max(
+            _value(left).correlation_depth,
+            _value(left_factor).correlation_depth,
+            _value(right).correlation_depth,
+            _value(right_factor).correlation_depth,
+        )
         return _SqlPredicate(
             _bool_clause(
                 sqlalchemy.func.httk_fraction_scaled_equal(
@@ -319,31 +371,43 @@ class _SqlQueryContext:
                     _value(right).exact,
                     _value(right_factor).exact,
                 )
-            )
+            ),
+            correlation_depth=depth,
         )
 
     def and_(self, *predicates: _SqlPredicate) -> _SqlPredicate:
         if not predicates:
             return self.always_true()
-        return _SqlPredicate(_bool_clause(sqlalchemy.and_(*(_predicate(item).clause for item in predicates))))
+        predicates = tuple(_predicate(item) for item in predicates)
+        return _SqlPredicate(
+            _bool_clause(sqlalchemy.and_(*(item.clause for item in predicates))),
+            correlation_depth=max(item.correlation_depth for item in predicates),
+        )
 
     def or_(self, *predicates: _SqlPredicate) -> _SqlPredicate:
         if not predicates:
             return self.always_false()
-        return _SqlPredicate(_bool_clause(sqlalchemy.or_(*(_predicate(item).clause for item in predicates))))
+        predicates = tuple(_predicate(item) for item in predicates)
+        return _SqlPredicate(
+            _bool_clause(sqlalchemy.or_(*(item.clause for item in predicates))),
+            correlation_depth=max(item.correlation_depth for item in predicates),
+        )
 
     def not_(self, predicate: _SqlPredicate) -> _SqlPredicate:
         return ~_predicate(predicate)
 
     def when_known(self, known: _SqlPredicate, predicate: _SqlPredicate) -> _SqlPredicate:
         """Preserve SQL's unknown value when a conditional backing fact is absent."""
+        known = _predicate(known)
+        predicate = _predicate(predicate)
         return _SqlPredicate(
             _bool_clause(
                 sqlalchemy.case(
-                    (_predicate(known).clause, _predicate(predicate).clause),
+                    (known.clause, predicate.clause),
                     else_=sqlalchemy.null(),
                 )
-            )
+            ),
+            correlation_depth=max(known.correlation_depth, predicate.correlation_depth),
         )
 
     def _scoped_scalar(self, scope: _SqlScope, value: _SqlValue) -> _SqlValue:
@@ -371,9 +435,11 @@ class _SqlQueryContext:
             exact_element=None if value.exact_element is None else select_scalar(value.exact_element),
             codec=value.codec,
             literal=value.literal,
+            correlation_depth=scope.correlation_depth,
         )
 
     def _related_scope(self, parent: _SqlScope, spec: FieldSpec) -> _SqlScope:
+        depth = parent.correlation_depth + 1
         if spec.role == "reference":
             assert spec.target is not None
             schema = resolve_schema(spec.target)
@@ -387,6 +453,7 @@ class _SqlQueryContext:
                 _scope_ancestors(parent),
                 (*parent.conditions, condition),
                 singleton=parent.singleton,
+                correlation_depth=depth,
             )
         if spec.role != "child" or spec.child is None:
             raise StoredPropertySqlConfigurationError(
@@ -409,6 +476,7 @@ class _SqlQueryContext:
                 _scope_ancestors(parent),
                 (*parent.conditions, condition, target_condition),
                 singleton=False,
+                correlation_depth=depth,
             )
         return _SqlScope(
             self,
@@ -419,12 +487,17 @@ class _SqlQueryContext:
             (*parent.conditions, condition),
             scalar_child=spec,
             singleton=False,
+            correlation_depth=depth,
         )
 
     def _child_scalar_value(self, scope: _SqlScope, spec: FieldSpec) -> _SqlValue:
         assert spec.child is not None
         if spec.codec_name is None:
-            return _SqlValue(scope.alias.c[spec.child.element_columns[0].name], scope=scope)
+            return _SqlValue(
+                scope.alias.c[spec.child.element_columns[0].name],
+                scope=scope,
+                correlation_depth=scope.correlation_depth,
+            )
         codec = codec_named(spec.codec_name)
         exact = scope.alias.c.get(f"{spec.field}_exact") if spec.codec_name in _EXACT_CODEC_NAMES else None
         return _SqlValue(
@@ -432,6 +505,7 @@ class _SqlQueryContext:
             exact_element=exact,
             codec=codec,
             scope=scope,
+            correlation_depth=scope.correlation_depth,
         )
 
 
@@ -629,19 +703,41 @@ class StoredPropertySqlPlan:
                 )
             except QueryLiteralError as error:
                 raise FilterTranslationError(str(error), "type-mismatch") from error
+            self._validate_clickhouse_correlation(predicate)
             searcher.add(cast(SqlExpression, predicate))
         sort_values: list[_SqlValue] = []
         for name, descending in sort:
             value = self._sort_value(backing, context, name, public_id_prefix)
+            self._validate_clickhouse_correlation(value)
             # SQLite orders nulls first in ascending order while DuckDB's
             # default differs.  Make the cross-dialect NULLS LAST contract
             # explicit before the actual user key in both directions.
-            null_rank = sqlalchemy.case((value.element.is_(None), 1), else_=0)
+            if self.store._database.engine.dialect.name == "clickhousedb":
+                from httk.data.db.clickhouse import null_order_rank
+
+                null_rank = null_order_rank(value.element, "last", dialect_name="clickhousedb")
+            else:
+                null_rank = sqlalchemy.case((value.element.is_(None), 1), else_=0)
             searcher.add_sort(SqlColumn(searcher, null_rank), False)
             order_element = value.element if value.codec is not None and value.codec.name == "float" else value.exact
             searcher.add_sort(SqlColumn(searcher, order_element), descending)
             sort_values.append(value)
         return searcher, variable, tuple(sort_values)
+
+    def _validate_clickhouse_correlation(self, value: object) -> None:
+        """Reject only nested correlation that survives a callback's return value."""
+
+        if self.store._database.engine.dialect.name != "clickhousedb":
+            return
+        depth = getattr(value, "correlation_depth", 0)
+        if depth <= 1:
+            return
+        from httk.data.db.clickhouse import ClickHouseUnsupportedQueryError
+
+        raise ClickHouseUnsupportedQueryError(
+            "clickhousedb does not support stored-property correlation beyond one immediate scope; "
+            "nested composition quantifiers must be de-correlated"
+        )
 
     def _handlers(
         self,
@@ -991,6 +1087,11 @@ def _value(value: object) -> _SqlValue:
 
 
 def _predicate(value: object) -> _SqlPredicate:
+    if isinstance(value, SqlExpression):
+        return _SqlPredicate(
+            value.where_clause,
+            correlation_depth=value.correlation_depth,
+        )
     if not isinstance(value, _SqlPredicate):
         raise StoredPropertySqlConfigurationError("stored-property query callback received a foreign predicate")
     return value

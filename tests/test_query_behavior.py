@@ -10,9 +10,12 @@ from fractions import Fraction
 from typing import ClassVar
 
 import pytest
+from clickhouse_read_support import bulk_store
 from httk.core.storage import StorageInfo, stored_property
-from test_db_searcher import ALL_FORMULAS, ALL_LABELS, LABELS, RECORDS, REF_A, Rec, Reference, Tag
+from test_db_searcher import ALL_FORMULAS, ALL_LABELS, LABELS, RECORDS, REF_A, TAGS, Rec, Reference, Tag
 from test_db_stored_properties import FIRST, SECOND, CalculationEntry, GenericCalculationFirst, GenericCalculationSecond
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +39,25 @@ def query_store(store_factory):
     for label in LABELS:
         store.save(label)
     return store
+
+
+@pytest.fixture(scope="module")
+def clickhouse_query_store():
+    with bulk_store(
+        (*RECORDS, *TAGS, *LABELS, FIRST, SECOND),
+        entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
+    ) as store:
+        yield store
+
+
+def test_clickhouse_bulk_query_behavior(clickhouse_query_store):
+    searcher, variable = rec_searcher(clickhouse_query_store)
+    searcher.add(variable.formula.contains("a"))
+    assert formulas(searcher) == {"CaTiO3", "NaCl", "CaO", "SrCaTiO"}
+
+    labels_searcher, label = label_searcher(clickhouse_query_store)
+    labels_searcher.add(label.text.contains("50%"))
+    assert texts(labels_searcher) == {"50% Mg", "Mg 50%"}
 
 
 def rec_searcher(store):

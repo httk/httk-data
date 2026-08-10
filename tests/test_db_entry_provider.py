@@ -9,6 +9,7 @@ from typing import Annotated, ClassVar
 
 import pytest
 import sqlalchemy
+from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core import (
     EntryTypeDefinition,
     FracVector,
@@ -19,6 +20,8 @@ from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, sto
 
 from httk.data.db import Database, SqlStore, StoreEntryProvider
 from httk.data.validation import validate_record
+
+pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
 
 @dataclass(frozen=True)
@@ -78,8 +81,13 @@ BOOK_2 = Book(
 )
 
 
-@pytest.fixture()
-def store():
+@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM))
+def store(request):
+    records = (ADA, BOOLE, CARA, BOOK_1, BOOK_2)
+    if request.param == "clickhousedb":
+        with bulk_store(records) as sql_store:
+            yield sql_store
+        return
     with Database.sqlite() as database:
         sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
