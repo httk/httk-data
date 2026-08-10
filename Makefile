@@ -70,6 +70,7 @@ TEST_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),3072)
 EXTENDED_DUCKDB_MEMORY_BUDGET_MB = $(or $(HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB),16384)
 TEST_TIMEOUT_SECONDS ?= 900
 EXTENDED_TEST_TIMEOUT_SECONDS ?= 1200
+BENCHMARK_TIMEOUT_SECONDS ?= 1800
 
 # ClickHouse is an opt-in developer service, never part of test/check/ci.
 CLICKHOUSE_VERSION ?= 26.8.1.1028
@@ -191,8 +192,13 @@ test-extended-fastfail:
 	HTTK_TEST_PROFILE=extended HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(EXTENDED_DUCKDB_MEMORY_BUDGET_MB) timeout --foreground $(EXTENDED_TEST_TIMEOUT_SECONDS) $(call TEST_MEMGUARD,24) $(PYTHON) -m pytest -q -m "" -x
 
 benchmarks:
-	$(call MEMGUARD,24) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize parity
-	$(call MEMGUARD,24) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize deferred
+	timeout --foreground $(BENCHMARK_TIMEOUT_SECONDS) $(call MEMGUARD,12) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize parity
+	timeout --foreground $(BENCHMARK_TIMEOUT_SECONDS) $(call MEMGUARD,12) $(PYTHON) benchmarks/bench50_parallel.py --workers 1 4 --replicate 5 --mode distinct --finalize deferred
+	@if [ -n "$$HTTK_TEST_CLICKHOUSE_URI" ]; then \
+		timeout --foreground $(BENCHMARK_TIMEOUT_SECONDS) $(call MEMGUARD,12) $(PYTHON) benchmarks/bench50_parallel.py --backend clickhouse --workers 1 4 --replicate 5 --mode distinct --finalize deferred; \
+	else \
+		echo "Skipping ClickHouse benchmarks: set HTTK_TEST_CLICKHOUSE_URI to enable them"; \
+	fi
 
 check: format-check typecheck typecheck_pyright test
 
