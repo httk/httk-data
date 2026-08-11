@@ -12,7 +12,7 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from httk.core.optimade import FilterAst
 
@@ -258,6 +258,25 @@ class StoredEntryFederation:
         :return: The declared sources in caller order.
         """
         return tuple(item.source for item in self._sources)
+
+    def snapshot_cutoff_ns(self, now_ns: int) -> int | None:
+        """Return the latest instant strictly before every capable source's current bucket.
+
+        Per-source floor conversion then selects each store's last completed
+        timestamp unit, so future monotonic writes cannot enter the snapshot,
+        even when sources use different timestamp resolutions. Timestamp-
+        disabled sources are ignored; ``None`` means no source is capable.
+
+        :param now_ns: Current time in nanoseconds.
+        :return: A nanosecond cutoff, or ``None`` when no source stores timestamps.
+        """
+        completed_buckets = []
+        for source in self._sources:
+            store = cast(Any, source.source.store)
+            if store.store_timestamps:
+                resolution = store.store_timestamp_resolution
+                completed_buckets.append((now_ns // resolution) * resolution)
+        return None if not completed_buckets else min(completed_buckets) - 1
 
     @property
     def _colliding_streams(self) -> Mapping[str, frozenset[tuple[int, int]]]:

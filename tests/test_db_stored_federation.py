@@ -172,6 +172,36 @@ def test_stored_entry_source_accepts_structural_entry_store() -> None:
         StoredEntrySource(MissingEntryStore(), FederatedCalculation, "missing")
 
 
+def test_snapshot_cutoff_ns_uses_the_coarsest_capable_source_and_skips_disabled_sources() -> None:
+    resolutions = (1, 1_000, 1_000_000_000)
+    databases = [Database.sqlite() for _ in resolutions]
+    try:
+        sources = []
+        for index, (database, resolution) in enumerate(zip(databases, resolutions, strict=True)):
+            store = SqlStore(
+                database,
+                entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
+                store_timestamp_resolution=resolution,
+            )
+            store.save(_record(f"source-{index}"))
+            sources.append(StoredEntrySource(store, FederatedCalculation, f"source-{index}", f"{index}:"))
+        federation = StoredEntryFederation(tuple(sources))
+        now_ns = 3_456_789_123
+        assert federation.snapshot_cutoff_ns(now_ns) == 2_999_999_999
+    finally:
+        for database in databases:
+            database.dispose()
+
+    with Database.sqlite() as database:
+        store = SqlStore(
+            database,
+            entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
+            store_timestamps=False,
+        )
+        federation = StoredEntryFederation((StoredEntrySource(store, FederatedCalculation, "disabled", "disabled:"),))
+        assert federation.snapshot_cutoff_ns(3_456_789_123) is None
+
+
 @pytest.fixture(params=("sqlite", "duckdb"))
 def databases(request):
     if request.param == "duckdb":
