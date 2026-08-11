@@ -278,6 +278,7 @@ class StoredEntryFederation:
         sort: Sequence[tuple[str, bool]] = (),
         offset: int = 0,
         limit: int | None = None,
+        as_of: object = None,
     ) -> StoredEntryPage:
         """Return one globally merged page with an exact filtered total.
 
@@ -289,13 +290,17 @@ class StoredEntryFederation:
         :param sort: The property sort keys and directions.
         :param offset: The number of matching rows to skip globally.
         :param limit: The maximum number of rows to return, or no maximum.
+        :param as_of: Optional historic cutoff. Sources without store timestamps
+            deliberately omit this cutoff and serve their current state.
+            Dependencies of a visible row remain visible because references
+            only point at earlier-or-equal rows from the same transaction.
         :return: The globally merged page.
         :raises DuplicateEntryIdError: If a visible id has multiple cross-source origins.
         """
         _validate_page_bounds(offset, limit)
         ordered = _normalized_sort(sort)
         stream_sort = _stream_sort(ordered) if ordered else ()
-        streams = self._streams(filter_string, stream_sort)
+        streams = self._streams(filter_string, stream_sort, as_of=as_of)
         counts = tuple(stream.candidate_stream.searcher.count() for stream in streams)
         total_count = sum(counts)
         if ordered:
@@ -309,20 +314,22 @@ class StoredEntryFederation:
         # The ID-only sentinel is deliberately excluded, especially for
         # limit=0 metadata calls.
         for candidate in visible:
-            self._probe_candidate(candidate)
+            self._probe_candidate(candidate, as_of=as_of)
         rows = tuple(self._row(candidate) for candidate in visible)
         return StoredEntryPage(rows, total_count, more)
 
-    def fetch(self, public_id: str) -> Mapping[str, Any] | None:
+    def fetch(self, public_id: str, *, as_of: object = None) -> Mapping[str, Any] | None:
         """Fetch one public id and detect a collision among its possible origins.
 
         :param public_id: The public id to fetch.
+        :param as_of: Optional historic cutoff. Sources without store timestamps
+            deliberately omit this cutoff and serve their current state.
         :return: The fetched response row, or ``None`` when it is absent.
         :raises DuplicateEntryIdError: If the id has multiple origins.
         """
         if not isinstance(public_id, str):
             raise TypeError("StoredEntryFederation.fetch public_id must be a string")
-        matches = self._probe_public_id(public_id)
+        matches = self._probe_public_id(public_id, as_of=as_of)
         if not matches:
             return None
         return self._row(matches[0])
@@ -371,13 +378,17 @@ class StoredEntryFederation:
         filter_string: str | FilterAst | None,
         sort: Sequence[tuple[str, bool]],
         stream_keys: frozenset[tuple[int, int]] | None = None,
+        *,
+        as_of: object = None,
     ) -> tuple[_Stream, ...]:
         streams: list[_Stream] = []
         for source in self._sources:
+            source_as_of = as_of if getattr(source.source.store, "store_timestamps", False) else None
             candidates = source.plan.candidate_searchers(
                 filter_string,
                 sort=sort,
                 public_id_prefix=source.source.public_id_prefix,
+                as_of=source_as_of,
             )
             for backing_index, candidate in enumerate(candidates):
                 if stream_keys is not None and (source.source_index, backing_index) not in stream_keys:
@@ -443,20 +454,20 @@ class StoredEntryFederation:
                 heapq.heappush(heap, (_sort_key(following, sort), index, following))
         return result[offset:]
 
-    def _probe_candidate(self, candidate: _Candidate) -> None:
+    def _probe_candidate(self, candidate: _Candidate, *, as_of: object = None) -> None:
         colliding = self._colliding_streams.get(candidate.stream.source.source.public_id_prefix)
         if colliding is None:
             return
         matches = [candidate]
         filter_string = "id = " + json.dumps(candidate.public_id)
         candidate_key = (candidate.stream.source.source_index, candidate.stream.backing_index)
-        for stream in self._streams(filter_string, (), colliding - {candidate_key}):
+        for stream in self._streams(filter_string, (), colliding - {candidate_key}, as_of=as_of):
             stream.candidate_stream.searcher.set_limit(1)
             matches.extend(_candidates(stream))
         if len(matches) > 1:
             raise DuplicateEntryIdError(candidate.public_id, tuple(item.origin for item in matches))
 
-    def _probe_public_id(self, public_id: str) -> tuple[_Candidate, ...]:
+    def _probe_public_id(self, public_id: str, *, as_of: object = None) -> tuple[_Candidate, ...]:
         stream_keys = frozenset(
             (source.source_index, backing_index)
             for source in self._sources
@@ -467,7 +478,7 @@ class StoredEntryFederation:
             return ()
         filter_string = "id = " + json.dumps(public_id)
         matches: list[_Candidate] = []
-        for stream in self._streams(filter_string, (), stream_keys):
+        for stream in self._streams(filter_string, (), stream_keys, as_of=as_of):
             stream.candidate_stream.searcher.set_limit(1)
             matches.extend(_candidates(stream))
         if len(matches) > 1:

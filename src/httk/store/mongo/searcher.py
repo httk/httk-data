@@ -9,7 +9,7 @@ import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from httk.store.db.codecs import ValueCodec, codec_named
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
@@ -652,10 +652,10 @@ class MongoVariable:
                 "store_timestamp",
                 FieldSpec("store_timestamp", int, "scalar", ()),
                 operand_converter=lambda value: ns_operand_to_store_units(
-                    value, self._searcher._store.store_timestamp_resolution
+                    value, cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
                 presentation_converter=lambda value: (
-                    None if value is None else value * self._searcher._store.store_timestamp_resolution
+                    None if value is None else value * cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
             )
         try:
@@ -695,10 +695,16 @@ class _MongoOutput:
 
 
 class MongoSearcher:
-    """Build and execute a MongoDB query over reference-connected variables."""
+    """Build and execute a MongoDB query over reference-connected variables.
 
-    def __init__(self, store: "MongoStore") -> None:
+    An historic cutoff is injected for every root and lookup variable; visible
+    rows' dependencies are always visible because references only point at
+    earlier-or-equal rows from the same transaction.
+    """
+
+    def __init__(self, store: "MongoStore", *, as_of: object = None) -> None:
         self._store = store
+        self._as_of = as_of
         self._variables: list[MongoVariable] = []
         self._hidden_variables: list[MongoVariable] = []
         self._root: MongoVariable | None = None
@@ -745,6 +751,8 @@ class MongoSearcher:
         self._variables.append(variable)
         if self._root is None:
             self._root = variable
+        if self._as_of is not None:
+            self.add(cast(MongoField, variable.store_timestamp) <= self._as_of)
         return variable
 
     def _root_sid_field(self) -> MongoField:
@@ -770,6 +778,8 @@ class MongoSearcher:
         )
         variable._source = reference
         self._hidden_variables.append(variable)
+        if self._as_of is not None:
+            self.add(cast(MongoField, variable.store_timestamp) <= self._as_of)
         return variable
 
     def output(self, variable: MongoVariable | MongoField, name: str) -> None:

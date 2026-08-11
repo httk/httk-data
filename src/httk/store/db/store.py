@@ -106,6 +106,7 @@ from httk.store.store_timestamp import (
     advance_store_timestamp_mark,
     capture_store_timestamp,
     encode_store_timestamp_state,
+    ns_operand_to_store_units,
     parse_store_timestamp_state,
 )
 
@@ -248,9 +249,9 @@ class SqlStore:
         return self._store_timestamps
 
     @property
-    def store_timestamp_resolution(self) -> int:
-        """Return nanoseconds per stored timestamp unit."""
-        return self._store_timestamp_resolution
+    def store_timestamp_resolution(self) -> int | None:
+        """Return nanoseconds per stored timestamp unit, or ``None`` when disabled."""
+        return self._store_timestamp_resolution if self._store_timestamps else None
 
     @property
     def _store_timestamp_state(self) -> str:
@@ -1735,7 +1736,7 @@ class SqlStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self) -> SqlSearcher:
+    def searcher(self, *, as_of: object = None) -> SqlSearcher:
         """Return a new :class:`~httk.store.db.searcher.SqlSearcher` querying this store.
 
         The searcher runs on this store's read path — inside an open
@@ -1743,9 +1744,14 @@ class SqlStore:
         reconstructs matched objects through :meth:`fetch`, so the identity
         cache applies.
 
+        :param as_of: Optional historic cutoff in canonical timestamp form.
         :return: A new SQL searcher bound to this store.
         """
-        return SqlSearcher(self)
+        if as_of is not None:
+            if not self._store_timestamps:
+                raise ValueError("as_of queries require SqlStore(store_timestamps=True)")
+            ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
+        return SqlSearcher(self, as_of=as_of)
 
     def fsck(
         self,

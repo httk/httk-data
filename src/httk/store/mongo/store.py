@@ -40,6 +40,7 @@ from httk.store.store_timestamp import (
     advance_store_timestamp_mark,
     capture_store_timestamp,
     encode_store_timestamp_state,
+    ns_operand_to_store_units,
     parse_store_timestamp_state,
 )
 
@@ -190,9 +191,9 @@ class MongoStore:
         return self._store_timestamps
 
     @property
-    def store_timestamp_resolution(self) -> int:
-        """Return nanoseconds per stored timestamp unit."""
-        return self._store_timestamp_resolution
+    def store_timestamp_resolution(self) -> int | None:
+        """Return nanoseconds per stored timestamp unit, or ``None`` when disabled."""
+        return self._store_timestamp_resolution if self._store_timestamps else None
 
     @property
     def _store_timestamp_state(self) -> str:
@@ -1115,18 +1116,23 @@ class MongoStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self) -> Any:
+    def searcher(self, *, as_of: object = None) -> Any:
         """Return a Mongo searcher bound to this store's read path.
 
         Queries use the active transaction session when one is open, so they
         see that transaction's uncommitted writes, and object outputs hydrate
         through :meth:`fetch`, preserving the identity-cache contract.
 
+        :param as_of: Optional historic cutoff in canonical timestamp form.
         :return: A new MongoDB searcher bound to this store.
         """
+        if as_of is not None:
+            if not self._store_timestamps:
+                raise ValueError("as_of queries require MongoStore(store_timestamps=True)")
+            ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
         from .searcher import MongoSearcher
 
-        return MongoSearcher(self)
+        return MongoSearcher(self, as_of=as_of)
 
     def stored_property_plan(self, family: type) -> Any:
         """Return the Mongo stored-property plan for one configured entry family.

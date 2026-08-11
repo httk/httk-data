@@ -137,6 +137,7 @@ class _FederatedPlan:
     outputs: tuple[_FederatedOutput, ...]
     offset: int
     limit: int | None
+    as_of: object
     count_cache: _FederatedCountCache
 
 
@@ -166,6 +167,10 @@ def _source_error(source: str, operation: str, exc: Exception) -> FederatedSourc
     if isinstance(exc, (UnsupportedQueryError, AttributeError)):
         return _FederatedUnsupportedQueryError(source, operation)
     return FederatedSourceError(source, operation)
+
+
+def _child_searcher(store: Store, as_of: object) -> Searcher:
+    return store.searcher() if as_of is None else store.searcher(as_of=as_of)
 
 
 _SEARCH_FIELD_SURFACE = (
@@ -221,7 +226,7 @@ def _count_plan(store: "FederatedStore", plan: _FederatedPlan) -> int:
     for source_plan in plan.sources:
         source = source_plan.source
         try:
-            child_searcher = store._sources[source].searcher()
+            child_searcher = _child_searcher(store._sources[source], plan.as_of)
             child_variable = cast(SearchVariable, child_searcher.variable(source_plan.target))
         except Exception as exc:
             raise _source_error(source, "count searcher construction", exc) from exc
@@ -267,7 +272,7 @@ def _execute_plan(
             return
         source = source_plan.source
         try:
-            child_searcher = store._sources[source].searcher()
+            child_searcher = _child_searcher(store._sources[source], plan.as_of)
             child_variable = cast(SearchVariable, child_searcher.variable(source_plan.target))
         except Exception as exc:
             raise _source_error(source, "searcher construction", exc) from exc
@@ -415,6 +420,7 @@ class FederatedResultSet:
                 self._plan.outputs,
                 self._plan.offset + start,
                 remaining,
+                self._plan.as_of,
                 self._plan.count_cache,
             ),
         )
@@ -563,13 +569,16 @@ class FederatedStore:
 
         return FederatedTarget(name, targets, self)
 
-    def searcher(self) -> "FederatedSearcher":
+    def searcher(self, *, as_of: object = None) -> "FederatedSearcher":
         """Create an unbound federated searcher without touching child stores.
 
+        :param as_of: Optional historic cutoff forwarded to every child store.
+            A child that cannot honor it raises and the federation surfaces that
+            child failure; this is a user-facing store API.
         :return: A new mutable query builder.
         """
 
-        return FederatedSearcher(self)
+        return FederatedSearcher(self, as_of=as_of)
 
 
 class FederatedVariable:
@@ -753,9 +762,11 @@ class FederatedSearcher:
     """Build and validate one portable, single-root federated query.
 
     :param store: The federation whose child stores provide the query surface.
+    :param as_of: Optional historic cutoff forwarded to child stores.
     """
 
     __slots__ = (
+        "_as_of",
         "_count_cache",
         "_expressions",
         "_limit",
@@ -767,8 +778,9 @@ class FederatedSearcher:
         "origin",
     )
 
-    def __init__(self, store: FederatedStore) -> None:
+    def __init__(self, store: FederatedStore, *, as_of: object = None) -> None:
         self._store = store
+        self._as_of = as_of
         self._variable: FederatedVariable | None = None
         self._prototypes: Mapping[str, Searcher] = MappingProxyType({})
         self._expressions: list[_FederatedAst] = []
@@ -802,7 +814,7 @@ class FederatedSearcher:
             if source not in source_targets:
                 continue
             try:
-                child_searcher = self._store._sources[source].searcher()
+                child_searcher = _child_searcher(self._store._sources[source], self._as_of)
                 variables[source] = cast(SearchVariable, child_searcher.variable(source_targets[source]))
                 prototypes[source] = child_searcher
             except Exception as exc:
@@ -874,7 +886,7 @@ class FederatedSearcher:
         # fail on a child's duplicate-output guard.
         for source, target in variable._targets.items():
             try:
-                child_searcher = self._store._sources[source].searcher()
+                child_searcher = _child_searcher(self._store._sources[source], self._as_of)
                 child_variable = child_searcher.variable(target)
                 child_value = (
                     child_variable
@@ -928,6 +940,7 @@ class FederatedSearcher:
             planned_outputs,
             self.offset,
             self._limit,
+            self._as_of,
             self._count_cache,
         )
 

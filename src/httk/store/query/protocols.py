@@ -455,8 +455,16 @@ class Searcher(Protocol):
 
 
 class Store(Protocol):
-    """Require a store that can create a query searcher."""
+    """Require a store that can create a query searcher.
 
-    def searcher(self) -> Searcher:
-        """Create an empty searcher."""
+    Implementations predating the ``as_of`` keyword may omit it and remain
+    usable for current-state queries, but cannot honor historic queries.
+    """
+
+    def searcher(self, *, as_of: object = None) -> Searcher:
+        """Create an empty searcher, optionally at a historic cutoff.
+
+        :param as_of: Optional canonical historic timestamp cutoff.
+        :return: An empty query searcher.
+        """
         ...

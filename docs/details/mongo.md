@@ -171,8 +171,13 @@ store.fsck(repair=True, clamp_future_timestamps=True, known_types=(StructureReco
 Clamping is destructive to historic-query fidelity; inspect a non-repair fsck
 report and confirm the skew before using it.
 
-Follow-ups are a serve-level as-of parameter, a per-source federation cutoff,
-and an enable/disable migration for existing layouts.
+The query stack also exposes `as_of=T` on stored-property federation
+`query()`/`fetch()` and on the general `FederatedStore.searcher()`. The serving
+layer accepts `_httk_as_of` and includes it in stable pagination plans. Stored
+federation is availability-first: a source with `store_timestamps=False`
+deliberately ignores the cutoff and serves that source's current state; sources
+with timestamps enabled apply their own-resolution cutoff. Existing layouts do
+not require an enable/disable migration for reading this capability.
 
 ## Roles, leases, and fsck
 

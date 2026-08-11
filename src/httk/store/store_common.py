@@ -40,7 +40,7 @@ class EntryStore(Protocol):
         """Return the configured entry-family layouts in stable order."""
         ...
 
-    def searcher(self) -> Any:
+    def searcher(self, *, as_of: object = None) -> Any:
         """Return a backend searcher used to build candidate ID streams."""
         ...
 

@@ -18,6 +18,17 @@ class MongoTimestampRecord:
     value: int
 
 
+@dataclass(frozen=True)
+class MongoAsOfLeaf:
+    code: str
+
+
+@dataclass(frozen=True)
+class MongoAsOfBranch:
+    label: str
+    leaf: MongoAsOfLeaf
+
+
 def test_mongo_timestamp_save_dedup_query_and_sort(mongo_test_database):
     store = MongoStore(mongo_test_database, entry_records={})
     store._clock = lambda: 1_000_000
@@ -55,6 +66,29 @@ def test_mongo_timestamp_save_dedup_query_and_sort(mongo_test_database):
         assert list(candidate)
     with pytest.raises(ValueError, match="timezone-aware"):
         _ = variable.store_timestamp <= datetime.datetime(1970, 1, 1)  # noqa: DTZ001
+
+
+def test_mongo_as_of_reference_lookup_and_pagination(mongo_test_database):
+    store = MongoStore(mongo_test_database, entry_records={})
+    leaf = MongoAsOfLeaf("visible")
+    store._clock = lambda: 1_000_000
+    store.save(leaf)
+    store.save(MongoAsOfBranch("old-1", leaf))
+    store._clock = lambda: 1_500_000
+    store.save(MongoAsOfBranch("old-2", leaf))
+    store._clock = lambda: 3_000_000
+    store.save(MongoAsOfBranch("new", leaf))
+
+    searcher = store.searcher(as_of=2_000_000)
+    branch = searcher.variable(MongoAsOfBranch)
+    searcher.add(branch.leaf.code == "visible")
+    searcher.add_sort(branch.label)
+    searcher.set_limit(1)
+    searcher.add_offset(1)
+    searcher.output(branch, "record")
+
+    assert searcher.count() == 2
+    assert [row[0][0].label for row in searcher] == ["old-2"]
 
 
 def test_mongo_timestamp_layout_guard_and_clock_regression(mongo_test_database):

@@ -307,11 +307,17 @@ class MongoStoredPropertyPlan:
                 yield self.response_row(backing.backing, result[0][0])
 
     def filter_searchers(
-        self, filter_string: str | FilterAst, *, sort: Sequence[tuple[str, bool]] = (), public_id_prefix: str = ""
+        self,
+        filter_string: str | FilterAst,
+        *,
+        sort: Sequence[tuple[str, bool]] = (),
+        public_id_prefix: str = "",
+        as_of: object = None,
     ) -> tuple[MongoSearcher, ...]:
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         return tuple(
-            self._searcher_for(item, ast, sort, public_id_prefix, candidate=False)[0] for item in self._backings
+            self._searcher_for(item, ast, sort, public_id_prefix, candidate=False, as_of=as_of)[0]
+            for item in self._backings
         )
 
     def candidate_searchers(
@@ -320,11 +326,14 @@ class MongoStoredPropertyPlan:
         *,
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
+        as_of: object = None,
     ) -> tuple[MongoStoredPropertyCandidateStream, ...]:
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[MongoStoredPropertyCandidateStream] = []
         for backing, name in zip(self._backings, self.layout.record_names, strict=True):
-            searcher, variable, sorts = self._searcher_for(backing, ast, sort, public_id_prefix, candidate=True)
+            searcher, variable, sorts = self._searcher_for(
+                backing, ast, sort, public_id_prefix, candidate=True, as_of=as_of
+            )
             searcher.output(variable.sid, "sid")
             # ``content_id`` remains canonical: StoredEntryFederation applies
             # its source prefix when it turns a candidate into a public id.
@@ -405,8 +414,9 @@ class MongoStoredPropertyPlan:
         public_id_prefix: str,
         *,
         candidate: bool,
+        as_of: object = None,
     ) -> tuple[MongoSearcher, MongoVariable, tuple[MongoField, ...]]:
-        searcher = self.store.searcher()
+        searcher = self.store.searcher(as_of=as_of)
         variable = searcher.variable(backing.backing)
         context = _MongoQueryContext(backing.backing, self.store)
         if ast is not None:

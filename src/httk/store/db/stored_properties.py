@@ -164,12 +164,12 @@ class _SqlScope:
                     self.alias.c[STORE_TIMESTAMP_COLUMN],
                     scope=self,
                     operand_converter=lambda value: ns_operand_to_store_units(
-                        value, self.context._searcher._store.store_timestamp_resolution
+                        value, cast(int, self.context._searcher._store.store_timestamp_resolution)
                     ),
                     presentation_converter=lambda value: (
                         None
                         if value is None
-                        else cast(int, value) * self.context._searcher._store.store_timestamp_resolution
+                        else cast(int, value) * cast(int, self.context._searcher._store.store_timestamp_resolution)
                     ),
                 ),
             )
@@ -619,16 +619,18 @@ class StoredPropertySqlPlan:
         *,
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
+        as_of: object = None,
     ) -> tuple[SqlSearcher, ...]:
         """Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list.
 
         :param filter_string: The OPTIMADE filter or parsed filter tree.
         :param sort: The property sort keys and directions.
         :param public_id_prefix: The prefix used when filtering or sorting ids.
+        :param as_of: Optional historic cutoff in canonical timestamp form.
         :return: One searcher for each configured backing.
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
-        return tuple(self._filter_searcher(backing, ast, sort, public_id_prefix) for backing in self._backings)
+        return tuple(self._filter_searcher(backing, ast, sort, public_id_prefix, as_of) for backing in self._backings)
 
     def candidate_searchers(
         self,
@@ -636,6 +638,7 @@ class StoredPropertySqlPlan:
         *,
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
+        as_of: object = None,
     ) -> tuple[StoredPropertySqlCandidateStream, ...]:
         """Return ID-only concrete streams for a bounded federated page.
 
@@ -647,12 +650,13 @@ class StoredPropertySqlPlan:
         :param filter_string: The OPTIMADE filter, parsed filter tree, or no filter.
         :param sort: The property sort keys and directions.
         :param public_id_prefix: The prefix used when filtering or sorting ids.
+        :param as_of: Optional historic cutoff in canonical timestamp form.
         :return: One candidate stream for each configured backing.
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[StoredPropertySqlCandidateStream] = []
         for backing, backing_name in zip(self._backings, self.layout.record_names, strict=True):
-            searcher, variable, sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix)
+            searcher, variable, sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix, as_of)
             searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
             searcher.output(SqlColumn(searcher, variable._alias.c[CONTENT_ID_COLUMN]), "content_id")
             for index, value in enumerate(sort_values):
@@ -719,7 +723,9 @@ class StoredPropertySqlPlan:
                             value = connection.execute(
                                 sqlalchemy.select(table.c[STORE_TIMESTAMP_COLUMN]).where(table.c[SID_COLUMN] == sid)
                             ).scalar_one_or_none()
-                        row[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
+                        row[name] = (
+                            None if value is None else int(value) * cast(int, self.store.store_timestamp_resolution)
+                        )
                 continue
             projection = configured.projections.get(name)
             row[name] = None if projection is None else _response_json_value(projection.response(record))
@@ -741,8 +747,9 @@ class StoredPropertySqlPlan:
         ast: FilterAst,
         sort: Sequence[tuple[str, bool]],
         public_id_prefix: str,
+        as_of: object,
     ) -> SqlSearcher:
-        searcher, variable, _sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix)
+        searcher, variable, _sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix, as_of)
         searcher.output(variable, "record")
         return searcher
 
@@ -752,8 +759,9 @@ class StoredPropertySqlPlan:
         ast: FilterAst | None,
         sort: Sequence[tuple[str, bool]],
         public_id_prefix: str,
+        as_of: object,
     ) -> tuple[SqlSearcher, SqlVariable, tuple[_SqlValue, ...]]:
-        searcher = self.store.searcher()
+        searcher = self.store.searcher(as_of=as_of)
         variable = searcher.variable(backing.backing)
         context = _SqlQueryContext(searcher, variable)
         if ast is None:

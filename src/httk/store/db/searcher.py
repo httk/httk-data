@@ -635,10 +635,12 @@ class SqlVariable:
                 self._alias.c[STORE_TIMESTAMP_COLUMN],
                 variable=self,
                 operand_converter=lambda value: ns_operand_to_store_units(
-                    value, self._searcher._store.store_timestamp_resolution
+                    value, cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
                 presentation_converter=lambda value: (
-                    None if value is None else value * self._searcher._store.store_timestamp_resolution
+                    None
+                    if value is None
+                    else cast(int, value) * cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
             )
         for spec in self._schema.fields:
@@ -708,6 +710,8 @@ class SqlVariable:
             sub = SqlVariable(self._searcher, spec.target, target_schema, alias)
             self._reference_variables[spec.field] = sub
             self._joins.append((alias, onclause, sub))
+            if self._searcher._as_of is not None:
+                self._searcher.add(cast(SqlColumn, sub.store_timestamp) <= self._searcher._as_of)
         return sub
 
     def _flat_joins(self) -> Iterator[tuple[sqlalchemy.FromClause, sqlalchemy.ColumnElement[bool]]]:
@@ -746,10 +750,16 @@ class SqlSearcher:
     returns the number of matches, disregarding any limit and offset.
 
     :param store: The SQL store whose tables and connection serve the query.
+    :param as_of: Optional historic cutoff in canonical timestamp form.
+
+    An historic cutoff is injected for every root and reference variable;
+    visible rows' dependencies are always visible because references only point
+    at earlier-or-equal rows from the same transaction.
     """
 
-    def __init__(self, store: "SqlStore") -> None:
+    def __init__(self, store: "SqlStore", *, as_of: object = None) -> None:
         self._store = store
+        self._as_of = as_of
         self._variables: list[SqlVariable] = []
         self._where: list[SqlExpression] = []
         self._having: list[SqlExpression] = []
@@ -775,6 +785,8 @@ class SqlSearcher:
         alias = self._store._table(schema.table_name).alias()
         variable = SqlVariable(self, target, schema, alias)
         self._variables.append(variable)
+        if self._as_of is not None:
+            self.add(cast(SqlColumn, variable.store_timestamp) <= self._as_of)
         return variable
 
     def output(self, variable: "SqlVariable | SqlColumn", name: str) -> None:
@@ -976,7 +988,7 @@ class SqlSearcher:
             # DuckDB connection carries only one active result set, so streaming
             # the outer cursor across a nested fetch silently truncates it after
             # the first row. (Under SQLite it merely worked by accident.)
-            rows = connection.execute(statement).fetchall()
+            rows: Any = connection.execute(statement).fetchall()
         if self._store._database.engine.dialect.name == "clickhousedb":
             from httk.store.db.clickhouse import normalize_clickhouse_value
 
