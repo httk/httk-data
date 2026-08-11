@@ -46,6 +46,7 @@ from .entry_providers import (
     RunEntryProvider,
     product_relationships,
 )
+from .export import export_dataset
 from .federated_store import (
     FederatedResultSet,
     FederatedSearcher,
@@ -118,6 +119,7 @@ __all__ = [
     "Searcher",
     "Store",
     "UnsupportedQueryError",
+    "export_dataset",
     "filter_searcher",
     "portable_query_capabilities",
     "portable_query_fields",
