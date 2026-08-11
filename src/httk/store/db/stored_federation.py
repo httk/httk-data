@@ -152,6 +152,7 @@ class _Candidate:
     sid: int
     content_id: str
     sort_values: tuple[Any, ...]
+    store_timestamp: int | None = None
 
     @property
     def public_id(self) -> str:
@@ -477,7 +478,12 @@ class StoredEntryFederation:
     def _row(candidate: _Candidate) -> Mapping[str, Any]:
         source = candidate.stream.source
         record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid)
-        row = source.plan.response_row(candidate.stream.backing, record, public_id=candidate.public_id)
+        row = source.plan.response_row(
+            candidate.stream.backing,
+            record,
+            public_id=candidate.public_id,
+            store_timestamp=candidate.store_timestamp,
+        )
         return MappingProxyType(dict(row))
 
 
@@ -524,13 +530,15 @@ class _BatchedCandidateIterator:
 
 def _candidates(stream: _Stream) -> Iterator[_Candidate]:
     for values, _names in stream.candidate_stream.searcher:
-        expected_width = 2 + stream.candidate_stream.sort_count
+        expected_width = 2 + stream.candidate_stream.sort_count + int(stream.candidate_stream.timestamp_output)
         if len(values) != expected_width:
             raise RuntimeError(
                 f"candidate stream {stream.source.source.name}/{stream.backing_name} returned "
                 f"{len(values)} values; expected {expected_width}"
             )
-        yield _Candidate(stream, int(values[0]), str(values[1]), tuple(values[2:]))
+        sort_end = 2 + stream.candidate_stream.sort_count
+        timestamp = values[sort_end] if stream.candidate_stream.timestamp_output else None
+        yield _Candidate(stream, int(values[0]), str(values[1]), tuple(values[2:sort_end]), timestamp)
 
 
 def _next_or_none(iterator: Iterator[_Candidate]) -> _Candidate | None:

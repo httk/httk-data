@@ -82,6 +82,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    STORE_TIMESTAMP_COLUMN,
     backing_dispatch_column_name,
     dispatch_table_for,
     entry_dispatch_table_name,
@@ -100,6 +101,13 @@ from httk.store.store_common import (
     _MetadataPlan,
     reject_cursor_proxy,
 )
+from httk.store.store_timestamp import (
+    StoreClockRegressionError,
+    advance_store_timestamp_mark,
+    capture_store_timestamp,
+    encode_store_timestamp_state,
+    parse_store_timestamp_state,
+)
 
 if TYPE_CHECKING:
     from httk.store.db.bulk import BulkIngest
@@ -114,6 +122,7 @@ __all__ = [
     "EntryDispatchIntegrityError",
     "EntryMetadataConflictError",
     "SqlStore",
+    "StoreClockRegressionError",
 ]
 
 
@@ -147,6 +156,10 @@ class SqlStore:
 
     :param database: The database used for storage.
     :param entry_records: The required entry-family declaration when first opening a database.
+    :param store_timestamps: Whether parent rows carry store-managed timestamps.
+    :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
+    :param allow_clock_regression: Whether to disable the process-local clock guard.
+    :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
     :raises TypeError: If the first open omits ``entry_records``.
     :raises httk.store.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
     """
@@ -162,8 +175,24 @@ class SqlStore:
         database: Database,
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
+        store_timestamps: bool = True,
+        store_timestamp_resolution: int = 1000,
+        allow_clock_regression: bool = False,
+        clock_regression_grace: bool = True,
     ) -> None:
+        if (
+            not isinstance(store_timestamp_resolution, int)
+            or isinstance(store_timestamp_resolution, bool)
+            or store_timestamp_resolution <= 0
+        ):
+            raise ValueError("store_timestamp_resolution must be a positive integer")
         self._database = database
+        self._store_timestamps = store_timestamps
+        self._store_timestamp_resolution = store_timestamp_resolution
+        self._allow_clock_regression = allow_clock_regression
+        self._clock_regression_grace = clock_regression_grace
+        self._clock = time.time_ns
+        self._store_timestamp_mark: int | None = None
         self._backend_facts: BackendFacts | None = None
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
@@ -212,6 +241,20 @@ class SqlStore:
     def write_profile(self) -> Literal["transactional", "degraded", "bulk-fenced"]:
         """Return the persisted permanentization write profile."""
         return self._write_profile
+
+    @property
+    def store_timestamps(self) -> bool:
+        """Whether parent rows carry store-managed timestamps."""
+        return self._store_timestamps
+
+    @property
+    def store_timestamp_resolution(self) -> int:
+        """Return nanoseconds per stored timestamp unit."""
+        return self._store_timestamp_resolution
+
+    @property
+    def _store_timestamp_state(self) -> str:
+        return encode_store_timestamp_state(self._store_timestamps, self._store_timestamp_resolution)
 
     @property
     def _instances(self) -> Any:
@@ -278,7 +321,7 @@ class SqlStore:
         if not objects_before:
             if supplied is None:
                 raise TypeError("entry_records is required when opening an uninitialized database")
-            expected = expected_metadata(supplied)
+            expected = expected_metadata(supplied, store_timestamps=self._store_timestamps)
             metadata_table = expected.tables[METADATA_TABLE_NAME]
             if self.backend_facts.metadata_backend == "keepermap":
                 from httk.store.db.clickhouse import bootstrap_fence, keeper_database_uuid
@@ -315,6 +358,7 @@ class SqlStore:
                 self._initialization_ddl_journal.append(metadata_table)
                 self._stamp_layout(connection, supplied)
             self._install_layout(supplied, expected, names_before | {METADATA_TABLE_NAME})
+            self._initialize_store_timestamp_mark(connection)
             return
 
         schema: dict[str, object] = {METADATA_TABLE_NAME: {"missing": True}}
@@ -357,7 +401,7 @@ class SqlStore:
             validate_metadata_table(connection)
         stored = None
         read_error: ValueError | SQLAlchemyError | None = None
-        visible_metadata_keys = {"protocol", "entry_declaration"}
+        visible_metadata_keys = {"protocol", "entry_declaration", "store_timestamps"}
         if self.backend_facts.metadata_backend == "keepermap":
             visible_metadata_keys.add("write_profile")
         for attempt in range(20 if retry_metadata_visibility else 1):
@@ -435,7 +479,7 @@ class SqlStore:
         stored: Mapping[str, str],
         supplied: StorageLayout | None,
     ) -> None:
-        required_keys = {"protocol", "entry_declaration"}
+        required_keys = {"protocol", "entry_declaration", "store_timestamps"}
         persistent_optional_keys = {"write_profile"}
         recognized_runtime_keys = {"ingest_state", "lease"}
         allowed_keys = required_keys | persistent_optional_keys | recognized_runtime_keys
@@ -455,6 +499,28 @@ class SqlStore:
             }
         if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
             diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
+        persisted_timestamps = stored.get("store_timestamps")
+        parsed_timestamps = parse_store_timestamp_state(persisted_timestamps)
+        effective_timestamps = None if parsed_timestamps is None else parsed_timestamps[0]
+        effective_resolution = None if parsed_timestamps is None else parsed_timestamps[1]
+        if persisted_timestamps not in (None, "off") and parsed_timestamps is None:
+            diff["declaration"] = {
+                "store_timestamps": {
+                    "expected": self._store_timestamp_state,
+                    "actual": persisted_timestamps,
+                }
+            }
+        elif persisted_timestamps is None:
+            diff["declaration"] = {"store_timestamps": {"expected": self._store_timestamp_state, "actual": None}}
+        elif effective_timestamps != self._store_timestamps or (
+            effective_timestamps and effective_resolution != self._store_timestamp_resolution
+        ):
+            diff["declaration"] = {
+                "store_timestamps": {
+                    "expected": self._store_timestamp_state,
+                    "actual": persisted_timestamps,
+                }
+            }
         persisted_profile = stored.get("write_profile", "transactional")
         if persisted_profile not in {"transactional", "degraded", "bulk-fenced"}:
             diff["declaration"] = {"write_profile": {"actual": persisted_profile}}
@@ -510,7 +576,12 @@ class SqlStore:
                 }
         if object_problems:
             raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
-        self._install_layout(persisted, expected_metadata(persisted), names_before)
+        self._install_layout(
+            persisted,
+            expected_metadata(persisted, store_timestamps=self._store_timestamps),
+            names_before,
+        )
+        self._initialize_store_timestamp_mark(connection)
 
     @staticmethod
     def _layout_from_stored_declaration(value: str | None) -> StorageLayout:
@@ -533,6 +604,7 @@ class SqlStore:
         rows = {
             "protocol": STORAGE_PROTOCOL_VERSION,
             "entry_declaration": declaration_json(layout),
+            "store_timestamps": self._store_timestamp_state,
         }
         if self._write_profile != "transactional":
             rows["write_profile"] = self._write_profile
@@ -545,6 +617,50 @@ class SqlStore:
             sqlalchemy.insert(table),
             tuple({"key": key, "value": value} for key, value in rows.items()),
         )
+
+    def _initialize_store_timestamp_mark(self, connection: sqlalchemy.Connection) -> None:
+        """Derive the writable process-local timestamp mark from present parent tables."""
+        if not self._store_timestamps or self._allow_clock_regression:
+            self._store_timestamp_mark = None
+            return
+        maximum: int | None = None
+        tables: dict[str, sqlalchemy.Table] = dict(self._metadata.tables)
+        reflection_metadata = sqlalchemy.MetaData()
+        durable_tables = actual_table_names(connection)
+        for name in durable_tables - tables.keys():
+            if name.startswith("_httk_"):
+                continue
+            try:
+                tables[name] = sqlalchemy.Table(name, reflection_metadata, autoload_with=connection)
+            except SQLAlchemyError:
+                continue
+        for name, table in tables.items():
+            if name not in durable_tables or STORE_TIMESTAMP_COLUMN not in table.c or ROLE_COLUMN not in table.c:
+                continue
+            value = connection.execute(
+                sqlalchemy.select(sqlalchemy.func.max(table.c[STORE_TIMESTAMP_COLUMN]))
+            ).scalar_one()
+            if value is not None:
+                maximum = int(value) if maximum is None else max(maximum, int(value))
+        self._store_timestamp_mark = maximum
+
+    def _capture_store_timestamp(self, connection: sqlalchemy.Connection) -> int | None:
+        """Capture one guarded store-unit timestamp for a save or ingest batch."""
+        if not self._store_timestamps:
+            return None
+        return capture_store_timestamp(
+            self._clock,
+            self._store_timestamp_resolution,
+            self._store_timestamp_mark,
+            allow_clock_regression=self._allow_clock_regression,
+            clock_regression_grace=self._clock_regression_grace,
+        )
+
+    def _advance_store_timestamp_mark(self, captured: int | None) -> None:
+        if captured is not None and not self._allow_clock_regression:
+            self._store_timestamp_mark = advance_store_timestamp_mark(
+                self._store_timestamp_mark, captured, allow_clock_regression=self._allow_clock_regression
+            )
 
     def _install_layout(
         self,
@@ -657,6 +773,7 @@ class SqlStore:
             empty ingest outside the store and finalizes it at context exit; ``"auto"`` selects deferred only for a
             physically empty, supported serial ingest and otherwise selects parity (including ``workers>1``). A
             subclass may override :attr:`bulk_ingest_finalize_default` for ``"auto"`` calls.
+        :param track_sids: Whether to retain provisional-to-durable sid mappings.
         :return: A bulk-ingest context manager bound to this store.
         """
         from httk.store.db.bulk import BulkIngest
@@ -700,21 +817,32 @@ class SqlStore:
             yield
             return
         pending = self._pending_table_names()
+        timestamp_state = {"initialized": False, "captured": None}
         try:
-            with self._mutation_lock, self._database.engine.begin() as connection:
-                self._ensure_degraded_lease(connection)
-                stack.append(connection)
-                try:
-                    yield
-                finally:
-                    stack.pop()
-            self._tables_present.update(pending)
+            with self._mutation_lock:
+                with self._database.engine.begin() as connection:
+                    self._ensure_degraded_lease(connection)
+                    stack.append(connection)
+                    try:
+                        self._local.store_timestamp_transaction = timestamp_state
+                        try:
+                            yield
+                        except BaseException:
+                            if self._write_profile == "degraded":
+                                self._initialize_store_timestamp_mark(connection)
+                            raise
+                    finally:
+                        self._local.store_timestamp_transaction = None
+                        stack.pop()
+                self._advance_store_timestamp_mark(timestamp_state["captured"])
+                self._tables_present.update(pending)
         except BaseException:
             pending.clear()
             self._tables_present.clear()
             self._clear_identity_caches()
             raise
         finally:
+            self._local.store_timestamp_transaction = None
             pending.clear()
 
     def _connection_stack(self) -> list[sqlalchemy.Connection]:
@@ -729,7 +857,11 @@ class SqlStore:
         return stack[-1] if stack else None
 
     @contextlib.contextmanager
-    def _write_connection(self) -> Iterator[sqlalchemy.Connection]:
+    def _write_connection(
+        self,
+        *,
+        _publish_after_commit: Callable[[], None] | None = None,
+    ) -> Iterator[sqlalchemy.Connection]:
         current = self._current_connection()
         if current is not None:
             with self._mutation_lock, self._degraded_lifecycle_guard():
@@ -742,17 +874,21 @@ class SqlStore:
             return
         pending = self._pending_table_names()
         try:
-            with self._mutation_lock, self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
-                self._ensure_degraded_lease(connection)
-                started = self._begin_degraded_operation()
-                stack = self._connection_stack()
-                stack.append(connection)
-                try:
-                    yield connection
-                finally:
-                    stack.pop()
-                    self._end_degraded_operation(connection, started)
-            self._tables_present.update(pending)
+            with self._mutation_lock, self._degraded_lifecycle_guard():
+                with self._database.engine.begin() as connection:
+                    self._ensure_degraded_lease(connection)
+                    started = self._begin_degraded_operation()
+                    stack = self._connection_stack()
+                    stack.append(connection)
+                    try:
+                        yield connection
+                    finally:
+                        stack.pop()
+                        self._end_degraded_operation(connection, started)
+                # Local callback, invoked only after Engine.begin() committed.
+                if _publish_after_commit is not None:
+                    _publish_after_commit()
+                self._tables_present.update(pending)
         except BaseException:
             pending.clear()
             self._tables_present.clear()
@@ -1041,13 +1177,13 @@ class SqlStore:
         candidate = sqlalchemy.MetaData()
         requested = tuple(classes)
         for cls in requested:
-            table_for(resolve_schema(cls), candidate)
+            table_for(resolve_schema(cls), candidate, store_timestamps=self._store_timestamps)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, candidate)
+                table_for(schema, candidate, store_timestamps=self._store_timestamps)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), candidate)
         return candidate
@@ -1057,13 +1193,13 @@ class SqlStore:
         self._known_record_types.update(requested)
         candidate = self._candidate_metadata(requested)
         for cls in requested:
-            table_for(resolve_schema(cls), self._metadata)
+            table_for(resolve_schema(cls), self._metadata, store_timestamps=self._store_timestamps)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, self._metadata)
+                table_for(schema, self._metadata, store_timestamps=self._store_timestamps)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), self._metadata)
         return candidate
@@ -1192,13 +1328,27 @@ class SqlStore:
         reject_cursor_proxy(obj)
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection()
-        with self._write_connection() as connection:
+        timestamp_state = getattr(self._local, "store_timestamp_transaction", None)
+        _publish_after_commit = (
+            None
+            if timestamp_state is not None
+            else lambda: self._advance_store_timestamp_mark(projection.store_timestamp)
+        )
+        with self._write_connection(_publish_after_commit=_publish_after_commit) as connection:
             self._create_tables_for_write(connection, (record_type,))
+            if timestamp_state is None:
+                projection.store_timestamp = self._capture_store_timestamp(connection)
+            elif not timestamp_state["initialized"]:
+                projection.store_timestamp = self._capture_store_timestamp(connection)
+                timestamp_state["captured"] = projection.store_timestamp
+                timestamp_state["initialized"] = True
+            else:
+                projection.store_timestamp = timestamp_state["captured"]
             sid = self._save(connection, record_type, obj, projection, "", top_level=True)
             family = self._family_for_backing(record_type)
             if family is not None:
                 self._save_entry_dispatch(connection, family, record_type, sid, projection.content_id(record_type, obj))
-            return sid
+        return sid
 
     def _save(
         self,
@@ -1295,6 +1445,8 @@ class SqlStore:
             sid = self._allocate_degraded_sid(connection, table.name)
             values[SID_COLUMN] = sid
             values[ROLE_COLUMN] = int(top_level)
+            if projection.store_timestamp is not None:
+                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
             if key is not None:
                 values[CONTENT_ID_COLUMN] = key
             for spec in schema.fields:
@@ -1317,6 +1469,8 @@ class SqlStore:
         if key is not None:
             values[CONTENT_ID_COLUMN] = key
             values[ROLE_COLUMN] = int(top_level)
+            if projection.store_timestamp is not None:
+                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
             sid, inserted = self._insert_content_row(connection, table, values, key)
             if not inserted:
                 self._discard_inserted(connection, projection, checkpoint)
@@ -1331,6 +1485,8 @@ class SqlStore:
                 return sid
         else:
             values[ROLE_COLUMN] = int(top_level)
+            if projection.store_timestamp is not None:
+                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
             insert = sqlalchemy.insert(table).values(values) if values else sqlalchemy.insert(table)
             result = connection.execute(insert)
             sid = int(cast(Any, result.inserted_primary_key)[0])
@@ -1597,6 +1753,7 @@ class SqlStore:
         repair: bool = True,
         collect_garbage: bool = True,
         repair_conflicts: bool = False,
+        clamp_future_timestamps: bool = False,
         known_types: tuple[type, ...] = (),
         exclusive: bool = False,
     ) -> Any:
@@ -1614,6 +1771,7 @@ class SqlStore:
             repair=repair,
             collect_garbage=collect_garbage,
             repair_conflicts=repair_conflicts,
+            clamp_future_timestamps=clamp_future_timestamps,
             known_types=known_types,
             exclusive=exclusive,
         )

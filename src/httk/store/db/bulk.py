@@ -113,6 +113,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    STORE_TIMESTAMP_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
@@ -243,6 +244,7 @@ class BulkIngest:
         self._requested_finalize = finalize
         self._track_sids = track_sids
         self._finalize_profile = "parity"
+        self._store_timestamp: int | None = None
         self._deferred = False
         # Parallel-mode state (unused on the serial path).
         self._controller: Any = None
@@ -355,6 +357,7 @@ class BulkIngest:
                 preexisting = self._scan_store(probe)
                 self._entry_catalog = self._catalog_snapshot(probe)
                 physically_empty = self._physically_empty(probe, preexisting)
+                self._store_timestamp = store._capture_store_timestamp(probe)
             self._preexisting = preexisting
             self._select_finalize_profile()
             store._check_mutation_policy(
@@ -530,6 +533,7 @@ class BulkIngest:
             chunk_size=self._chunk_size,
             backend=("parquet" if self._store.backend_facts.parallel_shard_format == "parquet" else backend),
             track_sids=self._track_sids,
+            store_timestamp=self._store_timestamp,
             spill_deferred_auxiliary=(self._deferred and self._store.backend_facts.parallel_shard_format == "parquet"),
         )
         self._controller.start()
@@ -604,6 +608,7 @@ class BulkIngest:
                     self._release_connection(connection)
                     self._clear_ingest_marker()
                     store._tables_present.update(self._created)
+                    store._advance_store_timestamp_mark(self._store_timestamp)
                     self._final_sids_ready = True
                     return
                 self._release_connection(connection)
@@ -631,6 +636,7 @@ class BulkIngest:
                 self._release_connection(connection)
                 self._clear_ingest_marker()
                 store._tables_present.update(self._created)
+                store._advance_store_timestamp_mark(self._store_timestamp)
                 self._final_sids_ready = True
                 return
             transaction.rollback()
@@ -895,7 +901,7 @@ class BulkIngest:
         if self._deferred:
             return self._deferred_serial_save(obj, as_record)
         record_type = resolve_storage_record(obj, as_record=as_record)
-        projection = SaveProjection()
+        projection = SaveProjection(store_timestamp=self._store_timestamp)
         sid = self._encode(record_type, obj, projection, "")
         self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
         table_name = resolve_schema(record_type).table_name
@@ -936,6 +942,7 @@ class BulkIngest:
                 shard_dir=temp.name,
                 backend=stage_backend,
                 track_sids=self._track_sids,
+                store_timestamp=self._store_timestamp,
                 spill_deferred_auxiliary=(self._deferred and stage_format == "parquet"),
             )
             self._serial_stage = _SerialDeferredStage(temp, _WorkerEncoder(self._store, 0, config))
@@ -979,7 +986,7 @@ class BulkIngest:
         occurrence for the eventual fixpoint and conflict scan.
         """
         schema = resolve_schema(record_type)
-        projection = SaveProjection()
+        projection = SaveProjection(store_timestamp=self._store_timestamp)
         projected = projection.projector(record_type, obj)
 
         def reference_key(target: type, value: Any, _path: str) -> str:
@@ -1148,6 +1155,8 @@ class BulkIngest:
         sid = self._next_sid[table_name]
         self._next_sid[table_name] = sid + 1
         row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
+        if projection.store_timestamp is not None:
+            row[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             self._content_index[table_name][key] = sid
@@ -1982,7 +1991,11 @@ class BulkIngest:
         assert self._connection is not None
         stage = self._create_stage(table, rows)
         try:
-            value_columns = [column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN)]
+            value_columns = [
+                column.name
+                for column in table.columns
+                if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+            ]
             condition = sqlalchemy.and_(*(stage.c[name].is_not_distinct_from(table.c[name]) for name in value_columns))
             statement = (
                 sqlalchemy.select(stage.c[SID_COLUMN], sqlalchemy.func.min(table.c[SID_COLUMN]))
@@ -2322,4 +2335,10 @@ class BulkIngest:
 
 def _value_tuple(row: Mapping[str, Any]) -> tuple[Any, ...]:
     """The whole-parent-column dedup key of a by_value row (its sid excluded)."""
-    return tuple(sorted((name, value) for name, value in row.items() if name not in (SID_COLUMN, ROLE_COLUMN)))
+    return tuple(
+        sorted(
+            (name, value)
+            for name, value in row.items()
+            if name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+        )
+    )

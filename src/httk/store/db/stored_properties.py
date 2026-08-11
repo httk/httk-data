@@ -43,7 +43,7 @@ from sqlalchemy.sql.selectable import Exists, ScalarSelect
 from sqlalchemy.sql.visitors import replacement_traverse
 
 from httk.store.db.codecs import ValueCodec, codec_named
-from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN
+from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.db.rows import RowHydrator
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
@@ -55,6 +55,7 @@ from httk.store.query.optimade_filters import (
     constant_stringmatching_handler,
     translate_filter_ast,
 )
+from httk.store.store_timestamp import ns_operand_to_store_units
 
 __all__ = [
     "StoredPropertySqlCandidateStream",
@@ -87,6 +88,8 @@ class _SqlValue:
     scope: "_SqlScope | None" = None
     literal: object = _NO_LITERAL
     correlation_depth: int = 0
+    operand_converter: Callable[[object], object] | None = None
+    presentation_converter: Callable[[object], object] | None = None
 
     @property
     def exact(self) -> sqlalchemy.ColumnElement[Any]:
@@ -148,6 +151,28 @@ class _SqlScope:
     condition_depth: int = 0
 
     def field(self, name: str) -> _SqlValue:
+        if name == STORE_TIMESTAMP_COLUMN:
+            if not self.context._searcher._store.store_timestamps:
+                raise StoredPropertySqlConfigurationError(
+                    "store_timestamp queries require SqlStore(store_timestamps=True)"
+                )
+            if self.scalar_child is not None:
+                raise StoredPropertySqlConfigurationError("store_timestamp is only available on parent scopes")
+            return self.context._scoped_scalar(
+                self,
+                _SqlValue(
+                    self.alias.c[STORE_TIMESTAMP_COLUMN],
+                    scope=self,
+                    operand_converter=lambda value: ns_operand_to_store_units(
+                        value, self.context._searcher._store.store_timestamp_resolution
+                    ),
+                    presentation_converter=lambda value: (
+                        None
+                        if value is None
+                        else cast(int, value) * self.context._searcher._store.store_timestamp_resolution
+                    ),
+                ),
+            )
         if self.scalar_child is not None:
             if name not in {"value", self.scalar_child.field}:
                 raise StoredPropertySqlConfigurationError(
@@ -225,6 +250,7 @@ class _SqlQueryContext:
         return _SqlPredicate(sqlalchemy.false())
 
     def compare(self, left: _SqlValue, operator: str, right: _SqlValue) -> _SqlPredicate:
+        left, right = _timestamp_literals(left, right)
         left_value, right_value = _codec_literals(_value(left), _value(right))
         if operator == "=":
             return self.equal(left_value, right_value)
@@ -435,6 +461,8 @@ class _SqlQueryContext:
             exact_element=None if value.exact_element is None else select_scalar(value.exact_element),
             codec=value.codec,
             literal=value.literal,
+            operand_converter=value.operand_converter,
+            presentation_converter=value.presentation_converter,
             correlation_depth=scope.correlation_depth,
         )
 
@@ -528,12 +556,14 @@ class StoredPropertySqlCandidateStream:
     :param backing_name: The stable persisted name of the backing.
     :param searcher: The SQL searcher yielding the candidate projections.
     :param sort_count: The number of requested sort projections in each row.
+    :param timestamp_output: Whether each row ends with a canonical timestamp value.
     """
 
     backing: type
     backing_name: str
     searcher: SqlSearcher
     sort_count: int
+    timestamp_output: bool = False
 
 
 class StoredPropertySqlPlan:
@@ -626,8 +656,26 @@ class StoredPropertySqlPlan:
             searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
             searcher.output(SqlColumn(searcher, variable._alias.c[CONTENT_ID_COLUMN]), "content_id")
             for index, value in enumerate(sort_values):
-                searcher.output(SqlColumn(searcher, value.element), f"sort_{index}")
-            streams.append(StoredPropertySqlCandidateStream(backing.backing, backing_name, searcher, len(sort_values)))
+                searcher.output(
+                    SqlColumn(
+                        searcher,
+                        value.element,
+                        presentation_converter=value.presentation_converter,
+                    ),
+                    f"sort_{index}",
+                )
+            timestamp_output = self.store.store_timestamps
+            if timestamp_output:
+                searcher.output(cast(SqlColumn, variable.store_timestamp), "store_timestamp")
+            streams.append(
+                StoredPropertySqlCandidateStream(
+                    backing.backing,
+                    backing_name,
+                    searcher,
+                    len(sort_values),
+                    timestamp_output,
+                )
+            )
         return tuple(streams)
 
     def response_row(
@@ -636,12 +684,14 @@ class StoredPropertySqlPlan:
         record: object,
         *,
         public_id: str | None = None,
+        store_timestamp: int | None = None,
     ) -> Mapping[str, Any]:
         """Render one hydrated backing record at the protocol boundary.
 
         :param backing: The configured concrete class of ``record``.
         :param record: The hydrated backing record to project.
         :param public_id: The public id to use, or the record's canonical id when omitted.
+        :param store_timestamp: An already-normalized timestamp from a candidate stream, when available.
         :return: The protocol-boundary response row.
         :raises StoredPropertySqlConfigurationError: If ``backing`` is not configured for the family.
         """
@@ -653,6 +703,23 @@ class StoredPropertySqlPlan:
         row: dict[str, Any] = {"id": content_id(record) if public_id is None else public_id, "type": self.entry_type}
         for name in self.definition.properties:
             if name in _CORE_PROPERTIES:
+                continue
+            if name == "_httk_store_timestamp":
+                if not self.store.store_timestamps:
+                    row[name] = None
+                else:
+                    sid = self.store.sid_of(record, as_record=backing)
+                    if sid is None:
+                        row[name] = None
+                    elif store_timestamp is not None:
+                        row[name] = store_timestamp
+                    else:
+                        table = self.store._table(resolve_schema(backing).table_name)
+                        with self.store._read_connection() as connection:
+                            value = connection.execute(
+                                sqlalchemy.select(table.c[STORE_TIMESTAMP_COLUMN]).where(table.c[SID_COLUMN] == sid)
+                            ).scalar_one_or_none()
+                        row[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
                 continue
             projection = configured.projections.get(name)
             row[name] = None if projection is None else _response_json_value(projection.response(record))
@@ -1006,6 +1073,23 @@ def _codec_literals(left: _SqlValue, right: _SqlValue) -> tuple[_SqlValue, _SqlV
         right = _codec_literal(right, left.codec, left.exact_element is not None)
     elif right.codec is not None and left.literal is not _NO_LITERAL:
         left = _codec_literal(left, right.codec, right.exact_element is not None)
+    return left, right
+
+
+def _timestamp_literals(left: _SqlValue, right: _SqlValue) -> tuple[_SqlValue, _SqlValue]:
+    """Convert a literal beside the store timestamp into store units."""
+    if left.operand_converter is not None and right.literal is not _NO_LITERAL:
+        right = dataclasses.replace(
+            right,
+            element=sqlalchemy.literal(left.operand_converter(right.literal)),
+            literal=_NO_LITERAL,
+        )
+    elif right.operand_converter is not None and left.literal is not _NO_LITERAL:
+        left = dataclasses.replace(
+            left,
+            element=sqlalchemy.literal(right.operand_converter(left.literal)),
+            literal=_NO_LITERAL,
+        )
     return left, right
 
 

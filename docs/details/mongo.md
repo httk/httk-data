@@ -111,6 +111,69 @@ degraded mode the backing is written first, so a crash can temporarily make
 `fetch_entry()` report dispatch integrity failure; re-saving the record or
 running fsck repairs the main-role case.
 
+## Store timestamps
+
+`MongoStore` enables store-managed timestamps by default:
+
+```python
+store = MongoStore(
+    database,
+    entry_records={},
+    store_timestamps=True,
+    store_timestamp_resolution=1_000,  # nanoseconds per stored unit; default: 1,000 (microseconds)
+)
+```
+
+The stored value is `time.time_ns() // store_timestamp_resolution`. The public
+query API accepts a canonical nanosecond integer or an RFC3339/ISO-8601
+timezone-aware value and converts it to the store's units. For example, this
+historic query returns rows present at `T`:
+
+```python
+searcher = store.searcher()
+record = searcher.variable(StructureRecord)
+searcher.output(record, "record")
+searcher.add(record.store_timestamp <= "2026-01-01T00:00:00Z")
+rows = searcher.results(record=record)
+```
+
+The equivalent OPTIMADE filter is:
+
+```python
+from httk.store.mongo import optimade_filter_searcher
+
+rows = optimade_filter_searcher(
+    store, StructureRecord, '_httk_store_timestamp <= "2026-01-01T00:00:00Z"'
+)
+```
+
+`present at time T` means exactly `store_timestamp <= T`. FIRST-STORED-WINS
+applies: a deduplication re-save does not replace the original timestamp, and
+promoting a dependency to a main row does not replace it. One timestamp is
+captured per save transaction and one per bulk batch, so all rows written by
+that unit share its value.
+
+Before capture, the writer checks a process-local high-water mark. A clock
+regression smaller than 1 ms waits briefly when `clock_regression_grace=True`
+(the default); larger regressions, or a failed grace wait, raise
+`StoreClockRegressionError`. Set `clock_regression_grace=False` to skip the
+wait, or `allow_clock_regression=True` to disable the guard. The mark is
+per-process: reopening seeds it from stored rows, but it is not a cross-process
+clock-coordination protocol.
+
+`store.fsck()` checks for timestamps beyond the current clock plus the allowed
+future slack. An administrative repair can clamp them:
+
+```python
+store.fsck(repair=True, clamp_future_timestamps=True, known_types=(StructureRecord,))
+```
+
+Clamping is destructive to historic-query fidelity; inspect a non-repair fsck
+report and confirm the skew before using it.
+
+Follow-ups are a serve-level as-of parameter, a per-source federation cutoff,
+and an enable/disable migration for existing layouts.
+
 ## Roles, leases, and fsck
 
 Every Mongo record document has a store-managed role:

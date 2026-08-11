@@ -166,14 +166,14 @@ def _layout_from_declaration(value: str) -> StorageLayout:
     return layout
 
 
-def expected_metadata(layout: StorageLayout) -> sqlalchemy.MetaData:
+def expected_metadata(layout: StorageLayout, *, store_timestamps: bool = True) -> sqlalchemy.MetaData:
     """Return SQLAlchemy metadata for all protocol-owned tables of ``layout``."""
     metadata = sqlalchemy.MetaData()
     metadata_table_for(metadata)
     for family in layout.families:
         schemas = tuple(resolve_schema(record) for record in family.records)
         for schema in schemas:
-            table_for(schema, metadata)
+            table_for(schema, metadata, store_timestamps=store_timestamps)
         if len(schemas) > 1:
             dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), metadata)
     return metadata

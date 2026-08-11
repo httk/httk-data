@@ -68,7 +68,8 @@ class EntryDispatchIntegrityError(RuntimeError):
 class SaveProjection:
     """One-save projection cache shared by core identity and SQL encoding."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, store_timestamp: int | None = None) -> None:
+        self.store_timestamp = store_timestamp
         self.values_by_source: dict[tuple[type, int], Mapping[str, object]] = {}
         self.validated: set[tuple[type, int]] = set()
         self.metadata_rows: dict[tuple[type, int], Mapping[str, Any]] = {}

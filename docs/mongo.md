@@ -22,6 +22,12 @@ Choose `MongoStore` when MongoDB is already your operational data service or
 document-shaped records fit; choose `SqlStore` for relational deployments and
 SQL's stronger transaction model.
 
+Store timestamps are enabled by default. They support historic predicates such
+as `store_timestamp <= T`; configure their unit size with
+`store_timestamp_resolution` (default: microseconds, `time_ns() // 1000`).
+The [detailed guide](details/mongo.md#store-timestamps) covers the query
+syntax, deduplication semantics, clock guard, and fsck repair behavior.
+
 The full guide, {doc}`details/mongo`, covers the document mapping, query
 translation, continuation paging, replica-set requirements, and the documented
 differences from the SQL backend.

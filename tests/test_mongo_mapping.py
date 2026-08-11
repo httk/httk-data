@@ -112,3 +112,16 @@ def test_validator_requires_non_optional_fields_and_child_channels() -> None:
     exact = next(column.name for column in child_columns if column.name.endswith("_exact"))
     query = next(column.name for column in child_columns if column.name != exact)
     assert item["dependencies"][query] == [exact]
+
+
+def test_timestamp_mapping_is_flagged_and_accepts_small_python_ints() -> None:
+    """Timestamp validators accept PyMongo's int32 encoding for tiny test clocks."""
+    schema = resolve_schema(MongoMappingRecord)
+    enabled = validator_for(schema, store_timestamps=True)["$jsonSchema"]
+    disabled = validator_for(schema, store_timestamps=False)["$jsonSchema"]
+    assert enabled["properties"]["store_timestamp"]["bsonType"] == ["long", "int"]
+    assert "store_timestamp" in enabled["required"]
+    assert "store_timestamp" not in disabled["properties"]
+    assert "store_timestamp" not in disabled["required"]
+    assert any(spec.keys == (("store_timestamp", 1),) for spec in index_specs_for(schema))
+    assert not any(spec.keys == (("store_timestamp", 1),) for spec in index_specs_for(schema, store_timestamps=False))

@@ -44,12 +44,19 @@ register_entry_record(
 )
 
 
-def test_first_open_stamps_five_keys_and_reopen_trusts(mongo_test_database) -> None:
+def test_first_open_stamps_six_keys_and_reopen_trusts(mongo_test_database) -> None:
     """The single layout document is canonical and byte-stable."""
     store = MongoStore(mongo_test_database, entry_records={})
     document = mongo_test_database.database[METADATA_COLLECTION].find_one({"_id": "layout"})
     assert document is not None
-    assert set(document) == {"_id", "protocol", "entry_declaration", "document_layout", "generation"}
+    assert set(document) == {
+        "_id",
+        "protocol",
+        "entry_declaration",
+        "document_layout",
+        "generation",
+        "store_timestamps",
+    }
     assert document["protocol"] == "v2.1.0"
     assert document["document_layout"] == "mongo-v2"
     assert MongoStore(mongo_test_database).layout == store.layout

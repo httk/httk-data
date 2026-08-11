@@ -205,10 +205,11 @@ def _make_index(
     )
 
 
-def index_specs_for(schema: TableSchema) -> list[IndexSpec]:
+def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> list[IndexSpec]:
     """Derive all record-collection indexes from the schema IR.
 
     :param schema: Resolved storable schema.
+    :param store_timestamps: Whether to index the store-managed timestamp.
     :return: Deterministically ordered index specifications.
     """
     collection = collection_name_for(schema)
@@ -221,6 +222,13 @@ def index_specs_for(schema: TableSchema) -> list[IndexSpec]:
             _index_name("ix", collection, ("_httk_role",)),
         )
     )
+    if store_timestamps:
+        result.append(
+            IndexSpec(
+                (("store_timestamp", 1),),
+                _index_name("ix", collection, ("store_timestamp",)),
+            )
+        )
     for field in schema.fields:
         if field.role == "child":
             continue
@@ -284,10 +292,11 @@ def _field_validator(spec: FieldSpec) -> tuple[dict[str, Any], dict[str, list[st
     return properties, dependencies, required
 
 
-def validator_for(schema: TableSchema) -> dict[str, Any]:
+def validator_for(schema: TableSchema, *, store_timestamps: bool = True) -> dict[str, Any]:
     """Build the writer-owned ``$jsonSchema`` validator for a record collection.
 
     :param schema: Resolved storable schema.
+    :param store_timestamps: Whether parent documents require a timestamp.
     :return: A MongoDB collection validator command fragment.
     """
     collection_name_for(schema)
@@ -297,6 +306,9 @@ def validator_for(schema: TableSchema) -> dict[str, Any]:
         "f": {"bsonType": "object", "additionalProperties": True},
     }
     required = ["_id", "_httk_role", "f"]
+    if store_timestamps:
+        properties["store_timestamp"] = {"bsonType": ["long", "int"]}
+        required.append("store_timestamp")
     if schema.dedup == "content_id":
         properties["content_id"] = {"bsonType": "string", "pattern": "^[0-9a-fA-F]{64}$"}
         required.append("content_id")

@@ -367,7 +367,7 @@ class SqlResultSet:
                 return None
             return state._hydrators[index].row(int(value))
         if output.spec is None or output.spec.role == "scalar":
-            return value
+            return output.presentation_converter(value) if output.presentation_converter is not None else value
         offset = len(state._names) + state._extra_offsets[index]
         extras = state._projection_extras[index]
         if output.spec.role == "fixed_array":
@@ -390,7 +390,11 @@ class SqlResultSet:
 
     def _float_at(self, position: int, index: int) -> Any:
         state = self._state()
-        return state._rows[position][index] if state._rows is not None else None
+        if state._rows is None:
+            return None
+        value = state._rows[position][index]
+        output = state._plan._outputs[index]
+        return output.presentation_converter(value) if output.presentation_converter is not None else value
 
     def __iter__(self) -> Iterator[ResultRow]:
         self._ensure()

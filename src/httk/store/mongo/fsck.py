@@ -13,6 +13,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from httk.store.db.schema import TableSchema, resolve_schema
+from httk.store.store_timestamp import FUTURE_TIMESTAMP_SLACK_NS
 
 from .leases import acquire_fsck
 from .mapping import COUNTERS_COLLECTION, METADATA_COLLECTION, collection_name_for, entry_dispatch_table_name
@@ -99,6 +100,44 @@ def _record_repair(counters: dict[str, _Counters], collection: str, message: str
     """Store and report one fsck repair."""
     counters[collection].repaired += 1
     _LOGGER.warning("MongoStore fsck repaired: %s", message, extra={"context": "storage"})
+
+
+def _check_future_timestamps(
+    store: MongoStore,
+    schemas: Mapping[str, TableSchema],
+    counters: dict[str, _Counters],
+    violations: list[str],
+    *,
+    clamp: bool,
+) -> None:
+    """Report parent timestamps beyond the current clock plus checker slack."""
+    if not store.store_timestamps:
+        return
+    now_ns = store._clock()
+    resolution = store.store_timestamp_resolution
+    limit_units = (now_ns + FUTURE_TIMESTAMP_SLACK_NS) // resolution
+    now_units = now_ns // resolution
+    repaired_any = False
+    for name in schemas:
+        collection = store._database.database[name]
+        for document in collection.find({"store_timestamp": {"$gt": limit_units}}, {"_id": 1, "store_timestamp": 1}):
+            counters[name].examined += 1
+            sid = document["_id"]
+            future_ns = int(document["store_timestamp"]) * resolution
+            limit_ns = limit_units * resolution
+            if clamp:
+                collection.update_one({"_id": sid}, {"$set": {"store_timestamp": now_units}})
+                repaired_any = True
+                counters[name].repaired += 1
+                violations.append(
+                    f"collection {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns; "
+                    f"clamped to {now_ns} ns"
+                )
+            else:
+                counters[name].conflicts += 1
+                violations.append(f"collection {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns")
+    if clamp and repaired_any:
+        store._initialize_store_timestamp_mark()
 
 
 def _valid_sid(value: Any) -> bool:
@@ -322,6 +361,7 @@ def run_fsck(
     collect_garbage: bool = True,
     repair_conflicts: bool = False,
     force: bool = False,
+    clamp_future_timestamps: bool = False,
     known_types: tuple[type, ...] = (),
 ) -> FsckSummary:
     """Run the exclusive MongoStore integrity repair and garbage collector.
@@ -331,6 +371,7 @@ def run_fsck(
     :param collect_garbage: Whether unmarked dependency documents are swept.
     :param repair_conflicts: Whether invalid dispatch documents are deleted.
     :param force: Administrative override passed to the fsck lease protocol.
+    :param clamp_future_timestamps: Clamp timestamps beyond the allowed future slack when repairing.
     :param known_types: Record classes needed to attribute ordinary collections
         after reopening a store.
     :return: Immutable per-collection counters and all reported violations.
@@ -355,6 +396,13 @@ def run_fsck(
                 if len(family.records) > 1:
                     counters[entry_dispatch_table_name(family.name)]
             unattributed = _report_unattributed_collections(store, schemas, counters, violations)
+            _check_future_timestamps(
+                store,
+                schemas,
+                counters,
+                violations,
+                clamp=clamp_future_timestamps and repair and not unattributed,
+            )
             if repair:
                 _integrity_pass(store, schemas, counters, violations, repair_conflicts=repair_conflicts, lease=lease)
             marked = _mark(store, schemas, counters, violations, lease=lease)

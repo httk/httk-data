@@ -29,8 +29,10 @@ from httk.core.storage import QueryLiteralError, StoredPropertyProjection, conte
 from httk.store.db.schema import FieldSpec, SchemaError, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.query.optimade_filters import FilterTranslationError, HandlerTable, translate_filter_ast
+from httk.store.store_timestamp import ns_operand_to_store_units
 
 from .evaluator import MongoPredicate, MongoScope, MongoValue, canonical_predicate, evaluate
+from .mapping import collection_name_for
 from .searcher import MongoField, MongoSearcher, MongoVariable
 
 __all__ = [
@@ -53,8 +55,9 @@ class MongoStoredPropertyConfigurationError(ValueError):
 class _MongoQueryContext:
     """Mongo implementation of httk-core's neutral ``QueryContext`` protocol."""
 
-    def __init__(self, backing: type) -> None:
+    def __init__(self, backing: type, store: Any | None = None) -> None:
         self._next_scope = 0
+        self._store = store
         self._root = self._new_scope(resolve_schema(backing))
 
     def _new_scope(
@@ -150,6 +153,14 @@ class _MongoQueryContext:
     def _field(self, scope: MongoScope, name: str) -> MongoValue:
         if name.startswith("__content_id__"):
             return MongoValue("field", scope=scope, field=name)
+        if name == "store_timestamp":
+            if self._store is None or not self._store.store_timestamps:
+                raise MongoStoredPropertyConfigurationError(
+                    "store_timestamp queries require MongoStore(store_timestamps=True)"
+                )
+            if scope.parent is not None:
+                raise MongoStoredPropertyConfigurationError("store_timestamp is only available on parent scopes")
+            return MongoValue("store_timestamp", scope=scope, field=name)
         if scope.scalar_child:
             if scope.relationship is None or name not in {"value", scope.relationship.field}:
                 raise MongoStoredPropertyConfigurationError("scalar child scopes use field('value')")
@@ -192,7 +203,17 @@ class _MongoQueryContext:
 
     @staticmethod
     def _coerce_literals(left: MongoValue, right: MongoValue) -> tuple[MongoValue, MongoValue]:
-        if left.spec is not None and right.kind == "constant":
+        if left.kind == "store_timestamp" and right.kind == "constant" and right.literal is not None:
+            assert left.scope is not None
+            store = left.scope.context._store
+            assert store is not None
+            right = replace(right, literal=ns_operand_to_store_units(right.literal, store.store_timestamp_resolution))
+        elif right.kind == "store_timestamp" and left.kind == "constant" and left.literal is not None:
+            assert right.scope is not None
+            store = right.scope.context._store
+            assert store is not None
+            left = replace(left, literal=ns_operand_to_store_units(left.literal, store.store_timestamp_resolution))
+        elif left.spec is not None and right.kind == "constant":
             right = replace(right, literal=_literal_for(left.spec, right.literal))
         elif right.spec is not None and left.kind == "constant":
             left = replace(left, literal=_literal_for(right.spec, left.literal))
@@ -213,6 +234,7 @@ class MongoStoredPropertyCandidateStream:
     backing_name: str
     searcher: Any
     sort_count: int
+    timestamp_output: bool = False
 
 
 class _ConstantSortSearcher:
@@ -233,13 +255,19 @@ class _ConstantSortSearcher:
         self._searcher.set_limit(limit)
 
     def __iter__(self) -> Iterator[SearchResult]:
-        names = ("sid", "content_id", *(f"sort_{index}" for index in range(len(self._sort))))
         for result in self._searcher:
             values = iter(result.values[2:])
             sort_values = tuple(
                 self._entry_type if name == "type" else next(values) for name, _descending in self._sort
             )
-            yield SearchResult((result.values[0], result.values[1], *sort_values), names)
+            tail = tuple(values)
+            names = (
+                "sid",
+                "content_id",
+                *(f"sort_{index}" for index in range(len(self._sort))),
+                *(("store_timestamp",) if tail else ()),
+            )
+            yield SearchResult((result.values[0], result.values[1], *sort_values, *tail), names)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._searcher, name)
@@ -303,15 +331,43 @@ class MongoStoredPropertyPlan:
             searcher.output(self._public_id_field(variable, ""), "content_id")
             for index, value in enumerate(sorts):
                 searcher.output(value, f"sort_{index}")
+            timestamp_output = self.store.store_timestamps
+            if timestamp_output:
+                searcher.output(cast(MongoField, variable.store_timestamp), "store_timestamp")
             candidate_searcher: Any = (
                 _ConstantSortSearcher(searcher, sort, self.entry_type)
                 if any(sort_name == "type" for sort_name, _descending in sort)
                 else searcher
             )
-            streams.append(MongoStoredPropertyCandidateStream(backing.backing, name, candidate_searcher, len(sort)))
+            streams.append(
+                MongoStoredPropertyCandidateStream(
+                    backing.backing,
+                    name,
+                    candidate_searcher,
+                    len(sort),
+                    timestamp_output,
+                )
+            )
         return tuple(streams)
 
-    def response_row(self, backing: type, record: object, *, public_id: str | None = None) -> Mapping[str, Any]:
+    def response_row(
+        self,
+        backing: type,
+        record: object,
+        *,
+        public_id: str | None = None,
+        store_timestamp: int | None = None,
+    ) -> Mapping[str, Any]:
+        """Render one hydrated backing record at the protocol boundary.
+
+        :param backing: The configured concrete record class.
+        :param record: The hydrated backing record.
+        :param public_id: The public id, or the record's canonical id when omitted.
+        :param store_timestamp: An already-normalized candidate timestamp; otherwise the fallback lookup is used.
+        :return: The protocol response row.
+
+        Candidate/federation rows carry this value; ``records()`` and entry-provider paths may use the fallback lookup.
+        """
         configured = next((item for item in self._backings if item.backing is backing), None)
         if configured is None:
             raise MongoStoredPropertyConfigurationError(
@@ -320,6 +376,23 @@ class MongoStoredPropertyPlan:
         result: dict[str, Any] = {"id": content_id(record) if public_id is None else public_id, "type": self.entry_type}
         for name in self.definition.properties:
             if name not in _CORE_PROPERTIES:
+                if name == "_httk_store_timestamp":
+                    if store_timestamp is not None:
+                        result[name] = store_timestamp
+                    elif not self.store.store_timestamps:
+                        result[name] = None
+                    else:
+                        sid = self.store.sid_of(record, as_record=backing)
+                        found = (
+                            None
+                            if sid is None
+                            else self.store._database.database[collection_name_for(resolve_schema(backing))].find_one(
+                                {"_id": sid}, {"store_timestamp": 1}, **self.store._session_kwargs()
+                            )
+                        )
+                        value = None if found is None else found.get("store_timestamp")
+                        result[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
+                    continue
                 projection = configured.projections.get(name)
                 result[name] = None if projection is None else _response_json_value(projection.response(record))
         return result
@@ -335,7 +408,7 @@ class MongoStoredPropertyPlan:
     ) -> tuple[MongoSearcher, MongoVariable, tuple[MongoField, ...]]:
         searcher = self.store.searcher()
         variable = searcher.variable(backing.backing)
-        context = _MongoQueryContext(backing.backing)
+        context = _MongoQueryContext(backing.backing, self.store)
         if ast is not None:
             try:
                 predicate = translate_filter_ast(
@@ -354,12 +427,29 @@ class MongoStoredPropertyPlan:
             # authority; this cannot drop exact or UNKNOWN-sensitive matches.
             searcher.add(variable.always_true())
             identity = canonical_predicate(predicate)
-            searcher.set_row_verifier(
-                lambda document, p=predicate, cls=backing.backing: (
-                    evaluate(p, self.store.fetch(cls, int(document["_id"]))) is True
-                ),
-                identity,
-            )
+
+            def verify(document: dict[str, Any], p=predicate, cls=backing.backing) -> bool:
+                sid = int(document["_id"])
+                timestamp: dict[str, object] = {}
+
+                def resolve_timestamp() -> object:
+                    if "value" not in timestamp:
+                        found = self.store._database.database[collection_name_for(resolve_schema(cls))].find_one(
+                            {"_id": sid}, {"store_timestamp": 1}, **self.store._session_kwargs()
+                        )
+                        timestamp["value"] = None if found is None else found.get("store_timestamp")
+                    return timestamp["value"]
+
+                return (
+                    evaluate(
+                        p,
+                        self.store.fetch(cls, sid),
+                        store_timestamp_resolver=resolve_timestamp,
+                    )
+                    is True
+                )
+
+            searcher.set_row_verifier(verify, identity)
         elif not candidate:
             searcher.add(variable.always_true())
         sort_fields: list[MongoField] = []

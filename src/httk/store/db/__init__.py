@@ -68,6 +68,7 @@ __all__ = [
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StaleResultError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StorageLayoutUpgradeRequiredError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "StoreClockRegressionError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoreEntryProvider",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "StoreUnderConstructionError",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -89,6 +90,7 @@ _SQL_EXPORTS = {
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
+    "StoreClockRegressionError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",
     "StoreEntryProvider": ".entry_provider",

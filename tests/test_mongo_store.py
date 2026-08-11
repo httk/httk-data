@@ -267,4 +267,4 @@ def test_record_document_shape(mongo_test_database):
     document = mongo_test_database.database[collection_name_for(resolve_schema(MongoRoleDependency))].find_one(
         {"_id": sid}
     )
-    assert set(document) == {"_id", "content_id", "_httk_role", "f"}
+    assert set(document) == {"_id", "content_id", "_httk_role", "store_timestamp", "f"}

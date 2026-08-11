@@ -44,6 +44,7 @@ __all__ = [
     "DISPATCH_CONTENT_ID_COLUMN",
     "ROLE_COLUMN",
     "SID_COLUMN",
+    "STORE_TIMESTAMP_COLUMN",
     "backing_dispatch_column_name",
     "dispatch_table_for",
     "entry_dispatch_table_name",
@@ -59,6 +60,9 @@ CONTENT_ID_COLUMN: Final = "content_id"
 
 ROLE_COLUMN: Final = "_httk_role"
 """The permanentization role of a parent record — ``0`` dependency, ``1`` main."""
+
+STORE_TIMESTAMP_COLUMN: Final = "store_timestamp"
+"""The store-managed integer timestamp on every parent record table."""
 
 DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
 """The content identity primary key of an entry-family dispatch table."""
@@ -78,11 +82,11 @@ _TYPE_FOR_KIND: Final[dict[ScalarKind, type[sqlalchemy.types.TypeEngine[Any]]]] 
 }
 
 
-def sqlalchemy_metadata(schemas: Iterable[TableSchema]) -> sqlalchemy.MetaData:
+def sqlalchemy_metadata(schemas: Iterable[TableSchema], *, store_timestamps: bool = True) -> sqlalchemy.MetaData:
     """A fresh :class:`sqlalchemy.MetaData` holding the tables of ``schemas`` (recursively)."""
     metadata = sqlalchemy.MetaData()
     for schema in schemas:
-        table_for(schema, metadata)
+        table_for(schema, metadata, store_timestamps=store_timestamps)
     return metadata
 
 
@@ -148,7 +152,7 @@ def dispatch_table_for(
     return sqlalchemy.Table(name, metadata, *columns)
 
 
-def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData) -> sqlalchemy.Table:
+def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData, *, store_timestamps: bool = True) -> sqlalchemy.Table:
     """The :class:`sqlalchemy.Table` of ``schema`` within ``metadata``, building it on first use.
 
     Building is idempotent per metadata — if the table is already registered it
@@ -160,12 +164,12 @@ def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData) -> sqlalchemy.
     existing = metadata.tables.get(schema.table_name)
     if existing is not None:
         return existing
-    table = _build_parent_table(schema, metadata)
+    table = _build_parent_table(schema, metadata, store_timestamps=store_timestamps)
     for spec in schema.fields:
         if spec.child is not None:
             _build_child_table(schema, spec, spec.child, metadata)
     for target in schema.referenced_classes():
-        table_for(resolve_schema(target), metadata)
+        table_for(resolve_schema(target), metadata, store_timestamps=store_timestamps)
     return table
 
 
@@ -190,7 +194,9 @@ def _column_index(table_name: str, spec: ColumnSpec) -> sqlalchemy.Index | None:
     return None
 
 
-def _build_parent_table(schema: TableSchema, metadata: sqlalchemy.MetaData) -> sqlalchemy.Table:
+def _build_parent_table(
+    schema: TableSchema, metadata: sqlalchemy.MetaData, *, store_timestamps: bool = True
+) -> sqlalchemy.Table:
     name = schema.table_name
     items: list[Any] = [
         sqlalchemy.Column(
@@ -207,6 +213,9 @@ def _build_parent_table(schema: TableSchema, metadata: sqlalchemy.MetaData) -> s
     items.append(
         sqlalchemy.CheckConstraint(f"{ROLE_COLUMN} IN (0, 1)", name=_index_name("ck", name, (ROLE_COLUMN, "valid")))
     )
+    if store_timestamps:
+        items.append(sqlalchemy.Column(STORE_TIMESTAMP_COLUMN, sqlalchemy.BigInteger, nullable=False))
+        items.append(sqlalchemy.Index(_index_name("ix", name, (STORE_TIMESTAMP_COLUMN,)), STORE_TIMESTAMP_COLUMN))
     if schema.dedup == "content_id":
         items.append(sqlalchemy.Column(CONTENT_ID_COLUMN, sqlalchemy.Text, nullable=False))
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))

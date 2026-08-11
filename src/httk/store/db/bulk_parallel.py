@@ -65,6 +65,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    STORE_TIMESTAMP_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
@@ -194,6 +195,7 @@ class _WorkerConfig:
     shard_dir: str
     backend: str  # "duckdb" or "sqlite"
     track_sids: bool = True
+    store_timestamp: int | None = None
     # Deferred Parquet builds persist auxiliary root/dispatch/diagnostic data
     # alongside record rows.  Parity merge deliberately keeps its established
     # in-memory manifest protocol.
@@ -527,7 +529,7 @@ class _WorkerEncoder:
 
     def save(self, token: int, obj: Any, as_record: type | None) -> int:
         record_type = resolve_storage_record(obj, as_record=as_record)
-        projection = SaveProjection()
+        projection = SaveProjection(store_timestamp=self._config.store_timestamp)
         sid = self._encode(record_type, obj, projection, "")
         self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
         table_name = resolve_schema(record_type).table_name
@@ -615,6 +617,8 @@ class _WorkerEncoder:
             )
         self._next_sid[table_name] = sid + 1
         row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
+        if self._config.store_timestamp is not None:
+            row[STORE_TIMESTAMP_COLUMN] = self._config.store_timestamp
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             for field_name, column_name in _plain_float_skip_fields(record_type):
@@ -763,6 +767,7 @@ class ParallelController:
         chunk_size: int,
         backend: str,
         track_sids: bool = True,
+        store_timestamp: int | None = None,
         spill_deferred_auxiliary: bool = False,
     ) -> None:
         import multiprocessing
@@ -778,6 +783,7 @@ class ParallelController:
             shard_dir=self._temp.name,
             backend=backend,
             track_sids=track_sids,
+            store_timestamp=store_timestamp,
             spill_deferred_auxiliary=spill_deferred_auxiliary,
         )
         self._queues: list[Any] = [self._context.Queue(maxsize=_QUEUE_MAXSIZE) for _ in range(workers)]
@@ -1112,7 +1118,11 @@ class _Merger:
         self._apply_collapse(table, schema, pairs)
 
     def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> bool:
-        value_columns = [column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN)]
+        value_columns = [
+            column.name
+            for column in table.columns
+            if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+        ]
         while True:
             keep = (
                 sqlalchemy.select(

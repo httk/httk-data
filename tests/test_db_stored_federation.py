@@ -38,7 +38,10 @@ class FederatedCalculation:
             {
                 "_httk_label": PropertyDefinition.from_simple(
                     "_httk_label", description="A label stored for federation tests."
-                )
+                ),
+                "_httk_store_timestamp": PropertyDefinition.from_simple(
+                    "_httk_store_timestamp", description="A store timestamp test filter.", fulltype="timestamp"
+                ),
             }
         )
 
@@ -74,6 +77,10 @@ def _modified_query(context, operator: str, literal: object):
     return context.compare(value, operator, context.constant(literal))
 
 
+def _store_timestamp_query(context, operator: str, literal: object):
+    return context.compare(context.field("store_timestamp"), operator, context.constant(literal))
+
+
 @dataclass(frozen=True)
 class FederationFirst:
     __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="stored_federation_first")
@@ -91,6 +98,11 @@ class FederationFirst:
             response=_modified_response,
             query=_modified_query,
             sort=lambda context: context.field("modified"),
+        ),
+        "_httk_store_timestamp": StoredPropertyProjection(
+            response=lambda _record: None,
+            query=_store_timestamp_query,
+            sort=lambda context: context.field("store_timestamp"),
         ),
         "_httk_label": StoredPropertyProjection(
             response=_label_value,
@@ -180,16 +192,26 @@ def _federation(
     *,
     first_prefix: str = "alpha:",
     second_prefix: str = "beta:",
+    first_clock: int | None = None,
+    second_clock: int | None = None,
+    first_resolution: int = 1000,
+    second_resolution: int = 1000,
 ) -> StoredEntryFederation:
     first_database, second_database = databases
     first_store = SqlStore(
         first_database,
         entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
+        store_timestamp_resolution=first_resolution,
     )
     second_store = SqlStore(
         second_database,
         entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
+        store_timestamp_resolution=second_resolution,
     )
+    if first_clock is not None:
+        first_store._clock = lambda: first_clock
+    if second_clock is not None:
+        second_store._clock = lambda: second_clock
     for record in first_records:
         first_store.save(record)
     for record in second_records:
@@ -200,6 +222,39 @@ def _federation(
             StoredEntrySource(second_store, FederatedCalculation, "beta", second_prefix),
         )
     )
+
+
+def test_stored_entry_federation_filters_store_timestamp(databases):
+    federation = _federation(
+        databases,
+        (_record("first"),),
+        (_record("second"),),
+        first_clock=1_000_000,
+        second_clock=3_000_000,
+    )
+
+    page = federation.query('_httk_store_timestamp <= "1970-01-01T00:00:00.002500Z"', limit=10)
+
+    assert [row["immutable_id"] for row in page.rows] == ["first"]
+
+
+def test_stored_entry_federation_sorts_store_timestamp_in_nanoseconds(databases):
+    federation = _federation(
+        databases,
+        (_record("first"),),
+        (_record("second"),),
+        first_clock=2_000_000,
+        second_clock=1_000_000,
+        first_resolution=1,
+        second_resolution=1000,
+    )
+
+    page = federation.query(sort=(("_httk_store_timestamp", False),), limit=10)
+
+    assert [(row["immutable_id"], row["_httk_store_timestamp"]) for row in page.rows] == [
+        ("second", 1_000_000),
+        ("first", 2_000_000),
+    ]
 
 
 def test_unsorted_page_preserves_source_backing_native_order_and_hydrates_only_visible_rows(databases, monkeypatch):

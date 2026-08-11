@@ -298,6 +298,7 @@ def test_deferred_is_deterministic_for_identical_input(store_factory, workers):
     second = store_factory(entry_records=CALC_FAMILY)
     _require_bulk(first)
     for store in (first, second):
+        store._clock = lambda: 1_700_000_000_000_000_000
         with store.bulk_ingest(workers=workers, finalize="deferred") as bulk:
             for value in _stream():
                 bulk.save(value)

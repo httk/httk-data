@@ -9,6 +9,8 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from httk.store.store_timestamp import StoreClockRegressionError
+
     from .database import MongoDatabase, TransactionsUnavailableError
     from .documents import RecordTooLargeError
     from .entry_provider import StoreEntryProvider, auto_definition
@@ -39,6 +41,7 @@ __all__ = [
     "MongoStoredPropertyPlan",
     "MongoVariable",
     "RecordTooLargeError",
+    "StoreClockRegressionError",
     "StoreEntryProvider",
     "StoreLockedError",
     "TransactionsUnavailableError",
@@ -59,6 +62,7 @@ _MONGO_EXPORTS = {
     "auto_definition": ".entry_provider",
     "MongoSearcher": ".searcher",
     "MongoStore": ".store",
+    "StoreClockRegressionError": ".store",
     "MongoStoredPropertyCandidateStream": ".stored_properties",
     "MongoStoredPropertyConfigurationError": ".stored_properties",
     "MongoStoredPropertyPlan": ".stored_properties",

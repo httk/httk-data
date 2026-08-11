@@ -35,6 +35,13 @@ from httk.store.store_common import (
     _metadata_plan,
     reject_cursor_proxy,
 )
+from httk.store.store_timestamp import (
+    StoreClockRegressionError,
+    advance_store_timestamp_mark,
+    capture_store_timestamp,
+    encode_store_timestamp_state,
+    parse_store_timestamp_state,
+)
 
 from .database import MongoDatabase, TransactionsUnavailableError
 from .documents import decode_record, encode_record, preflight_document
@@ -53,11 +60,13 @@ from .mapping import (
     validator_for,
 )
 
-__all__ = ["MongoStore"]
+__all__ = ["MongoStore", "StoreClockRegressionError"]
 
 _DOCUMENT_LAYOUT = "mongo-v2"
 _RESERVED_PREFIX = "_httk_"
-_METADATA_KEYS = frozenset({"_id", "protocol", "entry_declaration", "document_layout", "generation"})
+_METADATA_KEYS = frozenset(
+    {"_id", "protocol", "entry_declaration", "document_layout", "generation", "store_timestamps"}
+)
 _LOGGER = logging.getLogger("httk.store.mongo")
 _TRANSACTION_ATTEMPTS = 5
 
@@ -77,6 +86,8 @@ class _TransactionState:
         self.lease = lease
         self.pending: dict[tuple[type, int], tuple[Any, bool]] = {}
         self.pending_sids: dict[tuple[type, int], int] = {}
+        self.timestamp_initialized = False
+        self.store_timestamp: int | None = None
 
 
 class MongoStore:
@@ -89,6 +100,10 @@ class MongoStore:
 
     :param database: The MongoDB database wrapper.
     :param entry_records: The required entry-family declaration on first open.
+    :param store_timestamps: Whether saved parent documents receive timestamps.
+    :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
+    :param allow_clock_regression: Whether to disable the process-local clock guard.
+    :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
     :raises TypeError: If the first open omits ``entry_records``.
     :raises ~httk.store.storage_layout.StorageLayoutUpgradeRequiredError: If the
         persisted layout is not trusted by this implementation.
@@ -102,8 +117,24 @@ class MongoStore:
         database: MongoDatabase,
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
+        store_timestamps: bool = True,
+        store_timestamp_resolution: int = 1000,
+        allow_clock_regression: bool = False,
+        clock_regression_grace: bool = True,
     ) -> None:
+        if (
+            not isinstance(store_timestamp_resolution, int)
+            or isinstance(store_timestamp_resolution, bool)
+            or store_timestamp_resolution <= 0
+        ):
+            raise ValueError("store_timestamp_resolution must be a positive integer")
         self._database = database
+        self._store_timestamps = store_timestamps
+        self._store_timestamp_resolution = store_timestamp_resolution
+        self._allow_clock_regression = allow_clock_regression
+        self._clock_regression_grace = clock_regression_grace
+        self._clock = time.time_ns
+        self._store_timestamp_mark: int | None = None
         self._layout: StorageLayout | None = None
         self._collections_ready: set[str] = set()
         # Layout declarations describe the persistent roots; this additional
@@ -126,6 +157,7 @@ class MongoStore:
         for family in self.layout.families:
             self._known_record_types.update(family.records)
         self._last_generation = self._layout_generation()
+        self._initialize_store_timestamp_mark()
 
     @property
     def layout(self) -> StorageLayout:
@@ -152,6 +184,20 @@ class MongoStore:
         """
         return self.layout.entry_records
 
+    @property
+    def store_timestamps(self) -> bool:
+        """Whether parent documents carry store-managed timestamps."""
+        return self._store_timestamps
+
+    @property
+    def store_timestamp_resolution(self) -> int:
+        """Return nanoseconds per stored timestamp unit."""
+        return self._store_timestamp_resolution
+
+    @property
+    def _store_timestamp_state(self) -> str:
+        return encode_store_timestamp_state(self._store_timestamps, self._store_timestamp_resolution)
+
     def _initialize_layout(self, supplied: StorageLayout | None) -> None:
         database = self._database.database
         names = {name for name in database.list_collection_names() if not name.startswith("system.")}
@@ -168,6 +214,7 @@ class MongoStore:
                 "entry_declaration": declaration_json(supplied),
                 "document_layout": _DOCUMENT_LAYOUT,
                 "generation": 0,
+                "store_timestamps": self._store_timestamp_state,
             }
             try:
                 database[METADATA_COLLECTION].insert_one(document)
@@ -200,6 +247,17 @@ class MongoStore:
             diff["protocol"] = {
                 "expected": {"protocol": DECLARATION_PROTOCOL_VERSION, "document_layout": _DOCUMENT_LAYOUT},
                 "actual": {"protocol": protocol_actual, "document_layout": document_layout_actual},
+            }
+
+        persisted_timestamps = stored.get("store_timestamps")
+        parsed_timestamps = parse_store_timestamp_state(persisted_timestamps)
+        if (
+            parsed_timestamps is None
+            or parsed_timestamps[0] != self._store_timestamps
+            or (parsed_timestamps[0] and parsed_timestamps[1] != self._store_timestamp_resolution)
+        ):
+            diff["declaration"] = {
+                "store_timestamps": {"expected": self._store_timestamp_state, "actual": persisted_timestamps}
             }
 
         persisted: StorageLayout | None = None
@@ -319,7 +377,13 @@ class MongoStore:
             schema = resolve_schema(cls)
             name = collection_name_for(schema)
             if name not in seen:
-                requested.append((name, validator_for(schema), index_specs_for(schema)))
+                requested.append(
+                    (
+                        name,
+                        validator_for(schema, store_timestamps=self._store_timestamps),
+                        index_specs_for(schema, store_timestamps=self._store_timestamps),
+                    )
+                )
                 seen.add(name)
             for family in self.layout.families:
                 if cls not in family.records or len(family.records) < 2:
@@ -362,6 +426,46 @@ class MongoStore:
                 validationLevel="strict",
                 validationAction="error",
             )
+
+    def _initialize_store_timestamp_mark(self) -> None:
+        """Derive the writable process-local timestamp mark from present collections."""
+        if not self._store_timestamps or self._allow_clock_regression:
+            self._store_timestamp_mark = None
+            return
+        maximum: int | None = None
+        names = {
+            name
+            for name in self._database.database.list_collection_names()
+            if not name.startswith("system.") and not name.startswith(_RESERVED_PREFIX)
+        }
+        for name in names:
+            collection = self._database.database[name]
+            document = collection.find_one(
+                {"_httk_role": {"$in": ["main", "dep"]}},
+                {"store_timestamp": 1},
+                sort=[("store_timestamp", -1)],
+            )
+            if document is not None and document.get("store_timestamp") is not None:
+                value = int(document["store_timestamp"])
+                maximum = value if maximum is None else max(maximum, value)
+        self._store_timestamp_mark = maximum
+
+    def _capture_store_timestamp(self) -> int | None:
+        """Capture one guarded store-unit timestamp for a save."""
+        if not self._store_timestamps:
+            return None
+        return capture_store_timestamp(
+            self._clock,
+            self._store_timestamp_resolution,
+            self._store_timestamp_mark,
+            allow_clock_regression=self._allow_clock_regression,
+            clock_regression_grace=self._clock_regression_grace,
+        )
+
+    def _advance_store_timestamp_mark(self, captured: int | None) -> None:
+        self._store_timestamp_mark = advance_store_timestamp_mark(
+            self._store_timestamp_mark, captured, allow_clock_regression=self._allow_clock_regression
+        )
 
     # ------------------------------------------------------------------ leases and transactions
 
@@ -464,6 +568,7 @@ class MongoStore:
                         self._failed_identities.update(transaction.pending_sids)
                         raise
                     else:
+                        self._advance_store_timestamp_mark(transaction.store_timestamp)
                         self._publish_transaction_cache(transaction)
                     finally:
                         stack.pop()
@@ -497,6 +602,7 @@ class MongoStore:
         collect_garbage: bool = True,
         repair_conflicts: bool = False,
         force: bool = False,
+        clamp_future_timestamps: bool = False,
         known_types: tuple[type, ...] = (),
     ) -> FsckSummary:
         """Exclusively repair dispatch integrity and collect orphan dependencies.
@@ -509,6 +615,7 @@ class MongoStore:
         :param collect_garbage: Delete unmarked dependency documents.
         :param repair_conflicts: Delete invalid dispatch documents after reporting them.
         :param force: Administrative stale-lease override for the fsck handshake.
+        :param clamp_future_timestamps: Clamp timestamps beyond the allowed future slack when repairing.
         :param known_types: Record classes that attribute ordinary collections
             from earlier store sessions, allowing a safe sweep after reopen.
         :return: An immutable :class:`~httk.store.mongo.fsck.FsckSummary`.
@@ -521,6 +628,7 @@ class MongoStore:
             collect_garbage=collect_garbage,
             repair_conflicts=repair_conflicts,
             force=force,
+            clamp_future_timestamps=clamp_future_timestamps,
             known_types=known_types,
         )
 
@@ -550,7 +658,13 @@ class MongoStore:
         if self._current_transaction() is not None:
             self._ensure_graph_collections(record_type)
             self._ensure_counter_collection()
-            return self._save_once(record_type, obj)
+            transaction = self._current_transaction()
+            assert transaction is not None
+            if not transaction.timestamp_initialized:
+                transaction.store_timestamp = self._capture_store_timestamp()
+                transaction.timestamp_initialized = True
+            sid = self._save_once(record_type, obj, transaction.store_timestamp)
+            return sid
         with self._write_lock:
             lease = acquire_writer(self._database.database)
             previous_lease = getattr(self._local, "writer_lease", None)
@@ -559,21 +673,25 @@ class MongoStore:
                 self._observe_generation(lease.generation)
                 self._ensure_graph_collections(record_type)
                 self._ensure_counter_collection()
+                captured = self._capture_store_timestamp()
                 if not self._database.supports_transactions:
                     with self._database.client.start_session(causal_consistency=True) as session:
                         previous_session = getattr(self._local, "write_session", None)
                         self._local.write_session = session
                         try:
-                            return self._save_once(record_type, obj)
+                            sid = self._save_once(record_type, obj, captured)
                         finally:
                             self._local.write_session = previous_session
-                return self._save_implicit_transaction(record_type, obj, lease)
+                else:
+                    sid = self._save_implicit_transaction(record_type, obj, lease, captured)
+                self._advance_store_timestamp_mark(captured)
+                return sid
             finally:
                 self._local.writer_lease = previous_lease
                 lease.release()
 
-    def _save_once(self, record_type: type, obj: Any) -> int:
-        projection = SaveProjection()
+    def _save_once(self, record_type: type, obj: Any, store_timestamp: int | None) -> int:
+        projection = SaveProjection(store_timestamp=store_timestamp)
         self._projection_state(projection)
         try:
             sid = self._save(record_type, obj, projection, "", top_level=True)
@@ -589,7 +707,9 @@ class MongoStore:
             self._failed_identities.update(self._projection_sources(projection))
             raise
 
-    def _save_implicit_transaction(self, record_type: type, obj: Any, lease: WriterLease) -> int:
+    def _save_implicit_transaction(
+        self, record_type: type, obj: Any, lease: WriterLease, store_timestamp: int | None
+    ) -> int:
         last_error: BaseException | None = None
         for attempt in range(_TRANSACTION_ATTEMPTS):
             with self._database.client.start_session(causal_consistency=True) as session:
@@ -598,7 +718,7 @@ class MongoStore:
                 stack.append(transaction)
                 try:
                     self._start_transaction(session)
-                    sid = self._save_once(record_type, obj)
+                    sid = self._save_once(record_type, obj, store_timestamp)
                     self._commit(session)
                 except BaseException as error:
                     self._abort(session)
@@ -719,6 +839,8 @@ class MongoStore:
 
         sid = counter_next(self._database.database, schema.table_name, session=self._write_session())
         document: dict[str, Any] = {"_id": sid, "_httk_role": "main" if top_level else "dep", "f": f_document}
+        if projection.store_timestamp is not None:
+            document["store_timestamp"] = projection.store_timestamp
         if content_key is not None:
             document["content_id"] = content_key
         preflight_document(document, self._max_bson_size, record_type)

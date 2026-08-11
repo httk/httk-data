@@ -113,6 +113,14 @@ def test_evaluator_preserves_unknown_and_canonical_exact_constants():
     assert "1/3" in canonical_predicate(exact)
 
 
+def test_evaluator_resolves_store_timestamp_from_the_candidate_sid():
+    store = type("Store", (), {"store_timestamps": True, "store_timestamp_resolution": 1000})()
+    context = _MongoQueryContext(GenericCalculationFirst, store)
+    predicate = context.compare(context.field("store_timestamp"), "<=", context.constant(1_000_499))
+    assert evaluate(predicate, FIRST, store_timestamp_resolver=lambda: 1000) is True
+    assert evaluate(predicate, FIRST, store_timestamp_resolver=lambda: 1001) is False
+
+
 def test_evaluator_nullable_exact_distinct_and_exists_semantics():
     context = _MongoQueryContext(_EvaluatorRecord)
     record = _EvaluatorRecord(None, [-0.0, 0.0, float("nan"), float("nan")], assemblies=None, attached=[])

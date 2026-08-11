@@ -16,10 +16,12 @@ from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    STORE_TIMESTAMP_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
 from httk.store.db.schema import TableSchema, resolve_schema
+from httk.store.store_timestamp import FUTURE_TIMESTAMP_SLACK_NS
 
 if TYPE_CHECKING:
     from httk.store.db.store import SqlStore
@@ -59,6 +61,7 @@ def run_fsck(
     repair: bool = True,
     collect_garbage: bool = True,
     repair_conflicts: bool = False,
+    clamp_future_timestamps: bool = False,
     known_types: tuple[type, ...] = (),
     exclusive: bool = False,
 ) -> FsckSummary:
@@ -91,6 +94,7 @@ def run_fsck(
     graph = LogicalEdgeGraph.from_store(store, tuple(schemas.values()))
     counters: defaultdict[str, _Counter] = defaultdict(_Counter)
     violations: list[str] = []
+    timestamp_repaired = False
     # A degraded verification has no repair, collection, lease, or dirty-row
     # semantics.  In particular it must not manufacture a metadata ``lease``
     # row merely to inspect an otherwise untouched store.
@@ -106,6 +110,15 @@ def run_fsck(
         # call is read-only by construction, and even a repair call does not
         # touch a partially attributable database.
         mutation_allowed = not unattributed
+        timestamp_repaired = _check_future_timestamps(
+            store,
+            connection,
+            present,
+            graph,
+            counters,
+            violations,
+            clamp_future_timestamps and repair and mutation_allowed,
+        )
         if repair and mutation_allowed:
             _repair_dispatches(store, connection, present, counters, violations, True, repair_conflicts)
         else:
@@ -129,9 +142,66 @@ def run_fsck(
         elif collect_garbage:
             violations.append("sweep aborted because unattributed application tables exist")
         store._clear_identity_caches()
+    if timestamp_repaired:
+        with store._mutation_lock, store._read_connection() as connection:
+            store._initialize_store_timestamp_mark(connection)
     return FsckSummary(
         MappingProxyType({name: value.freeze() for name, value in sorted(counters.items())}), tuple(violations)
     )
+
+
+def _check_future_timestamps(
+    store: SqlStore,
+    connection: sqlalchemy.Connection,
+    present: set[str] | frozenset[str],
+    graph: LogicalEdgeGraph,
+    counters: defaultdict[str, _Counter],
+    violations: list[str],
+    clamp: bool,
+) -> bool:
+    """Report parent timestamps beyond the current clock plus writer/checker slack.
+
+    Clamping is destructive to historic-query fidelity and is a last-resort
+    repair for data written with a badly skewed clock.
+    """
+    if not store.store_timestamps:
+        return False
+    now_ns = store._clock()
+    resolution = store.store_timestamp_resolution
+    limit_units = (now_ns + FUTURE_TIMESTAMP_SLACK_NS) // resolution
+    now_units = now_ns // resolution
+    repaired_any = False
+    for name in graph.tables:
+        if name not in present or name not in store._metadata.tables:
+            continue
+        table = store._table(name)
+        if ROLE_COLUMN not in table.c or STORE_TIMESTAMP_COLUMN not in table.c:
+            continue
+        rows = connection.execute(
+            sqlalchemy.select(table.c[SID_COLUMN], table.c[STORE_TIMESTAMP_COLUMN]).where(
+                table.c[STORE_TIMESTAMP_COLUMN] > limit_units
+            )
+        ).all()
+        for sid, value in rows:
+            counters[name].examined += 1
+            future_ns = int(value) * resolution
+            limit_ns = limit_units * resolution
+            if clamp:
+                connection.execute(
+                    sqlalchemy.update(table)
+                    .where(table.c[SID_COLUMN] == sid)
+                    .values({STORE_TIMESTAMP_COLUMN: now_units})
+                )
+                repaired_any = True
+                counters[name].repaired += 1
+                violations.append(
+                    f"table {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns; "
+                    f"clamped to {now_ns} ns"
+                )
+            else:
+                counters[name].conflicts += 1
+                violations.append(f"table {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns")
+    return repaired_any
 
 
 def _repair_dispatches(

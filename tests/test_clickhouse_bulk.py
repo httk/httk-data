@@ -479,6 +479,7 @@ def test_duckdb_manifest_roots_and_parquet_spilled_roots_keep_the_same_orphans(m
         database = Database.duckdb()
         store = SqlStore(database, entry_records={})
         try:
+            store._clock = lambda: 1_700_000_000_000_000_000
             if spill:
                 with store.bulk_ingest(workers=2, chunk_size=1, finalize="deferred", verify_metadata=False) as bulk:
                     for value in stream:

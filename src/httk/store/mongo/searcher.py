@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from httk.store.db.codecs import ValueCodec, codec_named
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult, UnsupportedQueryError
+from httk.store.store_timestamp import ns_operand_to_store_units
 
 if TYPE_CHECKING:
     from httk.store.mongo.store import MongoStore
@@ -412,7 +413,16 @@ class MongoExpression:
 class MongoField:
     """A scalar field, or the value channel of an embedded child field."""
 
-    __slots__ = ("_child_keys", "_codec", "_key_path", "_presentation_prefix", "_spec", "_variable")
+    __slots__ = (
+        "_child_keys",
+        "_codec",
+        "_key_path",
+        "_operand_converter",
+        "_presentation_converter",
+        "_presentation_prefix",
+        "_spec",
+        "_variable",
+    )
 
     def __init__(
         self,
@@ -422,6 +432,8 @@ class MongoField:
         codec: ValueCodec | None = None,
         child_keys: tuple[str, ...] = (),
         presentation_prefix: str = "",
+        operand_converter: Callable[[Any], Any] | None = None,
+        presentation_converter: Callable[[Any], Any] | None = None,
     ) -> None:
         self._variable = variable
         self._key_path = key_path
@@ -429,6 +441,8 @@ class MongoField:
         self._codec = codec
         self._child_keys = child_keys
         self._presentation_prefix = presentation_prefix
+        self._operand_converter = operand_converter
+        self._presentation_converter = presentation_converter
 
     @property
     def _path(self) -> str:
@@ -438,7 +452,11 @@ class MongoField:
     def _encode(self, value: Any) -> Any:
         if isinstance(value, MongoField):
             return _FieldReference(value)
-        if value is None or self._codec is None:
+        if value is None:
+            return value
+        if self._operand_converter is not None:
+            value = self._operand_converter(value)
+        if self._codec is None:
             return value
         if isinstance(value, self._codec.python_type):
             query_index = next(
@@ -626,6 +644,20 @@ class MongoVariable:
             raise AttributeError(name)
         if name == "sid":
             return self.sid
+        if name == "store_timestamp":
+            if not self._searcher._store.store_timestamps:
+                raise AttributeError("store_timestamp queries require MongoStore(store_timestamps=True)")
+            return MongoField(
+                self,
+                "store_timestamp",
+                FieldSpec("store_timestamp", int, "scalar", ()),
+                operand_converter=lambda value: ns_operand_to_store_units(
+                    value, self._searcher._store.store_timestamp_resolution
+                ),
+                presentation_converter=lambda value: (
+                    None if value is None else value * self._searcher._store.store_timestamp_resolution
+                ),
+            )
         try:
             spec = self._schema.field(name)
         except SchemaError:
@@ -1012,6 +1044,13 @@ def _scalar_value(document: dict[str, Any], field: MongoField) -> Any:
     if field._key_path == "content_id":
         value = source.get("content_id")
         return None if value is None else field._presentation_prefix + value
+    if field._key_path == "store_timestamp":
+        value = source.get("store_timestamp")
+        return (
+            None
+            if value is None
+            else (field._presentation_converter(value) if field._presentation_converter is not None else value)
+        )
     embedded = source.get("f", {})
     spec = field._spec
     if spec.role == "scalar":

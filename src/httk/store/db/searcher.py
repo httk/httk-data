@@ -69,15 +69,16 @@ the exact set semantics of the reference in-memory store.
 
 import dataclasses
 from array import array
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import sqlalchemy
 
 from httk.store.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
-from httk.store.db.mapping import SID_COLUMN
+from httk.store.db.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
+from httk.store.store_timestamp import ns_operand_to_store_units
 
 if TYPE_CHECKING:
     from httk.store.db.store import SqlStore
@@ -115,6 +116,7 @@ class SqlExpression:
     :param post: Whether the HAVING condition is also applied.
     :param set_derived: Whether the condition depends on a set of joined rows.
     :param group_columns: The non-aggregated columns required by the HAVING condition.
+    :param correlation_depth: The maximum outer-query correlation depth used by this condition.
     """
 
     __slots__ = ("correlation_depth", "group_columns", "having_clause", "post", "set_derived", "where_clause")
@@ -229,6 +231,8 @@ class SqlColumn:
     :param codec: The value codec, when the field is encoded.
     :param query_index: The codec-column index used for query comparisons.
     :param from_child: Whether the column comes from a child-table join.
+    :param operand_converter: Optional conversion applied to public comparison operands.
+    :param presentation_converter: Optional conversion applied to scalar output values.
     """
 
     def __init__(
@@ -241,6 +245,8 @@ class SqlColumn:
         codec: ValueCodec | None = None,
         query_index: int = 0,
         from_child: bool = False,
+        operand_converter: Callable[[object], object] | None = None,
+        presentation_converter: Callable[[object], object] | None = None,
     ) -> None:
         self._searcher = searcher
         self._element = element
@@ -249,10 +255,14 @@ class SqlColumn:
         self._codec = codec
         self._query_index = query_index
         self._from_child = from_child
+        self._operand_converter = operand_converter
+        self._presentation_converter = presentation_converter
 
     def _encode(self, value: Any) -> Any:
         if isinstance(value, SqlColumn):
             return value._element
+        if self._operand_converter is not None:
+            return self._operand_converter(value)
         if value is None or self._codec is None:
             return value
         if isinstance(value, self._codec.python_type):
@@ -617,6 +627,20 @@ class SqlVariable:
             # The store-managed integer primary key ('sid' is a reserved field
             # name, so this never shadows a stored field).
             return SqlColumn(self._searcher, self._alias.c[SID_COLUMN])
+        if name == STORE_TIMESTAMP_COLUMN:
+            if not self._searcher._store.store_timestamps:
+                raise AttributeError("store_timestamp queries require SqlStore(store_timestamps=True)")
+            return SqlColumn(
+                self._searcher,
+                self._alias.c[STORE_TIMESTAMP_COLUMN],
+                variable=self,
+                operand_converter=lambda value: ns_operand_to_store_units(
+                    value, self._searcher._store.store_timestamp_resolution
+                ),
+                presentation_converter=lambda value: (
+                    None if value is None else value * self._searcher._store.store_timestamp_resolution
+                ),
+            )
         for spec in self._schema.fields:
             if spec.role == "child" and spec.optional and name == f"{spec.field}_present":
                 return SqlColumn(self._searcher, self._alias.c[name])
@@ -706,6 +730,7 @@ class _Output:
     exact_element: sqlalchemy.ColumnElement[Any] | None = None
     codec: ValueCodec | None = None
     decoder: Any = None
+    presentation_converter: Callable[[object], object] | None = None
 
 
 class SqlSearcher:
@@ -795,6 +820,7 @@ class SqlSearcher:
                     exact_element,
                     variable._codec,
                     decoder,
+                    variable._presentation_converter,
                 )
             )
         else:
@@ -986,7 +1012,9 @@ class SqlSearcher:
                 values: list[Any] = []
                 for index, (output, value) in enumerate(zip(self._outputs, row, strict=True)):
                     if output.target is None:
-                        values.append(value)
+                        values.append(
+                            output.presentation_converter(value) if output.presentation_converter is not None else value
+                        )
                     elif value is None:
                         values.append(None)
                     else:

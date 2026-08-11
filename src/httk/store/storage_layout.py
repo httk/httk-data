@@ -49,7 +49,9 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
         frozen = _freeze_mapping(diff)
         self.diff: Mapping[str, object] = frozen
         categories = ", ".join(frozen) or "unknown layout difference"
-        super().__init__(f"SqlStore layout upgrade is required ({categories})")
+        details = frozen.get("declaration")
+        detail_names = f": {', '.join(details)}" if isinstance(details, Mapping) else ""
+        super().__init__(f"SqlStore layout upgrade is required ({categories}{detail_names})")
 
 
 @dataclasses.dataclass(frozen=True)
