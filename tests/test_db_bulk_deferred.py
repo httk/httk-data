@@ -531,3 +531,19 @@ def test_deferred_track_sids_false_keeps_logical_result_without_resolution(store
         bulk.resolved_sid(Author, provisional)
     with _database_of(store).engine.connect() as connection:
         assert connection.execute(sqlalchemy.text("SELECT count(*) FROM bulk_author")).scalar_one() == 1
+
+
+def test_deferred_sqlite_more_than_ten_workers() -> None:
+    """Explicit deferred finalization is independent of SQLite's ATTACH ceiling."""
+    from httk.store.db import Database, SqlStore
+
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records={})
+        with store.bulk_ingest(workers=11, finalize="deferred") as bulk:
+            for index in range(11):
+                bulk.save(Author(f"A{index}", 1900 + index))
+        with database.engine.connect() as connection:
+            assert connection.execute(sqlalchemy.text("SELECT count(*) FROM bulk_author")).scalar_one() == 11
+    finally:
+        database.dispose()

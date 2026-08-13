@@ -257,8 +257,8 @@ class BulkIngest:
         self._deferred_top_types: set[type] = set()
         self._next_token = 0
         self._schema_graph_seen: set[type] = set()
-        # SQLite shard aliases the merge attached; detached in _release_connection
-        # after the transaction closes (SQLite forbids DETACH inside a transaction).
+        # External database aliases attached by deferred backends; detached in
+        # _release_connection after the transaction closes.
         self._parallel_attached: list[str] = []
         self._connection: sqlalchemy.Connection | None = None
         self._transaction: Any = None
@@ -749,13 +749,7 @@ class BulkIngest:
             return
 
     def _release_connection(self, connection: sqlalchemy.Connection | None) -> None:
-        """Detach any SQLite shards on ``connection`` and return it to the pool (idempotent).
-
-        SQLite forbids ``DETACH`` inside a transaction, so this runs only after
-        the spanning transaction has committed or rolled back — and on the exact
-        connection that ran the ``ATTACH``, before it is released, so no other
-        thread can check it out with the shards still attached.
-        """
+        """Detach external stages on ``connection`` and return it to the pool (idempotent)."""
         if connection is None or connection.closed:
             return
         if self._parallel_attached:
@@ -1772,6 +1766,15 @@ class BulkIngest:
                 raise RuntimeError(
                     "bulk_ingest lost tasks between dispatch and deferred finalize: "
                     f"expected {self._records_total} roots, found {roots}"
+                )
+            return
+        if not self._track_sids:
+            encoded_count = sum(manifest.encoded_count for manifest in manifests)
+            if encoded_count != self._records_total:
+                raise RuntimeError(
+                    "bulk_ingest(workers>1) lost tasks between dispatch and merge: "
+                    f"expected {self._records_total} encoded record(s), found {encoded_count}; "
+                    "the ingest is aborted rather than committing a partial store"
                 )
             return
         dispatched = {token for _table, token in self._returned_sids}

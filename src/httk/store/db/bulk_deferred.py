@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import CONTENT_ID_COLUMN, ROLE_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.store_common import EntryMetadataConflictError
 
 if TYPE_CHECKING:
@@ -150,21 +150,36 @@ class DeferredFinalizer:
                 del parameters, values
                 sources.setdefault(table, []).append(f"read_parquet([{quoted}])")
         else:
-            for index, manifest in enumerate(self.manifests):
-                path = manifest.shards.get("db")
-                tables = manifest.shards.get("tables", ())
-                if not path:
-                    continue
-                alias = f"httk_deferred_stage_{index}"
-                self.connection.execute(sqlalchemy.text(f"ATTACH DATABASE :path AS {alias}").bindparams(path=str(path)))
-                self.ingest._parallel_attached.append(alias)
-                for table in tables:
-                    sources.setdefault(table, []).append(f"{alias}.{self._q(table)}")
+            self._load_sqlite_stages()
+            return
         for table, relations in sources.items():
             view = self._temp_name("stage", table)
             self._create_view(view, " UNION ALL ".join(f"SELECT * FROM {relation}" for relation in relations))
             self.stage_views[table] = view
         self.root_stage = self.stage_views.pop("_httk_roots", None)
+
+    def _load_sqlite_stages(self) -> None:
+        """Stream SQLite shards into transaction-local staging tables."""
+        from httk.store.db.bulk_parallel import _copy_sqlite_shard
+
+        table_names = sorted({table for manifest in self.manifests for table in manifest.shards.get("tables", ())})
+        destinations: dict[str, sqlalchemy.Table] = {}
+        for table in table_names:
+            stage = self._temp_name("stage", table)
+            self._create_table(stage, f"SELECT * FROM {self._q(table)} WHERE 0")
+            self.ingest._staging_tables.add(stage)
+            real = self.store._table(table)
+            destinations[table] = sqlalchemy.Table(
+                stage,
+                sqlalchemy.MetaData(),
+                *(sqlalchemy.Column(column.name, column.type) for column in real.columns),
+            )
+            self.stage_views[table] = stage
+        for manifest in self.manifests:
+            path = manifest.shards.get("db")
+            tables = manifest.shards.get("tables", ())
+            if path and tables:
+                _copy_sqlite_shard(self.connection, str(path), tables, destinations)
 
     # ------------------------------------------------------------------ maps and conflict scan
 
@@ -394,17 +409,30 @@ class DeferredFinalizer:
                 )
             )
         else:
-            root_rows = [
-                {"tbl": table, "stage_sid": sid}
-                for manifest in self.manifests
-                for table, sid in manifest.token_sid.values()
-                if table in self.maps
-            ]
-            if root_rows:
-                self.connection.execute(
-                    sqlalchemy.text(f"INSERT INTO {self._q(roots)} (tbl, stage_sid) VALUES (:tbl, :stage_sid)"),
-                    root_rows,
-                )
+            if self.ingest._track_sids:
+                root_rows = [
+                    {"tbl": table, "stage_sid": sid}
+                    for manifest in self.manifests
+                    for table, sid in manifest.token_sid.values()
+                    if table in self.maps
+                ]
+                if root_rows:
+                    self.connection.execute(
+                        sqlalchemy.text(f"INSERT INTO {self._q(roots)} (tbl, stage_sid) VALUES (:tbl, :stage_sid)"),
+                        root_rows,
+                    )
+            else:
+                for table, stage in self.stage_views.items():
+                    if table not in self.maps:
+                        continue
+                    table_literal = table.replace("'", "''")
+                    self.connection.execute(
+                        sqlalchemy.text(
+                            f"INSERT INTO {self._q(roots)} (tbl, stage_sid) "
+                            f"SELECT '{table_literal}', {self._q(SID_COLUMN)} FROM {self._q(stage)} "
+                            f"WHERE {self._q(ROLE_COLUMN)} = 1"
+                        )
+                    )
         self._index_relation(roots, "tbl", "stage_sid")
         for component in self.graph.reachability_scc_order():
             cyclic = len(component) > 1 or any(
@@ -632,6 +660,13 @@ class DeferredFinalizer:
         from httk.store.store_common import EntryDispatchIntegrityError
 
         payload_stage = self.stage_views.get("_httk_dispatch_payload")
+        if not self.ingest._track_sids and payload_stage is None:
+            from httk.store.db.bulk_parallel import _rebuild_untracked_dispatch
+
+            self.ingest._inserted_count.update(
+                _rebuild_untracked_dispatch(self.connection, self.store, set(self.ingest._created_set))
+            )
+            return
         grouped: dict[str, list[Any]] = {}
         if payload_stage is None:
             # SQLite/DuckDB-native serial stages retain this list because the

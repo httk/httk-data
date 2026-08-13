@@ -228,6 +228,121 @@ def test_parallel_returned_token_resolves_and_dedups(store_factory):
         bulk.resolved_sid(Author, 10_000_019)  # a token this ingest never returned
 
 
+def test_parallel_sqlite_track_sids_false(monkeypatch) -> None:
+    """Untracked parallel ingestion validates task count without retaining public tokens."""
+    from httk.store.db.bulk_parallel import ParallelController
+
+    captured = []
+    original_finish = ParallelController.finish
+
+    def finish(controller):
+        manifests = original_finish(controller)
+        captured.extend(manifests)
+        return manifests
+
+    monkeypatch.setattr(ParallelController, "finish", finish)
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records={})
+        with store.bulk_ingest(workers=2, track_sids=False) as bulk:
+            token = bulk.save(Author("Ada", 1852))
+            bulk.save(Author("Grace", 1906))
+        with pytest.raises(RuntimeError, match="track_sids=False"):
+            bulk.resolved_sid(Author, token)
+        assert store.fetch(Author, 1) == Author("Ada", 1852)
+        assert store.fetch(Author, 2) == Author("Grace", 1906)
+        assert sum(manifest.encoded_count for manifest in captured) == 2
+        assert all(not manifest.token_sid for manifest in captured)
+    finally:
+        database.dispose()
+
+
+def test_parallel_sqlite_track_sids_false_detects_lost_count(monkeypatch) -> None:
+    """Untracked parallel ingestion aborts when worker occurrence counts are short."""
+    from httk.store.db.bulk_parallel import ParallelController
+
+    original_finish = ParallelController.finish
+
+    def finish(controller):
+        manifests = original_finish(controller)
+        manifests[0].encoded_count -= 1
+        return manifests
+
+    monkeypatch.setattr(ParallelController, "finish", finish)
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records={})
+        with (
+            pytest.raises(RuntimeError, match="expected 2 encoded record.*found 1"),
+            store.bulk_ingest(workers=2, track_sids=False) as bulk,
+        ):
+            bulk.save(Author("Ada", 1852))
+            bulk.save(Author("Grace", 1906))
+        assert not _has_application_rows(store, database)
+    finally:
+        database.dispose()
+
+
+@pytest.mark.parametrize("finalize", ["parity", "deferred"])
+def test_parallel_sqlite_untracked_dispatch_is_set_wise(finalize, monkeypatch) -> None:
+    """Untracked multi-record dispatch derives from final rows without worker payloads."""
+    from httk.store.db.bulk_parallel import ParallelController
+
+    captured = []
+    original_finish = ParallelController.finish
+
+    def finish(controller):
+        manifests = original_finish(controller)
+        captured.extend(manifests)
+        return manifests
+
+    monkeypatch.setattr(ParallelController, "finish", finish)
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records=CALC_FAMILY)
+        with store.bulk_ingest(workers=2, finalize=finalize, track_sids=False) as bulk:
+            bulk.save(BulkCalcA("alpha", 1))
+            bulk.save(BulkCalcB("beta", "kind-b"))
+        assert all(not manifest.dispatch for manifest in captured)
+        assert store.fetch_entry(BulkCalcFamily, content_id(BulkCalcA("alpha", 1))) == BulkCalcA("alpha", 1)
+        assert store.fetch_entry(BulkCalcFamily, content_id(BulkCalcB("beta", "kind-b"))) == BulkCalcB("beta", "kind-b")
+    finally:
+        database.dispose()
+
+
+@pytest.mark.parametrize("finalize", ["parity", "deferred"])
+def test_parallel_sqlite_untracked_dispatch_conflict(finalize, monkeypatch) -> None:
+    """Set-wise untracked dispatch rejects two backing types claiming one content id."""
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records=CALC_FAMILY)
+        shared = content_id(BulkCalcA("alpha", 1))
+        monkeypatch.setattr("httk.store.store_common.SaveProjection.content_id", lambda self, rt, src: shared)
+        with (
+            pytest.raises(EntryDispatchIntegrityError, match="conflicting backing"),
+            store.bulk_ingest(workers=2, finalize=finalize, track_sids=False) as bulk,
+        ):
+            bulk.save(BulkCalcA("alpha", 1))
+            bulk.save(BulkCalcB("beta", "kind-b"))
+        assert not _has_application_rows(store, database)
+    finally:
+        database.dispose()
+
+
+def test_parallel_sqlite_more_than_ten_workers() -> None:
+    """Automatic parallel merging is independent of SQLite's ATTACH ceiling."""
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records={})
+        with store.bulk_ingest(workers=11) as bulk:
+            assert bulk._finalize_profile == "parity"
+            for index in range(11):
+                bulk.save(Author(f"A{index}", 1900 + index))
+        assert _physical_counts(database)["bulk_author"] == 11
+    finally:
+        database.dispose()
+
+
 def test_parallel_cross_worker_content_conflict_raises(store_factory):
     """A cross-worker content-id hit with conflicting identity-excluded metadata aborts and leaves no rows."""
     store = store_factory()
@@ -517,8 +632,8 @@ def test_parallel_child_values_and_references_match_serial(store_factory):
     assert serial_reopened.fetch(Sample, 1).authors[0] == Author("Ada", 1852)
 
 
-def test_parallel_sqlite_file_store_detaches_shards(tmp_path):
-    """A parallel build on a pooled file-backed SQLite store detaches its shards and removes the shard directory."""
+def test_parallel_sqlite_file_store_cleans_shards(tmp_path):
+    """A parallel build on a pooled file-backed SQLite store removes its shard directory."""
     path = tmp_path / "store.sqlite"
     database = Database.sqlite(path)
     try:
@@ -527,9 +642,8 @@ def test_parallel_sqlite_file_store_detaches_shards(tmp_path):
             shard_dir = bulk._controller._temp.name
             for i in range(40):
                 bulk.save(Author(f"A{i}", 1900 + i))
-        # The shards were detached (on the exact connection that attached them,
-        # held until after commit) and their directory removed once the ingest
-        # released the connection.
+        # No shard attachment escapes, and the files disappear once the ingest
+        # releases its worker controller.
         assert bulk._parallel_attached == []
         assert not os.path.exists(shard_dir)
         # Subsequent serial writes and reads across the pool keep working.

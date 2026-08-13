@@ -55,6 +55,7 @@ import queue as queue_mod
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -105,6 +106,7 @@ _QUEUE_MAXSIZE = 64
 # Upper bound on how long the main process waits for a worker to make progress
 # (report a result, or accept a stop sentinel) before declaring the pool stalled.
 _WORKER_STALL_TIMEOUT = 300.0
+_SQLITE_COPY_BATCH_SIZE = 1_000
 
 
 def _worker_base(worker_index: int) -> int:
@@ -220,6 +222,7 @@ class _WorkerManifest:
     """What a finished worker reports to the main process."""
 
     worker_index: int
+    encoded_count: int
     token_sid: dict[int, tuple[str, int]]
     dispatch: list[_DispatchRow]
     tables: list[str]
@@ -506,6 +509,7 @@ class _WorkerEncoder:
         self._content_index: dict[str, dict[str, int]] = {}
         self._value_index: dict[str, dict[tuple[Any, ...], int]] = {}
         self._token_sid: dict[int, tuple[str, int]] = {}
+        self._encoded_count = 0
         self._root_rows: list[dict[str, Any]] = []
         self._dispatch: list[_DispatchRow] = []
         self._dispatch_payload: list[dict[str, Any]] = []
@@ -518,12 +522,11 @@ class _WorkerEncoder:
     def _deduplicate_in_worker(self) -> bool:
         """Whether this encoder needs in-memory keys to preserve public provisional sids.
 
-        Parquet deferred finalization has an occurrence sidecar and does the
-        content/by-value collapse set-wise.  With ``track_sids=False`` callers
-        have explicitly opted out of stable in-ingest provisional identities,
-        so retaining one client key per record would only defeat bounded mode.
+        Finalization collapses content/by-value occurrences set-wise.  With
+        ``track_sids=False`` callers have opted out of stable provisional
+        identities, so retaining one client key per record defeats bounded mode.
         """
-        return self._config.track_sids or self._config.backend != "parquet"
+        return self._config.track_sids
 
     # -- encoding
 
@@ -534,7 +537,11 @@ class _WorkerEncoder:
         self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
         table_name = resolve_schema(record_type).table_name
         family = self._store._family_for_backing(record_type)
-        if family is not None and len(family.records) > 1:
+        if (
+            (self._config.track_sids or self._config.spill_deferred_auxiliary)
+            and family is not None
+            and len(family.records) > 1
+        ):
             dispatch = _DispatchRow(
                 dispatch_name=entry_dispatch_table_name(family.name),
                 key=projection.content_id(record_type, obj),
@@ -555,13 +562,14 @@ class _WorkerEncoder:
                 )
             else:
                 self._dispatch.append(dispatch)
-        if self._config.track_sids or not self._config.spill_deferred_auxiliary:
+        if self._config.track_sids:
             self._token_sid[token] = (table_name, sid)
         if self._config.spill_deferred_auxiliary:
             self._root_rows.append({"token": token, "tbl": table_name, "stage_sid": sid})
         self._since_flush += 1
         if self._since_flush >= self._chunk_size:
             self._flush()
+        self._encoded_count += 1
         return sid
 
     def _encode(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
@@ -687,6 +695,7 @@ class _WorkerEncoder:
         self._flush()
         return _WorkerManifest(
             worker_index=-1,  # filled by the caller
+            encoded_count=self._encoded_count,
             token_sid=self._token_sid,
             dispatch=self._dispatch,
             tables=sorted(self._tables),
@@ -957,6 +966,31 @@ def _shard_parent_dir(store: SqlStore) -> str | None:
     return parent if os.path.isdir(parent) else None
 
 
+def _copy_sqlite_shard(
+    connection: sqlalchemy.Connection,
+    database: str,
+    tables: list[str] | tuple[str, ...],
+    destinations: dict[str, sqlalchemy.Table],
+) -> None:
+    """Stream one SQLite shard into tables on the destination connection."""
+    uri = Path(database).resolve().as_uri() + "?mode=ro"
+    source = sqlite3.connect(uri, uri=True)
+    try:
+        for table_name in tables:
+            destination = destinations[table_name]
+            columns = [column.name for column in destination.columns]
+            quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in columns)
+            table = table_name.replace('"', '""')
+            cursor = source.execute(f'SELECT {quoted} FROM "{table}"')
+            while rows := cursor.fetchmany(_SQLITE_COPY_BATCH_SIZE):
+                connection.execute(
+                    sqlalchemy.insert(destination),
+                    [dict(zip(columns, row, strict=True)) for row in rows],
+                )
+    finally:
+        source.close()
+
+
 # --------------------------------------------------------------------- merge (main process)
 
 
@@ -970,6 +1004,59 @@ def merge(ingest: "httk.store.db.bulk.BulkIngest", manifests: list[_WorkerManife
     :return: None.
     """
     _Merger(ingest, manifests).run()
+
+
+def _rebuild_untracked_dispatch(
+    connection: sqlalchemy.Connection,
+    store: SqlStore,
+    active_tables: set[str],
+) -> dict[str, int]:
+    """Build multi-record dispatch tables set-wise from surviving top-level backings."""
+    counts: dict[str, int] = {}
+    for family in store.layout.families:
+        if len(family.records) < 2:
+            continue
+        dispatch_name = entry_dispatch_table_name(family.name)
+        if dispatch_name not in active_tables:
+            continue
+        dispatch = store._table(dispatch_name)
+        columns = [column.name for column in dispatch.columns]
+        candidates = []
+        for record_name, record_type in zip(family.record_names, family.records, strict=True):
+            backing = store._table(resolve_schema(record_type).table_name)
+            target_column = backing_dispatch_column_name(record_name)
+            candidates.append(
+                sqlalchemy.select(
+                    *(
+                        backing.c[CONTENT_ID_COLUMN].label(column.name)
+                        if column.name == DISPATCH_CONTENT_ID_COLUMN
+                        else (
+                            backing.c[SID_COLUMN].label(column.name)
+                            if column.name == target_column
+                            else sqlalchemy.cast(sqlalchemy.null(), column.type).label(column.name)
+                        )
+                        for column in dispatch.columns
+                    )
+                ).where(backing.c[ROLE_COLUMN] == 1)
+            )
+        rows = sqlalchemy.union_all(*candidates).subquery()
+        conflict = connection.execute(
+            sqlalchemy.select(rows.c[DISPATCH_CONTENT_ID_COLUMN])
+            .group_by(rows.c[DISPATCH_CONTENT_ID_COLUMN])
+            .having(sqlalchemy.func.count() > 1)
+            .limit(1)
+        ).first()
+        if conflict is not None:
+            raise EntryDispatchIntegrityError(
+                f"entry dispatch {family.name!r} maps content_id {conflict[0]!r} to a conflicting backing row"
+            )
+        count = int(connection.execute(sqlalchemy.select(sqlalchemy.func.count()).select_from(rows)).scalar_one())
+        if count:
+            connection.execute(
+                sqlalchemy.insert(dispatch).from_select(columns, sqlalchemy.select(*(rows.c[name] for name in columns)))
+            )
+        counts[dispatch_name] = count
+    return counts
 
 
 class _Merger:
@@ -1067,35 +1154,16 @@ class _Merger:
             self._connection.execute(statement)
 
     def _load_sqlite_shards(self) -> None:
-        # SQLite forbids DETACH inside a transaction, and the merge owns one
-        # spanning transaction, so every shard is attached at once (its file is
-        # unlinked when the shard directory is cleaned up). Raise the default
-        # 10-database attach ceiling to accommodate many workers.
-        # The ingest owns this connection until after the transaction closes, so
-        # the post-transaction DETACH in _release_connection runs on the exact
-        # connection that attached these shards.
-        driver: Any = self._connection.connection.driver_connection
-        try:
-            driver.setlimit(sqlite3.SQLITE_LIMIT_ATTACHED, 125)
-        except (AttributeError, sqlite3.NotSupportedError):  # pragma: no cover - platform dependent
-            pass
-        for index, manifest in enumerate(self._manifests):
+        # Read each shard through its own connection: SQLite's compiled ATTACH
+        # ceiling is commonly ten and cannot always be raised at runtime.  The
+        # destination inserts still belong to the merge's one spanning transaction.
+        for manifest in self._manifests:
             database = manifest.shards.get("db")
             tables = manifest.shards.get("tables", [])
             if not database or not tables:
                 continue
-            alias = f"httk_shard_{index}"
-            # The path is bound (a quote in it must not break or inject); the alias
-            # is a controlled identifier and cannot be a bound parameter.
-            self._connection.execute(sqlalchemy.text(f"ATTACH DATABASE :db AS {alias}").bindparams(db=database))
-            self._ingest._parallel_attached.append(alias)
-            for table_name in tables:
-                columns = ", ".join(f'"{name}"' for name in self._table_columns(table_name))
-                self._connection.execute(
-                    sqlalchemy.text(
-                        f'INSERT INTO main."{table_name}" ({columns}) SELECT {columns} FROM {alias}."{table_name}"'
-                    )
-                )
+            destinations = {table_name: self._store._table(table_name) for table_name in tables}
+            _copy_sqlite_shard(self._connection, str(database), tables, destinations)
 
     # -- cross-worker collapse
 
@@ -1307,8 +1375,10 @@ class _Merger:
         matching the per-record ``save()`` loop's result.
         """
         reach = self._reachable_table()
-        seeds = self._survivor_seeds()
-        self._insert_reach(reach, seeds)
+        if self._ingest._track_sids:
+            self._insert_reach(reach, self._survivor_seeds())
+        else:
+            self._insert_role_roots(reach)
         self._close_reachability(reach)
         self._delete_unreached(reach)
         self._connection.execute(sqlalchemy.schema.DropTable(reach, if_exists=True))
@@ -1338,6 +1408,15 @@ class _Merger:
         self._connection.execute(
             sqlalchemy.insert(reach), [{"tbl": table_name, SID_COLUMN: sid} for table_name, sid in seeds]
         )
+
+    def _insert_role_roots(self, reach: sqlalchemy.Table) -> None:
+        """Seed untracked reachability directly from top-level row roles."""
+        for table_name in self._ingest._parent_schema:
+            table = self._store._table(table_name)
+            source = sqlalchemy.select(sqlalchemy.literal(table_name).label("tbl"), table.c[SID_COLUMN]).where(
+                table.c[ROLE_COLUMN] == 1
+            )
+            self._connection.execute(sqlalchemy.insert(reach).from_select(["tbl", SID_COLUMN], source))
 
     def _close_reachability(self, reach: sqlalchemy.Table) -> None:
         store = self._store
@@ -1454,6 +1533,10 @@ class _Merger:
 
     def _merge_dispatch(self) -> None:
         ingest = self._ingest
+        if not ingest._track_sids:
+            active = set(ingest._created_set) | set(ingest._preexisting)
+            ingest._inserted_count.update(_rebuild_untracked_dispatch(self._connection, self._store, active))
+            return
         for manifest in self._manifests:
             for row in manifest.dispatch:
                 final_sid = self._final_sid(row.ref_table, row.block_sid)
