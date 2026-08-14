@@ -109,7 +109,7 @@ def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -
     with clickhouse_database.engine.connect() as connection:
         assert dict(connection.execute(text("SELECT key, value FROM _httk_store_metadata")).all()) == {
             "protocol": STORAGE_PROTOCOL_VERSION,
-            "entry_declaration": '{"families":[],"format":1}',
+            "entry_declaration": '{"families":[],"format":2}',
             "write_profile": "bulk-fenced",
             "store_timestamps": "v1:1000",
         }
@@ -393,7 +393,7 @@ def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
                     stamps = dict(connection.execute(text("SELECT key, value FROM _httk_store_metadata")).all())
                 assert stamps == {
                     "protocol": STORAGE_PROTOCOL_VERSION,
-                    "entry_declaration": '{"families":[],"format":1}',
+                    "entry_declaration": '{"families":[],"format":2}',
                     "write_profile": "bulk-fenced",
                     "store_timestamps": "v1:1000",
                 }

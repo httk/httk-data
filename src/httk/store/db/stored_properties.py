@@ -31,7 +31,6 @@ from httk.core import (
     load_entry_type_definition,
 )
 from httk.core.optimade import FilterAst, parse_optimade_filter
-from httk.core.register import entry_family_info
 from httk.core.storage import (
     QueryLiteralError,
     StoredPropertyProjection,
@@ -885,14 +884,13 @@ def stored_property_sql_plan(store: SqlStore, family: type) -> StoredPropertySql
     entry_type = getattr(family, "type", None)
     if not isinstance(entry_type, str) or not entry_type or entry_type != entry_type.strip():
         raise StoredPropertySqlConfigurationError(f"{family.__name__}.type must be a non-empty stripped entry type")
-    registered_definition_id = entry_family_info(layout.name)[1]
-    definition_id = getattr(family, "definition_id", registered_definition_id)
-    if definition_id != registered_definition_id:
+    definition_id = getattr(family, "definition_id", layout.definition_id)
+    if definition_id != layout.definition_id:
         raise StoredPropertySqlConfigurationError(
-            f"{family.__name__}.definition_id does not match the registered family definition id"
+            f"{family.__name__}.definition_id does not match the store family definition id"
         )
     if not isinstance(definition_id, str) or not definition_id:
-        raise StoredPropertySqlConfigurationError(f"{family.__name__} needs a registered entry definition id")
+        raise StoredPropertySqlConfigurationError(f"{family.__name__} needs an entry definition id")
     factory = getattr(family, "entry_type_definition", None)
     definition = factory() if callable(factory) else load_entry_type_definition(definition_id)
     if not isinstance(definition, EntryTypeDefinition):

@@ -14,7 +14,7 @@ import sqlalchemy
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
-from httk.store import storage_layout
+from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration, storage_layout
 from httk.store.db import (
     STORAGE_PROTOCOL_VERSION,
     BackendFacts,
@@ -84,6 +84,29 @@ class WeirdNamedRecord:
 
 class UnregisteredFamily:
     pass
+
+
+class LocalLayoutFamily:
+    """Application-owned family which is deliberately not registered."""
+
+
+@dataclass(frozen=True)
+class LocalLayoutRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="local_layout_record")
+
+    value: str
+
+
+LOCAL_LAYOUT = EntryFamilyDeclaration(
+    name="test-local-layout-family",
+    family=LocalLayoutFamily,
+    records=(
+        EntryRecordDeclaration(
+            name="test-local-layout-record",
+            record=LocalLayoutRecord,
+        ),
+    ),
+)
 
 
 register_entry_family(name="test-layout-single-family", family=f"{__name__}:LayoutFamily")
@@ -167,9 +190,11 @@ def test_declaration_json_stamp_is_byte_stable() -> None:
     # This exact string guards cross-backend stamp stability.
     layout = normalize_entry_records({LayoutFamily: LayoutSingle, MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
     assert declaration_json(layout) == (
-        '{"families":[{"family":"test-layout-multi-family","records":["test-layout-first-backing",'
-        '"test-layout-second-backing"]},{"family":"test-layout-single-family",'
-        '"records":["test-layout-single-backing"]}],"format":1}'
+        '{"families":[{"definition_id":null,"family":"test-layout-multi-family","records":['
+        '{"definition_id":null,"record":"test-layout-first-backing"},{"definition_id":null,'
+        '"record":"test-layout-second-backing"}]},{"definition_id":null,"family":'
+        '"test-layout-single-family","records":[{"definition_id":null,"record":'
+        '"test-layout-single-backing"}]}],"format":2}'
     )
 
 
@@ -200,9 +225,39 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
         declaration = connection.execute(
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
-        assert declaration == '{"families":[],"format":1}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.4.0"
+        assert declaration == '{"families":[],"format":2}'
+    assert STORAGE_PROTOCOL_VERSION == "v2.5.0"
     assert SqlStore(database).entry_layout == ()
+
+
+def test_application_owned_declaration_needs_no_registry_and_rebinds_on_reopen(database: Database) -> None:
+    store = SqlStore(database, entry_families=(LOCAL_LAYOUT,))
+    record = LocalLayoutRecord("private")
+    sid = store.save(record)
+
+    layout = store.entry_layout[0]
+    assert layout.name == "test-local-layout-family"
+    assert layout.family is LocalLayoutFamily
+    assert layout.definition_id is None
+    assert layout.record_names == ("test-local-layout-record",)
+    assert layout.records == (LocalLayoutRecord,)
+    assert layout.record_definition_ids == (None,)
+
+    reopened = SqlStore(database, entry_families=(LOCAL_LAYOUT,))
+    assert reopened.fetch(LocalLayoutRecord, sid) == record
+    assert reopened.fetch_entry(LocalLayoutFamily, content_id(record)) == record
+
+    with pytest.raises(EntryLayoutBindingError, match="entry_families"):
+        SqlStore(database)
+
+
+def test_registered_and_application_owned_declarations_compose(database: Database) -> None:
+    store = SqlStore(
+        database,
+        entry_records={LayoutFamily: LayoutSingle},
+        entry_families=(LOCAL_LAYOUT,),
+    )
+    assert tuple(layout.family for layout in store.entry_layout) == (LayoutFamily, LocalLayoutFamily)
 
 
 def test_stamp_trust_reopens_with_missing_or_changed_record_tables(database: Database) -> None:
@@ -265,7 +320,7 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
         assert actual_table_names(connection) == before
 
 
-@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0"])
+@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"])
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     database: Database, old_protocol: str
 ) -> None:

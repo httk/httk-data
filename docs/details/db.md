@@ -108,6 +108,37 @@ store = SqlStore(
 )
 ```
 
+Applications may keep a private entry family out of global plugin discovery.
+Supply its stable persistence names and classes directly with
+`EntryFamilyDeclaration` and `EntryRecordDeclaration`:
+
+```python
+from httk.store import EntryFamilyDeclaration, EntryRecordDeclaration
+
+private_entries = EntryFamilyDeclaration(
+    name="my-application-publications",
+    family=PublicationEntry,
+    records=(
+        EntryRecordDeclaration(
+            name="my-application-publication",
+            record=PublicationRecord,
+        ),
+    ),
+)
+store = SqlStore(db, entry_families=(private_entries,))
+```
+
+This is a store-local binding, not a registry operation. The store persists
+the stable names and optional entry-definition IRIs but never persists or
+imports arbitrary Python paths. Consequently, every reopen of a store with
+application-owned declarations must supply the same `entry_families` value.
+Omitting it raises `EntryLayoutBindingError`. Installed reusable modules should
+continue to use registry-backed `entry_records`, which permits automatic
+resolution on `SqlStore(db)`.
+Both arguments may be supplied together when one store combines reusable
+module families with application-private families; name or class collisions
+are rejected while constructing the combined layout.
+
 A single record is queried directly. A tuple of two or more records creates
 a small family dispatch table, while the representation-specific data remains
 in its normalized Record tables. Saving an exact configured record (including
@@ -115,7 +146,7 @@ saving a naturally bound domain object) makes it discoverable through
 `fetch_entry(StructureEntry, content_id)`; that method returns the actual
 concrete Record.
 
-Later `SqlStore(db)` calls trust the persisted declaration; there is no layout
+Later registry-backed `SqlStore(db)` calls trust the persisted declaration; there is no layout
 mode or schema diffing. Missing or edited record tables fail with the database's
 own errors when used. Tables are created lazily on the first write; reads never
 issue DDL. Old, unversioned, or incompatible layouts raise

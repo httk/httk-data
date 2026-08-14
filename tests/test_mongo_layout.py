@@ -7,6 +7,7 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo
 
+from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration
 from httk.store.mongo import MongoStore
 from httk.store.mongo.mapping import METADATA_COLLECTION
 from httk.store.storage_layout import StorageLayoutUpgradeRequiredError
@@ -38,6 +39,24 @@ register_entry_family(name="test-mongo-layout-family", family=f"{__name__}:Mongo
 register_entry_record(
     name="test-mongo-layout-record", family="test-mongo-layout-family", record=f"{__name__}:MongoLayoutRecord"
 )
+
+
+class LocalMongoFamily:
+    """Application-owned Mongo family which is deliberately not registered."""
+
+
+@dataclass(frozen=True)
+class LocalMongoRecord:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="local_mongo_record")
+
+    value: str
+
+
+LOCAL_MONGO_LAYOUT = EntryFamilyDeclaration(
+    name="test-local-mongo-family",
+    family=LocalMongoFamily,
+    records=(EntryRecordDeclaration(name="test-local-mongo-record", record=LocalMongoRecord),),
+)
 register_entry_family(name="test-mongo-other-family", family=f"{__name__}:MongoOtherFamily")
 register_entry_record(
     name="test-mongo-other-record", family="test-mongo-other-family", record=f"{__name__}:MongoOtherRecord"
@@ -57,7 +76,7 @@ def test_first_open_stamps_six_keys_and_reopen_trusts(mongo_test_database) -> No
         "generation",
         "store_timestamps",
     }
-    assert document["protocol"] == "v2.1.0"
+    assert document["protocol"] == "v2.2.0"
     assert document["document_layout"] == "mongo-v2"
     assert MongoStore(mongo_test_database).layout == store.layout
 
@@ -90,6 +109,16 @@ def test_supplied_declaration_mismatch_has_structured_diff(mongo_test_database) 
         MongoStore(mongo_test_database, entry_records={MongoOtherFamily: MongoOtherRecord})
     assert "declaration" in error.value.diff
     assert error.value.diff["declaration"]["expected"] != error.value.diff["declaration"]["actual"]
+
+
+def test_application_owned_declaration_rebinds_without_registration(mongo_test_database) -> None:
+    """A local family is rebound explicitly rather than imported through discovery."""
+    store = MongoStore(mongo_test_database, entry_families=(LOCAL_MONGO_LAYOUT,))
+    assert store.entry_layout[0].family is LocalMongoFamily
+    assert store.entry_layout[0].records == (LocalMongoRecord,)
+    assert MongoStore(mongo_test_database, entry_families=(LOCAL_MONGO_LAYOUT,)).layout == store.layout
+    with pytest.raises(EntryLayoutBindingError, match="entry_families"):
+        MongoStore(mongo_test_database)
 
 
 def test_unversioned_database_is_refused_with_reserved_and_unversioned_entries(mongo_test_database) -> None:

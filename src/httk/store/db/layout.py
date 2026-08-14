@@ -1,7 +1,7 @@
 """Versioned physical layout for :class:`httk.store.db.store.SqlStore`."""
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Final, Literal
 
@@ -10,10 +10,15 @@ import sqlalchemy
 from httk.store.db.mapping import dispatch_table_for, entry_dispatch_table_name, table_for
 from httk.store.db.schema import resolve_schema
 from httk.store.storage_layout import (
+    EntryFamilyDeclaration,
     EntryFamilyLayout,
     StorageLayout,
     StorageLayoutUpgradeRequiredError,
+    _merge_storage_layouts,
     declaration_json,
+)
+from httk.store.storage_layout import (
+    normalize_entry_families as _normalize_entry_families,
 )
 from httk.store.storage_layout import (
     normalize_entry_records as _normalize_entry_records,
@@ -34,13 +39,15 @@ __all__ = [
     "declaration_json",
     "expected_metadata",
     "metadata_table_for",
+    "normalize_entry_declaration",
+    "normalize_entry_families",
     "normalize_entry_records",
     "read_store_metadata",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.4.0"
-# This bump adds the ClickHouse bulk-fenced profile and KeeperMap metadata
-# semantics to the permanentization layout.
+STORAGE_PROTOCOL_VERSION: Final = "v2.5.0"
+# This bump makes entry declarations self-describing and permits explicit
+# application-owned family bindings without global registry discovery.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"
@@ -153,6 +160,30 @@ def backend_facts_for_dialect(dialect_name: str) -> BackendFacts:
 def normalize_entry_records(entry_records: Mapping[type, type | tuple[type, ...]]) -> StorageLayout:
     """Normalize a declaration and apply SQL physical-name validation."""
     layout = _normalize_entry_records(entry_records)
+    _validate_physical_names(layout)
+    return layout
+
+
+def normalize_entry_families(entry_families: Sequence[EntryFamilyDeclaration]) -> StorageLayout:
+    """Normalize application-owned declarations and apply SQL physical-name validation."""
+    layout = _normalize_entry_families(entry_families)
+    _validate_physical_names(layout)
+    return layout
+
+
+def normalize_entry_declaration(
+    entry_records: Mapping[type, type | tuple[type, ...]] | None,
+    entry_families: Sequence[EntryFamilyDeclaration] | None,
+) -> StorageLayout | None:
+    """Merge registered and application-owned declarations and validate SQL names."""
+    layouts = []
+    if entry_records is not None:
+        layouts.append(_normalize_entry_records(entry_records))
+    if entry_families is not None:
+        layouts.append(_normalize_entry_families(entry_families))
+    if not layouts:
+        return None
+    layout = _merge_storage_layouts(*layouts)
     _validate_physical_names(layout)
     return layout
 

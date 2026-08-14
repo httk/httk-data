@@ -83,6 +83,7 @@ from .query.optimade_filters import (
     FilterTranslationError,
     filter_searcher,
 )
+from .storage_layout import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration
 from .store_common import EntryStore
 from .validation import PropertyValidationError, validate_property, validate_record
 
@@ -91,6 +92,9 @@ __all__ = [
     "ContinuationToken",
     "CountUnavailableError",
     "DataRecordEntryProvider",
+    "EntryFamilyDeclaration",
+    "EntryLayoutBindingError",
+    "EntryRecordDeclaration",
     "EntryStore",
     "FederatedResultSet",
     "FederatedSearcher",

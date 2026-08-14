@@ -84,6 +84,12 @@ store = MongoStore(
 )
 ```
 
+Application-private families can instead use the same explicit
+`EntryFamilyDeclaration`/`EntryRecordDeclaration` and `entry_families=` API as
+`SqlStore`. Such declarations bypass global discovery and must be supplied
+again on every reopen; see [Vocabulary](db.md#vocabulary) for the complete
+example and binding rules.
+
 The document layout is backend-specific, while the vocabulary of entry
 families, records, content ids, sids, projections, and stored properties is
 shared with the SQL layer. See [Vocabulary](db.md#vocabulary) for those

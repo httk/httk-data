@@ -38,7 +38,7 @@ import threading
 import time
 import typing
 import uuid
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import sqlalchemy
@@ -74,7 +74,7 @@ from httk.store.db.layout import (
     declaration_json,
     expected_metadata,
     metadata_table_for,
-    normalize_entry_records,
+    normalize_entry_declaration,
     read_store_metadata,
 )
 from httk.store.db.mapping import (
@@ -91,6 +91,7 @@ from httk.store.db.mapping import (
 from httk.store.db.rows import RowHydrator, StaleResultError, decode_field, is_lazy_row, lazy_row_identity
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlSearcher
+from httk.store.storage_layout import EntryFamilyDeclaration, EntryLayoutBindingError
 from httk.store.store_common import (
     _MISSING_METADATA,
     EntryDispatchIntegrityError,
@@ -147,7 +148,8 @@ class SqlStore:
     layout marker has been initialized on a physically empty database. Schemas
     edited out-of-band fail at use time with the database's own errors.
 
-    The first open of a database requires ``entry_records``. The store stamps
+    The first open of a database requires ``entry_records`` or
+    ``entry_families``. The store stamps
     the canonical JSON declaration and protocol version, then trusts that
     declaration on reopen: a supplied declaration must be byte-identical, and
     mismatches raise :class:`~httk.store.db.layout.StorageLayoutUpgradeRequiredError`.
@@ -157,11 +159,12 @@ class SqlStore:
 
     :param database: The database used for storage.
     :param entry_records: The required entry-family declaration when first opening a database.
+    :param entry_families: Application-owned declarations which bypass global registration.
     :param store_timestamps: Whether parent rows carry store-managed timestamps.
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
-    :raises TypeError: If the first open omits ``entry_records``.
+    :raises TypeError: If the first open omits both declaration forms.
     :raises httk.store.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
     """
 
@@ -176,6 +179,7 @@ class SqlStore:
         database: Database,
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
+        entry_families: Sequence[EntryFamilyDeclaration] | None = None,
         store_timestamps: bool = True,
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
@@ -221,7 +225,8 @@ class SqlStore:
             # initialization can create metadata, and a dispose interleaving
             # must never leave a later write able to acquire an unowned lease.
             self._register_degraded_lifecycle_fence()
-        self._initialize_layout(entry_records)
+        supplied = normalize_entry_declaration(entry_records, entry_families)
+        self._initialize_layout(supplied)
 
     @property
     def layout(self) -> StorageLayout:
@@ -283,8 +288,7 @@ class SqlStore:
         """
         return self.layout.entry_records
 
-    def _initialize_layout(self, entry_records: Mapping[type, type | tuple[type, ...]] | None) -> None:
-        supplied = normalize_entry_records(entry_records) if entry_records is not None else None
+    def _initialize_layout(self, supplied: StorageLayout | None) -> None:
         try:
             with self._degraded_lifecycle_guard(), self._database.engine.begin() as connection:
                 self._initialize_layout_on_connection(connection, supplied)
@@ -321,7 +325,7 @@ class SqlStore:
 
         if not objects_before:
             if supplied is None:
-                raise TypeError("entry_records is required when opening an uninitialized database")
+                raise TypeError("entry_records or entry_families is required when opening an uninitialized database")
             expected = expected_metadata(supplied, store_timestamps=self._store_timestamps)
             metadata_table = expected.tables[METADATA_TABLE_NAME]
             if self.backend_facts.metadata_backend == "keepermap":
@@ -534,19 +538,26 @@ class SqlStore:
                 }
             }
         persisted: StorageLayout | None = None
-        try:
-            persisted = self._layout_from_stored_declaration(stored.get("entry_declaration"))
-        except (TypeError, ValueError) as error:
-            diff["declaration"] = {
-                "expected": "canonical registered declaration",
-                "actual": stored.get("entry_declaration"),
-                "error": str(error),
-            }
-        if persisted is not None and supplied is not None and declaration_json(persisted) != declaration_json(supplied):
-            diff["declaration"] = {
-                "expected": declaration_json(persisted),
-                "actual": declaration_json(supplied),
-            }
+        stored_declaration = stored.get("entry_declaration")
+        if supplied is not None and isinstance(stored_declaration, str):
+            if stored_declaration == declaration_json(supplied):
+                persisted = supplied
+            else:
+                diff["declaration"] = {
+                    "expected": stored_declaration,
+                    "actual": declaration_json(supplied),
+                }
+        else:
+            try:
+                persisted = self._layout_from_stored_declaration(stored_declaration)
+            except EntryLayoutBindingError:
+                raise
+            except (TypeError, ValueError) as error:
+                diff["declaration"] = {
+                    "expected": "canonical registered declaration or explicit entry_families binding",
+                    "actual": stored_declaration,
+                    "error": str(error),
+                }
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None

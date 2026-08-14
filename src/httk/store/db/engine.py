@@ -48,6 +48,8 @@ class Database:
     :param engine: The configured SQLAlchemy engine to wrap.
     :param degraded: Open with autocommit isolation for degraded-mode access
         (recovery and inspection) instead of the default transactional isolation.
+    :param write_profile: Explicit permanentization profile, or ``None`` to
+        derive it from the backend and ``degraded`` flag.
     """
 
     def __init__(
@@ -165,6 +167,9 @@ class Database:
         storage profile before any :class:`~httk.store.db.store.SqlStore`
         initialization occurs.
 
+        :param url: ClickHouse SQLAlchemy URL or URL string.
+        :param database: Database name overriding the URL path, if supplied.
+        :return: Connected ClickHouse database wrapper using the bulk-fenced profile.
         :raises ImportError: If ``clickhouse-connect`` is not installed; install
             the ``httk-store[clickhouse]`` extra.
         :raises RuntimeError: If Keeper is unavailable, the server is too old,

@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 import typing
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from httk.core import FracVector
@@ -20,11 +20,15 @@ from httk.store.db.codecs import codec_named, decode_fracvector_exact
 from httk.store.db.schema import SchemaError, resolve_schema
 from httk.store.storage_layout import (
     DECLARATION_PROTOCOL_VERSION,
+    EntryFamilyDeclaration,
     EntryFamilyLayout,
+    EntryLayoutBindingError,
     StorageLayout,
     StorageLayoutUpgradeRequiredError,
     _layout_from_declaration,
+    _merge_storage_layouts,
     declaration_json,
+    normalize_entry_families,
     normalize_entry_records,
 )
 from httk.store.store_common import (
@@ -101,11 +105,12 @@ class MongoStore:
 
     :param database: The MongoDB database wrapper.
     :param entry_records: The required entry-family declaration on first open.
+    :param entry_families: Application-owned declarations which bypass global registration.
     :param store_timestamps: Whether saved parent documents receive timestamps.
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
-    :raises TypeError: If the first open omits ``entry_records``.
+    :raises TypeError: If the first open omits both declaration forms.
     :raises ~httk.store.storage_layout.StorageLayoutUpgradeRequiredError: If the
         persisted layout is not trusted by this implementation.
     """
@@ -118,6 +123,7 @@ class MongoStore:
         database: MongoDatabase,
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
+        entry_families: Sequence[EntryFamilyDeclaration] | None = None,
         store_timestamps: bool = True,
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
@@ -153,7 +159,12 @@ class MongoStore:
                 "MongoStore is running in degraded mode without multi-document transactions",
                 extra={"context": "storage"},
             )
-        supplied = normalize_entry_records(entry_records) if entry_records is not None else None
+        layouts = []
+        if entry_records is not None:
+            layouts.append(normalize_entry_records(entry_records))
+        if entry_families is not None:
+            layouts.append(normalize_entry_families(entry_families))
+        supplied = _merge_storage_layouts(*layouts) if layouts else None
         self._initialize_layout(supplied)
         for family in self.layout.families:
             self._known_record_types.update(family.records)
@@ -207,7 +218,7 @@ class MongoStore:
 
         if not metadata_exists and not names:
             if supplied is None:
-                raise TypeError("entry_records is required when opening an uninitialized database")
+                raise TypeError("entry_records or entry_families is required when opening an uninitialized database")
             self._validate_layout_names(supplied)
             document = {
                 "_id": "layout",
@@ -263,23 +274,29 @@ class MongoStore:
 
         persisted: StorageLayout | None = None
         declaration = stored.get("entry_declaration")
-        try:
-            if not isinstance(declaration, str):
-                raise ValueError("metadata is missing entry_declaration")
-            persisted = _layout_from_declaration(declaration)
-            if declaration_json(persisted) != declaration:
-                raise ValueError("stored entry declaration is not in its canonical deterministic encoding")
-        except (TypeError, ValueError) as error:
-            diff["declaration"] = {
-                "expected": "canonical registered declaration",
-                "actual": declaration,
-                "error": str(error),
-            }
-        if persisted is not None and supplied is not None and declaration_json(persisted) != declaration_json(supplied):
-            diff["declaration"] = {
-                "expected": declaration_json(persisted),
-                "actual": declaration_json(supplied),
-            }
+        if supplied is not None and isinstance(declaration, str):
+            if declaration == declaration_json(supplied):
+                persisted = supplied
+            else:
+                diff["declaration"] = {
+                    "expected": declaration,
+                    "actual": declaration_json(supplied),
+                }
+        else:
+            try:
+                if not isinstance(declaration, str):
+                    raise ValueError("metadata is missing entry_declaration")
+                persisted = _layout_from_declaration(declaration)
+                if declaration_json(persisted) != declaration:
+                    raise ValueError("stored entry declaration is not in its canonical deterministic encoding")
+            except EntryLayoutBindingError:
+                raise
+            except (TypeError, ValueError) as error:
+                diff["declaration"] = {
+                    "expected": "canonical registered declaration or explicit entry_families binding",
+                    "actual": declaration,
+                    "error": str(error),
+                }
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None

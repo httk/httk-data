@@ -15,8 +15,6 @@ from typing import TYPE_CHECKING, Any
 from httk.core import load_entry_type_definition
 from httk.core.project import PROJECT_DIRECTORY, discover_project
 from httk.core.register import (
-    entry_family_info,
-    entry_record_info,
     known_property_definitions,
     load_property_definition,
 )
@@ -63,16 +61,15 @@ def _add_definition_candidate(
 def _definitions(
     store: Any,
 ) -> tuple[dict[str, bytes], list[dict[str, str]], list[dict[str, object]]]:
-    """Collect registered entry-type and property documents for *store*."""
+    """Collect declared entry-type and property documents for *store*."""
 
     entry_ids: set[str] = set()
     authoritative_definitions: dict[str, Any] = {}
     declaration: list[dict[str, object]] = []
     for family in store.entry_layout:
-        family_id = entry_family_info(family.name)[1]
+        family_id = family.definition_id
         record_ids = []
-        for record_name in family.record_names:
-            record_id = entry_record_info(record_name)[2]
+        for record_id in family.record_definition_ids:
             if record_id is not None:
                 entry_ids.add(record_id)
                 record_ids.append(record_id)
@@ -82,7 +79,7 @@ def _definitions(
             if callable(factory):
                 authoritative_definitions[family_id] = factory()
         elif not record_ids:
-            raise ValueError(f"store family {family.name!r} has no registered entry-type definition")
+            raise ValueError(f"store family {family.name!r} has no entry-type definition")
         declaration.append(
             {
                 "family": family.name,

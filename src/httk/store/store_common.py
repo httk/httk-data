@@ -12,6 +12,7 @@ from httk.core.storage import IdentitySkip, project_storage_record
 from httk.core.storage.identity import _trusted_content_id
 
 from httk.store.db.schema import FieldSpec, resolve_schema
+from httk.store.storage_layout import EntryFamilyLayout
 
 __all__ = [
     "EntryDispatchIntegrityError",
@@ -36,7 +37,7 @@ class EntryStore(Protocol):
     """
 
     @property
-    def entry_layout(self) -> tuple[Any, ...]:
+    def entry_layout(self) -> tuple[EntryFamilyLayout, ...]:
         """Return the configured entry-family layouts in stable order."""
         ...
 

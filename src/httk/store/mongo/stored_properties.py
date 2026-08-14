@@ -23,7 +23,6 @@ from httk.core import (
     load_entry_type_definition,
 )
 from httk.core.optimade import FilterAst, parse_optimade_filter
-from httk.core.register import entry_family_info
 from httk.core.storage import QueryLiteralError, StoredPropertyProjection, content_id, stored_property_projections
 
 from httk.store.db.schema import FieldSpec, SchemaError, resolve_schema
@@ -547,10 +546,10 @@ def stored_property_mongo_plan(store: Any, family: type) -> MongoStoredPropertyP
     entry_type = getattr(family, "type", None)
     if not isinstance(entry_type, str) or not entry_type or entry_type != entry_type.strip():
         raise MongoStoredPropertyConfigurationError(f"{family.__name__}.type must be a non-empty stripped entry type")
-    definition_id = getattr(family, "definition_id", entry_family_info(layout.name)[1])
-    if definition_id != entry_family_info(layout.name)[1]:
+    definition_id = getattr(family, "definition_id", layout.definition_id)
+    if definition_id != layout.definition_id:
         raise MongoStoredPropertyConfigurationError(
-            f"{family.__name__}.definition_id does not match the registered family definition id"
+            f"{family.__name__}.definition_id does not match the store family definition id"
         )
     factory = getattr(family, "entry_type_definition", None)
     definition = factory() if callable(factory) else load_entry_type_definition(definition_id)
