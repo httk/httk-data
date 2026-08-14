@@ -28,6 +28,7 @@ from test_db_bulk import (
     BulkCalcA,
     BulkCalcB,
     BulkCalcFamily,
+    BulkImportEnvelope,
     ByValParent,
     ContentParent,
     Elem,
@@ -59,6 +60,41 @@ CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 
 
 # --- record shapes exercising the parallel metadata-verification restriction (H2) and float semantics (M2)
+
+
+@pytest.mark.parametrize("finalize", ["parity", "deferred"])
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("track_sids", [True, False])
+def test_bulk_promotes_nested_entry_records(finalize, workers, track_sids) -> None:
+    """A named nested record becomes an entry even after its private occurrence was flushed."""
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records=CALC_FAMILY)
+        structure = BulkCalcA("alpha", 1)
+        envelope = BulkImportEnvelope("1000008.cif", structure)
+        with store.bulk_ingest(
+            workers=workers,
+            finalize=finalize,
+            track_sids=track_sids,
+            chunk_size=1,
+        ) as bulk:
+            bulk.save(envelope)
+            bulk.save(Author("separator", 0))
+            bulk.save(envelope, promote=BulkCalcA)
+        assert store.fetch_entry(BulkCalcFamily, content_id(structure)) == structure
+    finally:
+        database.dispose()
+
+
+def test_bulk_rejects_unreachable_promoted_record() -> None:
+    """A misspelled or unrelated promotion cannot silently do nothing."""
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records=CALC_FAMILY)
+        with store.bulk_ingest(finalize="parity") as bulk, pytest.raises(ValueError, match="not reachable"):
+            bulk.save(BulkImportEnvelope("one.cif", BulkCalcA("alpha", 1)), promote=BulkCalcB)
+    finally:
+        database.dispose()
 
 
 @dataclass(frozen=True)

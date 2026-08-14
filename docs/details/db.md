@@ -406,6 +406,13 @@ or final — to its durable stored sid. It keys on the bare sid value, so resolv
 a returned sid against the type it was saved as (sids are allocated per table,
 and one value can recur across tables).
 
+**Nested entry promotion.** `bulk.save(envelope, promote=StructureRecord)`
+makes every nested `StructureRecord` occurrence a top-level entry while keeping
+the envelope as the returned root. Pass an iterable of classes to promote more
+than one record type. Each class must be reachable from the envelope's stored
+schema; projection, role marking, and entry dispatch all remain inside the same
+worker task.
+
 **`verify_metadata`** (default `True`, a plain `bool`) controls whether a
 content-id hit compares its identity-excluded metadata against the first
 in-memory occurrence — or against the stored row for a hit against existing

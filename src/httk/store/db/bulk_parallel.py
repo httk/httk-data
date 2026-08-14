@@ -75,6 +75,7 @@ from httk.store.db.store import (
     SqlStore,
     _encode_child_rows,
     _encode_parent_row,
+    _encode_promoted_descendants,
     _field_path,
 )
 from httk.store.store_common import (
@@ -224,6 +225,8 @@ class _WorkerManifest:
     worker_index: int
     encoded_count: int
     token_sid: dict[int, tuple[str, int]]
+    roots: list[tuple[str, int]]
+    late_role_roots: list[tuple[str, int]]
     dispatch: list[_DispatchRow]
     tables: list[str]
     # DuckDB: table -> list of parquet file paths. SQLite: {"db": path}.
@@ -510,6 +513,8 @@ class _WorkerEncoder:
         self._value_index: dict[str, dict[tuple[Any, ...], int]] = {}
         self._token_sid: dict[int, tuple[str, int]] = {}
         self._encoded_count = 0
+        self._roots: list[tuple[str, int]] = []
+        self._late_role_roots: list[tuple[str, int]] = []
         self._root_rows: list[dict[str, Any]] = []
         self._dispatch: list[_DispatchRow] = []
         self._dispatch_payload: list[dict[str, Any]] = []
@@ -530,12 +535,48 @@ class _WorkerEncoder:
 
     # -- encoding
 
-    def save(self, token: int, obj: Any, as_record: type | None) -> int:
+    def save(
+        self,
+        token: int,
+        obj: Any,
+        as_record: type | None,
+        promote: frozenset[type] = frozenset(),
+    ) -> int:
         record_type = resolve_storage_record(obj, as_record=as_record)
         projection = SaveProjection(store_timestamp=self._config.store_timestamp)
-        sid = self._encode(record_type, obj, projection, "")
-        self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
+        occurrences: list[tuple[type, Any, int]] = []
+        seen: set[tuple[type, int, int]] = set()
+        sid = self._encode(record_type, obj, projection, "", promote, occurrences, seen)
+        root = (record_type, id(obj), sid)
+        if root not in seen:
+            occurrences.append((record_type, obj, sid))
+        for occurrence_type, source, occurrence_sid in occurrences:
+            self._promote_occurrence(token, occurrence_type, source, projection, occurrence_sid)
         table_name = resolve_schema(record_type).table_name
+        if self._config.track_sids:
+            self._token_sid[token] = (table_name, sid)
+        self._since_flush += 1
+        if self._since_flush >= self._chunk_size:
+            self._flush()
+        self._encoded_count += 1
+        return sid
+
+    def _promote_occurrence(
+        self,
+        token: int,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        sid: int,
+    ) -> None:
+        table_name = resolve_schema(record_type).table_name
+        marked = self._promote_buffered_role(table_name, sid)
+        if self._config.track_sids and not self._config.spill_deferred_auxiliary:
+            self._roots.append((table_name, sid))
+            if not marked:
+                self._late_role_roots.append((table_name, sid))
+        if self._config.spill_deferred_auxiliary:
+            self._root_rows.append({"token": token, "tbl": table_name, "stage_sid": sid})
         family = self._store._family_for_backing(record_type)
         if (
             (self._config.track_sids or self._config.spill_deferred_auxiliary)
@@ -544,7 +585,7 @@ class _WorkerEncoder:
         ):
             dispatch = _DispatchRow(
                 dispatch_name=entry_dispatch_table_name(family.name),
-                key=projection.content_id(record_type, obj),
+                key=projection.content_id(record_type, source),
                 column=backing_dispatch_column_name(family.record_names[family.records.index(record_type)]),
                 all_columns=tuple(backing_dispatch_column_name(name) for name in family.record_names),
                 ref_table=table_name,
@@ -562,27 +603,41 @@ class _WorkerEncoder:
                 )
             else:
                 self._dispatch.append(dispatch)
-        if self._config.track_sids:
-            self._token_sid[token] = (table_name, sid)
-        if self._config.spill_deferred_auxiliary:
-            self._root_rows.append({"token": token, "tbl": table_name, "stage_sid": sid})
-        self._since_flush += 1
-        if self._since_flush >= self._chunk_size:
-            self._flush()
-        self._encoded_count += 1
-        return sid
 
-    def _encode(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
+    def _encode(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        path: str,
+        promote: frozenset[type],
+        occurrences: list[tuple[type, Any, int]],
+        seen: set[tuple[type, int, int]],
+    ) -> int:
         active_key = (record_type, id(source))
         if active_key in projection.active:
             raise StorageProjectionCycleError(path, record_type)
         projection.active.add(active_key)
         try:
-            return self._encode_active(record_type, source, projection, path)
+            sid = self._encode_active(record_type, source, projection, path, promote, occurrences, seen)
+            key = (record_type, id(source), sid)
+            if record_type in promote and key not in seen:
+                seen.add(key)
+                occurrences.append((record_type, source, sid))
+            return sid
         finally:
             projection.active.remove(active_key)
 
-    def _encode_active(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
+    def _encode_active(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        path: str,
+        promote: frozenset[type],
+        occurrences: list[tuple[type, Any, int]],
+        seen: set[tuple[type, int, int]],
+    ) -> int:
         schema = resolve_schema(record_type)
         self._register(record_type)
         table_name = schema.table_name
@@ -596,6 +651,9 @@ class _WorkerEncoder:
                 validator.__get__(None, record_type)(source)
             projection.validated.add(validation_key)
 
+        def resolve_sid(referenced_type: type, value: Any, field_path: str) -> int:
+            return self._encode(referenced_type, value, projection, field_path, promote, occurrences, seen)
+
         dedup_content = schema.dedup == "content_id" and _metadata_plan(record_type) is None
         key: str | None = None
         if schema.dedup == "content_id":
@@ -603,10 +661,10 @@ class _WorkerEncoder:
             if dedup_content and self._deduplicate_in_worker:
                 existing = self._content_index.setdefault(table_name, {}).get(key)
                 if existing is not None:
+                    _encode_promoted_descendants(
+                        schema, source, projected, path, existing, promote, resolve_sid, references=True
+                    )
                     return existing
-
-        def resolve_sid(referenced_type: type, value: Any, field_path: str) -> int:
-            return self._encode(referenced_type, value, projection, field_path)
 
         values = _encode_parent_row(schema, source, projected, path, resolve_sid)
 
@@ -615,6 +673,9 @@ class _WorkerEncoder:
             if self._deduplicate_in_worker:
                 existing = self._value_index.setdefault(table_name, {}).get(value_tuple)
                 if existing is not None:
+                    _encode_promoted_descendants(
+                        schema, source, projected, path, existing, promote, resolve_sid, references=False
+                    )
                     return existing
 
         sid = self._next_sid[table_name]
@@ -660,11 +721,12 @@ class _WorkerEncoder:
                 self._buffer(spec.child.table_name, child_row)
         return sid
 
-    def _promote_buffered_role(self, table_name: str, sid: int) -> None:
+    def _promote_buffered_role(self, table_name: str, sid: int) -> bool:
         for row in self._rows.get(table_name, ()):
             if row[SID_COLUMN] == sid:
                 row[ROLE_COLUMN] = 1
-                return
+                return True
+        return False
 
     def _register(self, record_type: type) -> None:
         if record_type in self._registered:
@@ -697,6 +759,8 @@ class _WorkerEncoder:
             worker_index=-1,  # filled by the caller
             encoded_count=self._encoded_count,
             token_sid=self._token_sid,
+            roots=self._roots,
+            late_role_roots=self._late_role_roots,
             dispatch=self._dispatch,
             tables=sorted(self._tables),
             shards=self._writer.finalize(),
@@ -710,7 +774,7 @@ class _WorkerEncoder:
 def _worker_main(worker_index: int, task_queue: Any, result_queue: Any) -> None:
     """Worker process entry point: encode tasks into shards, then report a manifest.
 
-    Tasks arrive as pickled ``(token, obj, as_record)`` byte strings (the main
+    Tasks arrive as pickled ``(token, obj, as_record, promote)`` byte strings (the main
     process pickles synchronously, so an unpicklable object fails the caller's
     ``save`` promptly instead of vanishing in a queue feeder thread). The worker
     never touches the store's database. On completion (or failure) it flushes its
@@ -729,8 +793,8 @@ def _worker_main(worker_index: int, task_queue: Any, result_queue: Any) -> None:
             item = task_queue.get()
             if item is None:
                 break
-            token, obj, as_record = pickle.loads(item)
-            encoder.save(token, obj, as_record)
+            token, obj, as_record, promote = pickle.loads(item)
+            encoder.save(token, obj, as_record, promote)
         manifest = encoder.finish()
         manifest.worker_index = worker_index
         _report(result_queue, (worker_index, "ok", manifest))
@@ -829,11 +893,17 @@ class ParallelController:
             _PARENT_STORE = None
             _PARENT_CONFIG = None
 
-    def dispatch(self, token: int, obj: Any, as_record: type | None) -> None:
+    def dispatch(
+        self,
+        token: int,
+        obj: Any,
+        as_record: type | None,
+        promote: frozenset[type] = frozenset(),
+    ) -> None:
         """Pickle the task synchronously and enqueue it on its worker (routed by token)."""
         # Pickle here, in the caller's thread: an unpicklable object raises out of
         # ``save`` promptly rather than being silently dropped by a queue feeder.
-        payload = pickle.dumps((token, obj, as_record))
+        payload = pickle.dumps((token, obj, as_record, promote))
         queue = self._queues[token % self._workers]
         while True:
             self._raise_if_worker_broken()
@@ -1107,6 +1177,7 @@ class _Merger:
                 changed = self._collapse_by_value(table, schema) or changed
             if not changed:
                 break
+        self._promote_late_roles()
         self._sweep_orphans()
         for name in self._graph.dependency_order(self._store._metadata.tables):
             table = self._store._metadata.tables[name]
@@ -1386,9 +1457,26 @@ class _Merger:
     def _survivor_seeds(self) -> list[tuple[str, int]]:
         seeds: set[tuple[str, int]] = set()
         for manifest in self._manifests:
-            for table_name, block_sid in manifest.token_sid.values():
+            for table_name, block_sid in manifest.roots:
                 seeds.add((table_name, self._collapse.get((table_name, block_sid), block_sid)))
         return sorted(seeds)
+
+    def _promote_late_roles(self) -> None:
+        """Mark roots whose worker row had already been flushed before promotion."""
+        by_table: dict[str, set[int]] = {}
+        for manifest in self._manifests:
+            for table_name, block_sid in manifest.late_role_roots:
+                by_table.setdefault(table_name, set()).add(self._collapse.get((table_name, block_sid), block_sid))
+        for table_name, sids in by_table.items():
+            table = self._store._table(table_name)
+            ordered = sorted(sids)
+            for start in range(0, len(ordered), _SQLITE_COPY_BATCH_SIZE):
+                batch = ordered[start : start + _SQLITE_COPY_BATCH_SIZE]
+                self._connection.execute(
+                    sqlalchemy.update(table)
+                    .where(table.c[SID_COLUMN].in_(batch), table.c[ROLE_COLUMN] == 0)
+                    .values({ROLE_COLUMN: 1})
+                )
 
     def _reachable_table(self) -> sqlalchemy.Table:
         reach = sqlalchemy.Table(

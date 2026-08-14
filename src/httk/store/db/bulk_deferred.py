@@ -413,7 +413,7 @@ class DeferredFinalizer:
                 root_rows = [
                     {"tbl": table, "stage_sid": sid}
                     for manifest in self.manifests
-                    for table, sid in manifest.token_sid.values()
+                    for table, sid in manifest.roots
                     if table in self.maps
                 ]
                 if root_rows:

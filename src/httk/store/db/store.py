@@ -752,7 +752,7 @@ class SqlStore:
         """Return a context manager that appends a stream of objects into this store.
 
         The returned :class:`~httk.store.db.bulk.BulkIngest` exposes
-        ``save(obj, *, as_record=None) -> int`` mirroring :meth:`save`, but
+        ``save(obj, *, as_record=None, promote=None) -> int`` mirroring :meth:`save`, but
         buffers encoded rows with pre-assigned sids and appends them in
         executemany batches. On a physically empty store the record tables are
         created index-less and their separable indexes are built once the stream
@@ -768,6 +768,10 @@ class SqlStore:
         that deduplicates against a pre-existing row is remapped at flush, so its
         durable sid is obtained from :meth:`~httk.store.db.bulk.BulkIngest.resolved_sid`
         once the context has exited cleanly.
+
+        ``save(..., promote=RecordClass)`` additionally makes every nested
+        occurrence of that record class a top-level entry without a second
+        projection or worker transfer. An iterable promotes several classes.
 
         :param chunk_size: The number of top-level saves buffered before a flush.
         :param verify_metadata: Whether content-id hits compare identity-excluded metadata.
@@ -2270,6 +2274,42 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
 
 def _field_path(path: str, field: str) -> str:
     return f"{path}.{field}" if path else field
+
+
+def _encode_promoted_descendants(
+    schema: TableSchema,
+    source: Any,
+    projected: Mapping[str, object],
+    path: str,
+    sid: int,
+    promoted: frozenset[type],
+    resolve_sid: SidResolver,
+    *,
+    references: bool,
+) -> None:
+    """Resolve only branches which can contain a requested bulk-promoted record."""
+
+    def reaches(candidate: type) -> bool:
+        pending = [candidate]
+        visited: set[type] = set()
+        while pending:
+            current = pending.pop()
+            if current in promoted:
+                return True
+            if current not in visited:
+                visited.add(current)
+                pending.extend(resolve_schema(current).referenced_classes())
+        return False
+
+    for spec in schema.fields:
+        if spec.target is None or not reaches(spec.target):
+            continue
+        value = SqlStore._projected_value(schema.cls, source, projected, spec)
+        if spec.role == "child":
+            assert spec.child is not None
+            _encode_child_rows(schema, spec, sid, value, _field_path(path, spec.field), resolve_sid)
+        elif references and value is not None:
+            resolve_sid(spec.target, value, _field_path(path, spec.field))
 
 
 def _encode_parent_row(

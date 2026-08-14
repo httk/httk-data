@@ -128,6 +128,14 @@ class BulkCalcB:
     kind: str
 
 
+@dataclass(frozen=True)
+class BulkImportEnvelope:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="bulk_import_envelope")
+
+    source: str
+    structure: BulkCalcA
+
+
 register_entry_family(name="test-db-bulk-calculations", family=f"{__name__}:BulkCalcFamily")
 register_entry_record(name="test-db-bulk-calc-a", family="test-db-bulk-calculations", record=f"{__name__}:BulkCalcA")
 register_entry_record(name="test-db-bulk-calc-b", family="test-db-bulk-calculations", record=f"{__name__}:BulkCalcB")

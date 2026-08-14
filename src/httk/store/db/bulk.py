@@ -122,6 +122,7 @@ from httk.store.db.store import (
     SqlStore,
     _encode_child_rows,
     _encode_parent_row,
+    _encode_promoted_descendants,
     _field_path,
     _metadata_scalar_equal,
 )
@@ -159,10 +160,10 @@ class _SerialDeferredStage:
         self._encoder = encoder
         self._finished: Any = None
 
-    def save(self, token: int, obj: Any, as_record: type | None) -> int:
+    def save(self, token: int, obj: Any, as_record: type | None, promote: frozenset[type]) -> int:
         # _WorkerEncoder deliberately exposes the assigned occurrence sid via
         # its token map, while retaining every metadata-bearing duplicate.
-        return self._encoder.save(token, obj, as_record)
+        return self._encoder.save(token, obj, as_record, promote)
 
     def finish(self) -> Any:
         if self._finished is None:
@@ -864,7 +865,13 @@ class BulkIngest:
 
     # ------------------------------------------------------------------ saving
 
-    def save(self, obj: Any, *, as_record: type | None = None) -> int:
+    def save(
+        self,
+        obj: Any,
+        *,
+        as_record: type | None = None,
+        promote: type | Iterable[type] | None = None,
+    ) -> int:
         """Encode and buffer ``obj``, returning its assigned or deduplicated sid.
 
         Mirrors :meth:`~httk.store.db.store.SqlStore.save`: an opted-in domain
@@ -880,6 +887,8 @@ class BulkIngest:
 
         :param obj: The object to store.
         :param as_record: The alternate record representation to use, if any.
+        :param promote: A record class, or iterable of record classes, whose nested occurrences are also made
+            top-level entries. The classes must be reachable from the selected outer record schema.
         :return: The provisional sid (see :meth:`resolved_sid` for the durable one).
         :raises RuntimeError: If the bulk context is not open.
         :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
@@ -890,27 +899,36 @@ class BulkIngest:
         if not self._entered or self._closed:
             raise RuntimeError("bulk_ingest().save() is only usable inside an open bulk context")
         reject_cursor_proxy(obj)
-        if self._parallel:
-            return self._parallel_save(obj, as_record)
-        if self._deferred:
-            return self._deferred_serial_save(obj, as_record)
         record_type = resolve_storage_record(obj, as_record=as_record)
+        promoted = self._promoted_types(record_type, promote)
+        if self._parallel:
+            return self._parallel_save(obj, as_record, record_type, promoted)
+        if self._deferred:
+            return self._deferred_serial_save(obj, as_record, record_type, promoted)
         projection = SaveProjection(store_timestamp=self._store_timestamp)
-        sid = self._encode(record_type, obj, projection, "")
-        self._promote_buffered_role(resolve_schema(record_type).table_name, sid)
+        occurrences: list[tuple[type, Any, int]] = []
+        seen: set[tuple[type, int, int]] = set()
+        sid = self._encode(record_type, obj, projection, "", promoted, occurrences, seen)
+        root = (record_type, id(obj), sid)
+        if root not in seen:
+            occurrences.append((record_type, obj, sid))
+        for occurrence_type, source, occurrence_sid in occurrences:
+            self._promote_occurrence(occurrence_type, source, projection, occurrence_sid)
         table_name = resolve_schema(record_type).table_name
-        family = self._store._family_for_backing(record_type)
-        if family is not None and len(family.records) > 1:
-            self._buffer_dispatch(family, record_type, sid, projection.content_id(record_type, obj))
         self._returned_sids.add((table_name, sid))
-        self._chunk_roots.append((table_name, sid))
         self._records_total += 1
         self._since_flush += 1
         if self._since_flush >= self._chunk_size:
             self._flush()
         return sid
 
-    def _deferred_serial_save(self, obj: Any, as_record: type | None) -> int:
+    def _deferred_serial_save(
+        self,
+        obj: Any,
+        as_record: type | None,
+        record_type: type,
+        promote: frozenset[type],
+    ) -> int:
         """Stage one serial occurrence without importing the parallel extra.
 
         The worker encoder is deliberately reused here: it is the only encoder
@@ -920,9 +938,9 @@ class BulkIngest:
         """
         from httk.store.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
 
-        record_type = resolve_storage_record(obj, as_record=as_record)
         self._record_schema_graph(record_type)
         self._deferred_top_types.add(record_type)
+        self._deferred_top_types.update(promote)
         if self._serial_stage is None:
             temp = tempfile.TemporaryDirectory(prefix="httk_deferred_")
             stage_format = self._store.backend_facts.serial_stage_format
@@ -942,7 +960,7 @@ class BulkIngest:
             self._serial_stage = _SerialDeferredStage(temp, _WorkerEncoder(self._store, 0, config))
         token = self._serial_next_token
         self._serial_next_token += 1
-        stage_sid = self._serial_stage.save(token, obj, as_record)
+        stage_sid = self._serial_stage.save(token, obj, as_record, promote)
         table_name = resolve_schema(record_type).table_name
         # Worker block sids are deliberately never public.  Removing the
         # single serial block offset preserves the ordinary serial return value
@@ -1016,7 +1034,13 @@ class BulkIngest:
             raise KeyError((record_type, sid))
         return self._resolved_map.get((table_name, sid), sid)
 
-    def _parallel_save(self, obj: Any, as_record: type | None) -> int:
+    def _parallel_save(
+        self,
+        obj: Any,
+        as_record: type | None,
+        record_type: type,
+        promote: frozenset[type],
+    ) -> int:
         """Dispatch ``obj`` to a worker and return a provisional token resolved after the merge.
 
         In parallel mode the encode happens asynchronously in a worker, so the
@@ -1028,16 +1052,20 @@ class BulkIngest:
 
         :param obj: The object to store.
         :param as_record: The alternate record representation to use, if any.
+        :param record_type: The already-resolved outer storage record class.
+        :param promote: The validated nested record classes to make top-level.
         :return: A provisional token (see :meth:`resolved_sid`).
         """
-        record_type = resolve_storage_record(obj, as_record=as_record)
         # Validate the metadata shape (and record the schema graph) before any DDL,
         # so a rejected type fails fast without leaving an empty table behind.
         self._record_schema_graph(record_type)
         if self._deferred:
             self._deferred_top_types.add(record_type)
+            self._deferred_top_types.update(promote)
         else:
             self._ensure_tables(record_type)
+            for promoted_type in promote:
+                self._ensure_tables(promoted_type)
         table_name = resolve_schema(record_type).table_name
         token = self._next_token
         self._next_token += 1
@@ -1045,8 +1073,34 @@ class BulkIngest:
             self._returned_sids.add((table_name, token))
         self._records_total += 1
         assert self._controller is not None
-        self._controller.dispatch(token, obj, as_record)
+        self._controller.dispatch(token, obj, as_record, promote)
         return token
+
+    @staticmethod
+    def _promoted_types(record_type: type, promote: type | Iterable[type] | None) -> frozenset[type]:
+        """Normalize and validate bulk-only nested top-level record classes."""
+        if promote is None:
+            return frozenset()
+        try:
+            candidates = (promote,) if isinstance(promote, type) else tuple(promote)
+        except TypeError:
+            raise TypeError("bulk_ingest().save(promote=...) accepts only record classes") from None
+        if any(not isinstance(candidate, type) for candidate in candidates):
+            raise TypeError("bulk_ingest().save(promote=...) accepts only record classes")
+        requested = frozenset(candidates)
+        reachable: set[type] = set()
+        pending = [record_type]
+        while pending:
+            current = pending.pop()
+            if current in reachable:
+                continue
+            reachable.add(current)
+            pending.extend(resolve_schema(current).referenced_classes())
+        missing = requested - reachable
+        if missing:
+            names = ", ".join(sorted(candidate.__name__ for candidate in missing))
+            raise ValueError(f"promoted record class(es) are not reachable from {record_type.__name__}: {names}")
+        return requested
 
     def _record_schema_graph(self, record_type: type) -> None:
         """Validate and record every record table's schema in the graph rooted at ``record_type``.
@@ -1097,17 +1151,40 @@ class BulkIngest:
         self._schema_graph_seen.add(record_type)
         self._parent_schema[schema.table_name] = schema
 
-    def _encode(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
+    def _encode(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        path: str,
+        promote: frozenset[type],
+        occurrences: list[tuple[type, Any, int]],
+        seen: set[tuple[type, int, int]],
+    ) -> int:
         active_key = (record_type, id(source))
         if active_key in projection.active:
             raise StorageProjectionCycleError(path, record_type)
         projection.active.add(active_key)
         try:
-            return self._encode_active(record_type, source, projection, path)
+            sid = self._encode_active(record_type, source, projection, path, promote, occurrences, seen)
+            key = (record_type, id(source), sid)
+            if record_type in promote and key not in seen:
+                seen.add(key)
+                occurrences.append((record_type, source, sid))
+            return sid
         finally:
             projection.active.remove(active_key)
 
-    def _encode_active(self, record_type: type, source: Any, projection: SaveProjection, path: str) -> int:
+    def _encode_active(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        path: str,
+        promote: frozenset[type],
+        occurrences: list[tuple[type, Any, int]],
+        seen: set[tuple[type, int, int]],
+    ) -> int:
         schema = resolve_schema(record_type)
         self._ensure_tables(record_type)
         table_name = schema.table_name
@@ -1126,6 +1203,9 @@ class BulkIngest:
                 validator.__get__(None, record_type)(source)
             projection.validated.add(validation_key)
 
+        def resolve_sid(referenced_type: type, value: Any, field_path: str) -> int:
+            return self._encode(referenced_type, value, projection, field_path, promote, occurrences, seen)
+
         key: str | None = None
         if schema.dedup == "content_id":
             key = projection.content_id(record_type, source)
@@ -1133,10 +1213,10 @@ class BulkIngest:
             if existing is not None:
                 if self._verify_metadata:
                     self._check_hit_metadata(record_type, key, projected, source, existing)
+                _encode_promoted_descendants(
+                    schema, source, projected, path, existing, promote, resolve_sid, references=True
+                )
                 return existing
-
-        def resolve_sid(referenced_type: type, value: Any, field_path: str) -> int:
-            return self._encode(referenced_type, value, projection, field_path)
 
         values = _encode_parent_row(schema, source, projected, path, resolve_sid)
 
@@ -1144,6 +1224,9 @@ class BulkIngest:
             value_tuple = tuple(sorted(values.items()))
             existing = self._value_index[table_name].get(value_tuple)
             if existing is not None:
+                _encode_promoted_descendants(
+                    schema, source, projected, path, existing, promote, resolve_sid, references=False
+                )
                 return existing
 
         sid = self._next_sid[table_name]
@@ -1177,12 +1260,35 @@ class BulkIngest:
                 self._buffer_row(spec.child.table_name, child_row)
         return sid
 
-    def _promote_buffered_role(self, table_name: str, sid: int) -> None:
+    def _promote_buffered_role(self, table_name: str, sid: int) -> bool:
         """Mark a top-level bulk occurrence main without making role a dedup key."""
         for row in self._rows.get(table_name, ()):
             if row[SID_COLUMN] == sid:
                 row[ROLE_COLUMN] = 1
-                return
+                return True
+        return False
+
+    def _promote_occurrence(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        sid: int,
+    ) -> None:
+        """Give one encoded occurrence ordinary top-level role and dispatch semantics."""
+        table_name = resolve_schema(record_type).table_name
+        if not self._promote_buffered_role(table_name, sid):
+            assert self._connection is not None
+            table = self._store._table(table_name)
+            self._connection.execute(
+                sqlalchemy.update(table)
+                .where(table.c[SID_COLUMN] == sid, table.c[ROLE_COLUMN] == 0)
+                .values(_httk_role=1)
+            )
+        self._chunk_roots.append((table_name, sid))
+        family = self._store._family_for_backing(record_type)
+        if family is not None and len(family.records) > 1:
+            self._buffer_dispatch(family, record_type, sid, projection.content_id(record_type, source))
 
     def _buffer_row(self, table_name: str, row: dict[str, Any]) -> None:
         self._rows.setdefault(table_name, []).append(row)
