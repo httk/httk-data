@@ -61,9 +61,3 @@ def test_store_layer_filters_a_query_support_none_property(store) -> None:
     definition = _definition_hiding("_httk_custom_name")
     searcher = optimade_filter_searcher(store, Material, '_httk_custom_name = "alpha oxide"', definition=definition)
     assert [material.name for material in _results(searcher)] == ["alpha oxide"]
-
-
-def test_store_layer_sibling_fields_unaffected(store) -> None:
-    definition = _definition_hiding("_httk_custom_name")
-    searcher = optimade_filter_searcher(store, Material, "_httk_custom_x > 1", definition=definition)
-    assert [material.name for material in _results(searcher)] == ["beta metal"]

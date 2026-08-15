@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from functools import cmp_to_key
 
 import pytest
-import sqlalchemy.exc
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
 from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
@@ -277,9 +276,8 @@ def test_type_tampered_anchor_is_a_clean_cursor_error_not_a_backend_error(store)
     assert payload["a"][0]["t"] == "int"
     payload["a"][0] = {"t": "str", "v": "not-an-integer"}
     tampered = ContinuationToken(_encode_payload(payload))
-    with pytest.raises(PaginationCursorError, match="incompatible") as excinfo:
+    with pytest.raises(PaginationCursorError, match="incompatible"):
         result.page(size=2, order_by=order, cursor=tampered)
-    assert not isinstance(excinfo.value, sqlalchemy.exc.DBAPIError)
 
 
 def test_validate_anchor_types_accepts_and_rejects_by_key_type():

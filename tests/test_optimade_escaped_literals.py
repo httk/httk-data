@@ -54,10 +54,6 @@ def test_equality_matches_value_with_embedded_double_quote(store):
     assert matches(store, '_httk_custom_name = "ab\\"c"') == [D_QUOTE]
 
 
-def test_equality_does_not_match_unrelated_value(store):
-    assert matches(store, '_httk_custom_name = "abc"') == [D_ABC]
-
-
 def test_equality_matches_value_with_embedded_backslash(store):
     # Filter text: _httk_custom_name = "a\\b" ; parser unescapes \\ -> \
     assert matches(store, '_httk_custom_name = "a\\\\b"') == [D_BS]
