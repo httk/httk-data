@@ -1,14 +1,17 @@
 """Live MongoDB tests for the packet-4a searcher profile."""
 
+import base64
+import json
 from dataclasses import dataclass
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
 from httk.store.db import Database, SqlStore
 from httk.store.mongo import MongoSearcher
 from httk.store.query import MultipleResultsError, NoResultError, PageOrder, PaginationCursorError, UnsupportedQueryError
-from httk.store.query.paging_tokens import _decode_continuation, _encode_continuation, _plan_fingerprint
+from httk.store.query.paging_tokens import _decode_continuation, _encode_continuation, _encode_payload, _plan_fingerprint
 
 
 @dataclass(frozen=True)
@@ -481,3 +484,34 @@ def test_paging_backend_discriminator_is_load_bearing(mongo_test_database):
     )
     with pytest.raises(PaginationCursorError, match="different query"):
         result.page(size=1, order_by=order, cursor=changed_token)
+
+
+def test_type_tampered_anchor_is_a_clean_cursor_error(mongo_test_database):
+    """A string swapped for an integer anchor fails as a clean PaginationCursorError."""
+    store, _searcher, _variable = _query(mongo_test_database)
+    result = _paging_results(store)
+    order = (PageOrder("rank", nulls="last"),)
+    token = result.page(size=1, order_by=order).next
+    assert token is not None
+    payload = json.loads(base64.urlsafe_b64decode(str(token) + "=" * (-len(token) % 4)))
+    assert payload["a"][0]["t"] == "int"
+    payload["a"][0] = {"t": "str", "v": "not-an-integer"}
+    tampered = type(token)(_encode_payload(payload))
+    with pytest.raises(PaginationCursorError, match="incompatible"):
+        result.page(size=1, order_by=order, cursor=tampered)
+
+
+def test_page_anchor_python_type_derives_from_the_order_column_kind():
+    """The Mongo anchor-type helper maps a key's stored column kind (no server needed)."""
+    from httk.store.db.codecs import codec_named
+    from httk.store.db.schema import resolve_schema
+    from httk.store.mongo.results import _anchor_python_type
+
+    schema = resolve_schema(MongoQueryRecord)
+    rank = schema.field("rank")  # int | None -> scalar int column
+    label = schema.field("label")  # str -> scalar str column
+    energy = schema.field("energy")  # Fraction -> encoded (codec query column)
+    assert _anchor_python_type(SimpleNamespace(_spec=rank, _codec=None)) is int
+    assert _anchor_python_type(SimpleNamespace(_spec=label, _codec=None)) is str
+    codec = codec_named(energy.codec_name)
+    assert _anchor_python_type(SimpleNamespace(_spec=energy, _codec=codec)) in {int, float, str}

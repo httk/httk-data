@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -109,6 +110,37 @@ def _decode_continuation(token: ContinuationToken, *, fingerprint: str, anchors:
     if _encode_payload(payload) != text:
         raise PaginationCursorError("cursor is not canonically encoded")
     return _DecodedContinuation(direction, values, sid)
+
+
+def _validate_anchor_types(values: tuple[Any, ...], expected: Sequence[type | None]) -> None:
+    """Reject a decoded cursor whose anchor types do not match the frozen plan.
+
+    A tampered token can pass canonical decoding yet carry an anchor whose type
+    is wrong for its order key (a string where the plan expects an integer).
+    Binding such an anchor would surface a raw backend error (for example a
+    DuckDB ``DataError``) instead of a clean
+    :class:`~httk.store.query.PaginationCursorError`, so callers validate every
+    decoded anchor against its key's type before building the seek query.
+
+    :param values: The decoded anchor values, in order-key order.
+    :param expected: The expected Python type per anchor, or ``None`` where the
+        plan cannot constrain a key's type; must be the same length as ``values``.
+    :raises ~httk.store.query.PaginationCursorError: If an anchor's type is
+        incompatible with its order key.
+    """
+    for position, (value, want) in enumerate(zip(values, expected, strict=True)):
+        # A null order value legitimately produces a ``None`` anchor for any key.
+        if value is None or want is None:
+            continue
+        # ``type`` identity, never ``isinstance``: this rejects bool as int and
+        # datetime as date, both of which the encoder tags distinctly.
+        value_type = type(value)
+        if value_type is want:
+            continue
+        # A whole-number JSON anchor is a legitimate seek value for a float key.
+        if want is float and value_type is int:
+            continue
+        raise PaginationCursorError(f"cursor anchor {position} has a type incompatible with the paging order key")
 
 
 def _plan_fingerprint(payload: Any) -> str:

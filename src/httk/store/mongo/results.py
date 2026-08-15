@@ -20,6 +20,7 @@ from httk.store.query.paging_tokens import (
     _DecodedContinuation,
     _encode_continuation,
     _plan_fingerprint,
+    _validate_anchor_types,
 )
 
 from .searcher import MongoField, MongoSearcher, MongoVariable, _MongoOutput, _scalar_value, _variable_document
@@ -29,6 +30,31 @@ __all__ = ["MongoResultSet"]
 
 _PAGE_SIZE_MAX: Final = 10_000
 _PAGE_ORDER_MAX: Final = 32
+
+_KIND_PYTHON_TYPES: Final[dict[str, type]] = {
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "bytes": bytes,
+}
+
+
+def _anchor_python_type(field: MongoField) -> type | None:
+    """Return the Python type a decoded cursor anchor must match for ``field``.
+
+    The anchor is the raw stored value of the field's order (query) column, so
+    its type follows that column's scalar kind, not the field's logical type.
+
+    :param field: The order-key field an anchor is compared against.
+    :return: The column's Python type, or ``None`` when it cannot be determined.
+    """
+    spec = field._spec
+    name = spec.field + field._codec.query_suffix if field._codec is not None else spec.field
+    for column in spec.columns:
+        if column.name == name:
+            return _KIND_PYTHON_TYPES.get(column.kind)
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +173,8 @@ class MongoResultSet:
         keys = self._page_keys(order_by)
         fingerprint = self._page_fingerprint(keys)
         decoded = None if cursor is None else _decode_continuation(cursor, fingerprint=fingerprint, anchors=len(keys))
+        if decoded is not None:
+            _validate_anchor_types(decoded.anchors, tuple(_anchor_python_type(self._page_field(key)) for key in keys))
 
         documents, more_in_fetch_direction = self._page_documents(keys, decoded, size)
         if decoded is not None and decoded.direction == "backward":

@@ -7,11 +7,13 @@ from dataclasses import dataclass
 from functools import cmp_to_key
 
 import pytest
+import sqlalchemy.exc
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 
 from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
 from httk.store.db import Database, SqlStore
 from httk.store.db.paging import _decode_continuation, _encode_continuation
+from httk.store.query.paging_tokens import _encode_payload, _validate_anchor_types
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
@@ -261,6 +263,40 @@ def test_malformed_nonfinite_cursor_payload_is_rejected(store):
     malformed = ContinuationToken(base64.urlsafe_b64encode(raw).decode().rstrip("="))
     with pytest.raises(PaginationCursorError, match="invalid anchor"):
         result.page(size=2, order_by=order, cursor=malformed)
+
+
+def test_type_tampered_anchor_is_a_clean_cursor_error_not_a_backend_error(store):
+    """A string swapped for an integer anchor fails as PaginationCursorError, not a raw DataError."""
+    result = results(store)
+    order = (PageOrder("bucket"),)
+    token = result.page(size=2, order_by=order).next
+    assert token is not None
+    payload = json.loads(base64.urlsafe_b64decode(str(token) + "=" * (-len(token) % 4)))
+    # The plan orders by an integer column; a string anchor would otherwise reach
+    # DuckDB as a bound parameter and raise sqlalchemy.exc.DataError (HTTP 500).
+    assert payload["a"][0]["t"] == "int"
+    payload["a"][0] = {"t": "str", "v": "not-an-integer"}
+    tampered = ContinuationToken(_encode_payload(payload))
+    with pytest.raises(PaginationCursorError, match="incompatible") as excinfo:
+        result.page(size=2, order_by=order, cursor=tampered)
+    assert not isinstance(excinfo.value, sqlalchemy.exc.DBAPIError)
+
+
+def test_validate_anchor_types_accepts_and_rejects_by_key_type():
+    # None is always acceptable (nullable order columns produce None anchors).
+    _validate_anchor_types((None, None), (int, str))
+    # Exact type identity accepts; the float key also accepts a whole-number int.
+    _validate_anchor_types((7, "x", 1.5, 3), (int, str, float, float))
+    # bool must not pass as int (isinstance subclass trap), and datetime is not date.
+    with pytest.raises(PaginationCursorError, match="anchor 0"):
+        _validate_anchor_types((True,), (int,))
+    with pytest.raises(PaginationCursorError, match="anchor 0"):
+        _validate_anchor_types((datetime.datetime(2026, 7, 30, 1, 2, 3),), (datetime.date,))
+    # A float is never accepted where an int key is expected.
+    with pytest.raises(PaginationCursorError, match="incompatible"):
+        _validate_anchor_types((1.0,), (int,))
+    # A None expected type imposes no constraint (unknown column type).
+    _validate_anchor_types(("anything",), (None,))
 
 
 def test_continuation_codec_roundtrips_supported_anchor_scalars():

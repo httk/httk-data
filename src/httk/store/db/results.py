@@ -28,6 +28,7 @@ from httk.store.query.paging_tokens import (
     _DecodedContinuation,
     _encode_continuation,
     _plan_fingerprint,
+    _validate_anchor_types,
 )
 
 __all__ = [
@@ -504,6 +505,7 @@ class SqlResultSet:
         decoded: _DecodedContinuation | None = None
         if cursor is not None:
             decoded = _decode_continuation(cursor, fingerprint=fingerprint, anchors=len(keys))
+            _validate_anchor_types(decoded.anchors, tuple(_anchor_python_type(key.output.element) for key in keys))
         if self._plan._vacuous:
             return ResultPage((), None, None, total=0 if include_total else None)
 
@@ -857,6 +859,18 @@ class SqlResultSet:
                 )
 
         return rows()
+
+
+def _anchor_python_type(element: sqlalchemy.ColumnElement[Any]) -> type | None:
+    """Return the Python type a decoded cursor anchor must match for ``element``.
+
+    :param element: The order-key column an anchor is bound against.
+    :return: The column's Python type, or ``None`` when SQLAlchemy cannot report one.
+    """
+    try:
+        return element.type.python_type
+    except (NotImplementedError, AttributeError):
+        return None
 
 
 def _cursor_guard(generation: _Generation, current: int) -> None:
