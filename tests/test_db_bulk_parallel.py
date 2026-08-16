@@ -846,3 +846,20 @@ def test_parallel_nan_attribution_is_schema_order_first(store_factory, run):
         bulk.save(TwoFloatMeta("k", math.nan, math.nan))  # token 0 -> worker 0
         bulk.save(TwoFloatMeta("k", math.nan, math.nan))  # token 1 -> worker 1
     assert not _has_application_rows(store, _database_of(store))
+
+
+@pytest.mark.parametrize("finalize", ["parity", "deferred"])
+def test_bulk_parallel_versioned_store_lands_current_rows(finalize) -> None:
+    """A parallel versioned-store build lands every family row current (ts_end NULL)."""
+    database = Database.sqlite()
+    try:
+        store = SqlStore(database, entry_records=CALC_FAMILY, store_timestamps="versioned")
+        with store.bulk_ingest(workers=2, finalize=finalize, chunk_size=1) as bulk:
+            bulk.save(BulkCalcA("alpha", 1))
+            bulk.save(BulkCalcB("beta", "kind-b"))
+        with database.engine.connect() as connection:
+            for table in ("bulk_calc_a", "bulk_calc_b"):
+                ends = connection.execute(sqlalchemy.text(f"SELECT ts_end FROM {table}")).all()
+                assert ends == [(None,)]
+    finally:
+        database.dispose()

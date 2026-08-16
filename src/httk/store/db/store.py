@@ -83,6 +83,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    TS_END_COLUMN,
     TS_START_COLUMN,
     backing_dispatch_column_name,
     dispatch_table_for,
@@ -177,7 +178,8 @@ class SqlStore:
     :param entry_records: The required entry-family declaration when first opening a database.
     :param entry_families: Application-owned declarations which bypass global registration.
     :param store_timestamps: The store-managed timestamp mode, one of ``"off"``,
-        ``"creation"``, or ``"versioned"`` (``"versioned"`` is not yet implemented).
+        ``"creation"``, or ``"versioned"`` (``"versioned"`` requires a SQL backend
+        with a transactional write profile; ClickHouse is unsupported).
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
@@ -210,8 +212,6 @@ class SqlStore:
             or store_timestamp_resolution <= 0
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
-        if store_timestamps == "versioned":
-            raise NotImplementedError("versioned stores are not implemented yet")
         self._database = database
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
@@ -222,6 +222,7 @@ class SqlStore:
         self._backend_facts: BackendFacts | None = None
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
+        self._versioned_tables: frozenset[str] = frozenset()
         self._managed_table_names: frozenset[str] = frozenset()
         self._known_record_types: set[type] = set()
         self._tables_present: set[str] = set()
@@ -352,6 +353,11 @@ class SqlStore:
     ) -> None:
         self._backend_facts = backend_facts_for_dialect(connection.dialect.name)
         self._validate_write_profile_connection(connection, self._write_profile)
+        if self._store_timestamps == "versioned":
+            if connection.dialect.name == "clickhousedb":
+                raise NotImplementedError("versioned stores are not supported on ClickHouse")
+            if self._write_profile == "bulk-fenced":
+                raise NotImplementedError("versioned stores are not supported with the bulk-fenced write profile")
         objects_before = actual_schema_objects(connection)
         names_before = frozenset(name for name, kinds in objects_before.items() if "table" in kinds)
         if METADATA_TABLE_NAME in names_before:
@@ -361,7 +367,8 @@ class SqlStore:
         if not objects_before:
             if supplied is None:
                 raise TypeError("entry_records or entry_families is required when opening an uninitialized database")
-            expected = expected_metadata(supplied, store_timestamps=self.store_timestamps)
+            self._versioned_tables = self._versioned_table_names(supplied)
+            expected = expected_metadata(supplied, **self._table_build_kwargs())
             metadata_table = expected.tables[METADATA_TABLE_NAME]
             if self.backend_facts.metadata_backend == "keepermap":
                 from httk.store.db.clickhouse import bootstrap_fence, keeper_database_uuid
@@ -623,9 +630,10 @@ class SqlStore:
                 }
         if object_problems:
             raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
+        self._versioned_tables = self._versioned_table_names(persisted)
         self._install_layout(
             persisted,
-            expected_metadata(persisted, store_timestamps=self.store_timestamps),
+            expected_metadata(persisted, **self._table_build_kwargs()),
             names_before,
         )
         self._initialize_store_timestamp_mark(connection)
@@ -666,7 +674,12 @@ class SqlStore:
         )
 
     def _initialize_store_timestamp_mark(self, connection: sqlalchemy.Connection) -> None:
-        """Derive the writable process-local timestamp mark from present parent tables."""
+        """Derive the writable process-local timestamp mark from present parent tables.
+
+        In versioned mode max(ts_start) still suffices as the high-water mark:
+        every ts_end value equals some (later or equal) row's ts_start, so it can
+        never exceed the maximum ts_start already scanned here.
+        """
         if not self.store_timestamps or self._allow_clock_regression:
             self._store_timestamp_mark = None
             return
@@ -707,6 +720,24 @@ class SqlStore:
                 self._store_timestamp_mark, captured, allow_clock_regression=self._allow_clock_regression
             )
 
+    def _versioned_table_names(self, layout: StorageLayout) -> frozenset[str]:
+        """The parent tables that carry lifecycle columns under versioned mode.
+
+        These are exactly the tables of the family backing records; dependency
+        and multi-record dispatch tables are never lifecycle-bearing.
+        """
+        if self._store_timestamps != "versioned":
+            return frozenset()
+        return frozenset(resolve_schema(record).table_name for family in layout.families for record in family.records)
+
+    def _table_build_kwargs(self) -> dict[str, Any]:
+        """The mapping DDL keyword arguments carrying this store's timestamp mode and dialect facts."""
+        return {
+            "timestamps": self._store_timestamps,
+            "versioned_tables": self._versioned_tables,
+            "supports_partial_unique_indexes": self.backend_facts.supports_partial_unique_indexes,
+        }
+
     def _install_layout(
         self,
         layout: StorageLayout,
@@ -714,6 +745,7 @@ class SqlStore:
         table_names: Iterable[str],
     ) -> None:
         self._layout = layout
+        self._versioned_tables = self._versioned_table_names(layout)
         self._metadata = metadata
         self._managed_table_names = frozenset(metadata.tables)
         self._tables_present = set(table_names)
@@ -1241,14 +1273,15 @@ class SqlStore:
     def _candidate_metadata(self, classes: Iterable[type]) -> sqlalchemy.MetaData:
         candidate = sqlalchemy.MetaData()
         requested = tuple(classes)
+        build_kwargs = self._table_build_kwargs()
         for cls in requested:
-            table_for(resolve_schema(cls), candidate, store_timestamps=self.store_timestamps)
+            table_for(resolve_schema(cls), candidate, **build_kwargs)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, candidate, store_timestamps=self.store_timestamps)
+                table_for(schema, candidate, **build_kwargs)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), candidate)
         return candidate
@@ -1257,14 +1290,15 @@ class SqlStore:
         requested = tuple(classes)
         self._known_record_types.update(requested)
         candidate = self._candidate_metadata(requested)
+        build_kwargs = self._table_build_kwargs()
         for cls in requested:
-            table_for(resolve_schema(cls), self._metadata, store_timestamps=self.store_timestamps)
+            table_for(resolve_schema(cls), self._metadata, **build_kwargs)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, self._metadata, store_timestamps=self.store_timestamps)
+                table_for(schema, self._metadata, **build_kwargs)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), self._metadata)
         return candidate
@@ -1521,6 +1555,8 @@ class SqlStore:
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
 
+        self._enforce_versioned_unique(connection, schema, table, values)
+
         if self._write_profile == "degraded":
             # Permanentization is deliberately sid-write-last: dependent
             # records are encoded first by _parent_row, element rows are made
@@ -1589,6 +1625,44 @@ class SqlStore:
                 )
         self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
         return sid
+
+    def _enforce_versioned_unique(
+        self,
+        connection: sqlalchemy.Connection,
+        schema: TableSchema,
+        table: sqlalchemy.Table,
+        values: Mapping[str, Any],
+    ) -> None:
+        """Enforce unique-among-current author fields on backends without partial unique indexes.
+
+        On SQLite and PostgreSQL a partial unique index (``ts_end IS NULL``)
+        does this in the engine; DuckDB has no partial indexes, so the same
+        guarantee is checked inside the write transaction before the insert.
+        """
+        if (
+            self._store_timestamps != "versioned"
+            or self.backend_facts.supports_partial_unique_indexes
+            or schema.table_name not in self._versioned_tables
+        ):
+            return
+        for spec in schema.fields:
+            if spec.role == "child":
+                continue
+            for column_spec in spec.columns:
+                if not column_spec.unique:
+                    continue
+                value = values.get(column_spec.name)
+                column = table.c[column_spec.name]
+                condition = column.is_(None) if value is None else column == value
+                found = connection.execute(
+                    sqlalchemy.select(table.c[SID_COLUMN]).where(condition, table.c[TS_END_COLUMN].is_(None)).limit(1)
+                ).first()
+                if found is not None:
+                    raise sqlalchemy.exc.IntegrityError(
+                        f"UNIQUE constraint failed (current rows): {schema.table_name}.{column_spec.name}",
+                        {},
+                        Exception(f"duplicate current value {value!r} for versioned unique column"),
+                    )
 
     def _insert_content_row(
         self,

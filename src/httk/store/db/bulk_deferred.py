@@ -15,7 +15,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
-from httk.store.db.mapping import CONTENT_ID_COLUMN, ROLE_COLUMN, SID_COLUMN, TS_START_COLUMN
+from httk.store.db.mapping import (
+    CONTENT_ID_COLUMN,
+    REPLACED_BY_COLUMN,
+    ROLE_COLUMN,
+    SID_COLUMN,
+    TS_END_COLUMN,
+    TS_START_COLUMN,
+)
 from httk.store.store_common import EntryMetadataConflictError
 
 if TYPE_CHECKING:
@@ -301,7 +308,7 @@ class DeferredFinalizer:
         columns: list[str] = []
         joins: list[str] = []
         for index, column in enumerate(real.columns):
-            if column.name in (SID_COLUMN, TS_START_COLUMN):
+            if column.name in (SID_COLUMN, TS_START_COLUMN, TS_END_COLUMN, REPLACED_BY_COLUMN):
                 continue
             target = reference_columns.get(column.name)
             if target is None or target not in self.maps:

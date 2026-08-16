@@ -111,8 +111,10 @@ from httk.store.db.layout import METADATA_TABLE_NAME, actual_schema_objects, bac
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    REPLACED_BY_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    TS_END_COLUMN,
     TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
@@ -2274,7 +2276,9 @@ class BulkIngest:
         stage = self._create_stage(table, rows)
         try:
             value_columns = [
-                column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN)
+                column.name
+                for column in table.columns
+                if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN, TS_END_COLUMN, REPLACED_BY_COLUMN)
             ]
             condition = sqlalchemy.and_(*(stage.c[name].is_not_distinct_from(table.c[name]) for name in value_columns))
             statement = (
@@ -2616,5 +2620,9 @@ class BulkIngest:
 def _value_tuple(row: Mapping[str, Any]) -> tuple[Any, ...]:
     """The whole-parent-column dedup key of a by_value row (its sid excluded)."""
     return tuple(
-        sorted((name, value) for name, value in row.items() if name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN))
+        sorted(
+            (name, value)
+            for name, value in row.items()
+            if name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN, TS_END_COLUMN, REPLACED_BY_COLUMN)
+        )
     )

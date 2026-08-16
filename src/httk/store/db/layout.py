@@ -93,6 +93,7 @@ class BackendFacts:
     stage_load: Literal["attach", "duckdb-views", "client-stream"]
     finalize_map_maintenance: Literal["update", "swap"]
     supports_adhoc_indexes: bool
+    supports_partial_unique_indexes: bool
 
 
 _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
@@ -112,6 +113,7 @@ _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
         stage_load="attach",
         finalize_map_maintenance="update",
         supports_adhoc_indexes=True,
+        supports_partial_unique_indexes=True,
     ),
     "duckdb": BackendFacts(
         transactional_ddl=True,
@@ -129,6 +131,7 @@ _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
         stage_load="duckdb-views",
         finalize_map_maintenance="update",
         supports_adhoc_indexes=True,
+        supports_partial_unique_indexes=False,
     ),
     "postgresql": BackendFacts(
         transactional_ddl=True,
@@ -146,6 +149,7 @@ _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
         stage_load="attach",
         finalize_map_maintenance="update",
         supports_adhoc_indexes=True,
+        supports_partial_unique_indexes=True,
     ),
     "clickhousedb": BackendFacts(
         transactional_ddl=False,
@@ -163,6 +167,7 @@ _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
         stage_load="client-stream",
         finalize_map_maintenance="swap",
         supports_adhoc_indexes=False,
+        supports_partial_unique_indexes=False,
     ),
 }
 
@@ -215,14 +220,26 @@ def _layout_from_declaration(value: str) -> StorageLayout:
     return layout
 
 
-def expected_metadata(layout: StorageLayout, *, store_timestamps: bool = True) -> sqlalchemy.MetaData:
+def expected_metadata(
+    layout: StorageLayout,
+    *,
+    timestamps: Literal["off", "creation", "versioned"] = "creation",
+    versioned_tables: frozenset[str] = frozenset(),
+    supports_partial_unique_indexes: bool = True,
+) -> sqlalchemy.MetaData:
     """Return SQLAlchemy metadata for all protocol-owned tables of ``layout``."""
     metadata = sqlalchemy.MetaData()
     metadata_table_for(metadata)
     for family in layout.families:
         schemas = tuple(resolve_schema(record) for record in family.records)
         for schema in schemas:
-            table_for(schema, metadata, store_timestamps=store_timestamps)
+            table_for(
+                schema,
+                metadata,
+                timestamps=timestamps,
+                versioned_tables=versioned_tables,
+                supports_partial_unique_indexes=supports_partial_unique_indexes,
+            )
         if len(schemas) > 1:
             dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), metadata)
     return metadata

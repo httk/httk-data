@@ -37,7 +37,7 @@ class TimestampNoneRecord:
 
 def test_parent_column_index_and_off_mapping():
     enabled = sqlalchemy_metadata([resolve_schema(TimestampRecord)]).tables["timestamp_record"]
-    disabled = sqlalchemy_metadata([resolve_schema(TimestampRecord)], store_timestamps=False).tables["timestamp_record"]
+    disabled = sqlalchemy_metadata([resolve_schema(TimestampRecord)], timestamps="off").tables["timestamp_record"]
     assert isinstance(enabled.c[TS_START_COLUMN].type, sqlalchemy.BigInteger)
     assert not enabled.c[TS_START_COLUMN].nullable
     assert "ts_start" not in disabled.c
@@ -320,9 +320,9 @@ def test_shared_timestamp_state_and_operand_helpers():
         ns_operand_to_store_units(datetime.datetime(1970, 1, 1), 1000)  # noqa: DTZ001
 
 
-def test_versioned_mode_not_implemented_and_invalid_mode_rejected():
+def test_versioned_mode_constructible_and_invalid_mode_rejected():
+    with Database.sqlite() as database, pytest.raises(ValueError, match="store_timestamps must be one of"):
+        SqlStore(database, entry_records={}, store_timestamps="bogus")  # type: ignore[arg-type]
     with Database.sqlite() as database:
-        with pytest.raises(NotImplementedError, match="versioned stores are not implemented yet"):
-            SqlStore(database, entry_records={}, store_timestamps="versioned")
-        with pytest.raises(ValueError, match="store_timestamps must be one of"):
-            SqlStore(database, entry_records={}, store_timestamps="bogus")  # type: ignore[arg-type]
+        store = SqlStore(database, entry_records={}, store_timestamps="versioned")
+        assert store.store_timestamp_mode == "versioned"

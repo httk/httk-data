@@ -547,3 +547,19 @@ def test_deferred_sqlite_more_than_ten_workers() -> None:
             assert connection.execute(sqlalchemy.text("SELECT count(*) FROM bulk_author")).scalar_one() == 11
     finally:
         database.dispose()
+
+
+@pytest.mark.parametrize("backend", ["sqlite", "duckdb"])
+def test_deferred_versioned_store_lands_current_rows(backend):
+    """A deferred versioned-store build lands every family row current (ts_end NULL)."""
+    from httk.store.db import Database, SqlStore
+
+    database = Database.sqlite() if backend == "sqlite" else Database.duckdb()
+    with database:
+        store = SqlStore(database, entry_records={BulkCalcFamily: (BulkCalcA, BulkCalcB)}, store_timestamps="versioned")
+        with store.bulk_ingest(finalize="deferred") as bulk:
+            bulk.save(BulkCalcA("alpha", 1))
+            bulk.save(BulkCalcB("beta", "kind-b"))
+        with database.engine.connect() as connection:
+            for table in ("bulk_calc_a", "bulk_calc_b"):
+                assert connection.execute(sqlalchemy.text(f"SELECT ts_end FROM {table}")).all() == [(None,)]

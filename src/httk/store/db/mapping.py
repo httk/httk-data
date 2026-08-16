@@ -26,9 +26,10 @@ would exceed common identifier-length limits.
 
 import hashlib
 from collections.abc import Iterable, Sequence
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 import sqlalchemy
+from sqlalchemy import text
 
 from httk.store.db.codecs import ScalarKind
 from httk.store.db.schema import (
@@ -42,8 +43,10 @@ from httk.store.db.schema import (
 __all__ = [
     "CONTENT_ID_COLUMN",
     "DISPATCH_CONTENT_ID_COLUMN",
+    "REPLACED_BY_COLUMN",
     "ROLE_COLUMN",
     "SID_COLUMN",
+    "TS_END_COLUMN",
     "TS_START_COLUMN",
     "backing_dispatch_column_name",
     "dispatch_table_for",
@@ -64,6 +67,14 @@ ROLE_COLUMN: Final = "_httk_role"
 TS_START_COLUMN: Final = "ts_start"
 """The store-managed integer creation timestamp on every parent record table."""
 
+TS_END_COLUMN: Final = "ts_end"
+"""The store-managed end-of-life timestamp on versioned family tables (NULL = current)."""
+
+REPLACED_BY_COLUMN: Final = "replaced_by_sid"
+"""The store-managed successor sid on versioned family tables (fsck-only consumer, no index)."""
+
+type _TimestampMode = Literal["off", "creation", "versioned"]
+
 DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
 """The content identity primary key of an entry-family dispatch table."""
 
@@ -82,11 +93,23 @@ _TYPE_FOR_KIND: Final[dict[ScalarKind, type[sqlalchemy.types.TypeEngine[Any]]]] 
 }
 
 
-def sqlalchemy_metadata(schemas: Iterable[TableSchema], *, store_timestamps: bool = True) -> sqlalchemy.MetaData:
+def sqlalchemy_metadata(
+    schemas: Iterable[TableSchema],
+    *,
+    timestamps: _TimestampMode = "creation",
+    versioned_tables: frozenset[str] = frozenset(),
+    supports_partial_unique_indexes: bool = True,
+) -> sqlalchemy.MetaData:
     """A fresh :class:`sqlalchemy.MetaData` holding the tables of ``schemas`` (recursively)."""
     metadata = sqlalchemy.MetaData()
     for schema in schemas:
-        table_for(schema, metadata, store_timestamps=store_timestamps)
+        table_for(
+            schema,
+            metadata,
+            timestamps=timestamps,
+            versioned_tables=versioned_tables,
+            supports_partial_unique_indexes=supports_partial_unique_indexes,
+        )
     return metadata
 
 
@@ -152,7 +175,14 @@ def dispatch_table_for(
     return sqlalchemy.Table(name, metadata, *columns)
 
 
-def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData, *, store_timestamps: bool = True) -> sqlalchemy.Table:
+def table_for(
+    schema: TableSchema,
+    metadata: sqlalchemy.MetaData,
+    *,
+    timestamps: _TimestampMode = "creation",
+    versioned_tables: frozenset[str] = frozenset(),
+    supports_partial_unique_indexes: bool = True,
+) -> sqlalchemy.Table:
     """The :class:`sqlalchemy.Table` of ``schema`` within ``metadata``, building it on first use.
 
     Building is idempotent per metadata — if the table is already registered it
@@ -164,12 +194,24 @@ def table_for(schema: TableSchema, metadata: sqlalchemy.MetaData, *, store_times
     existing = metadata.tables.get(schema.table_name)
     if existing is not None:
         return existing
-    table = _build_parent_table(schema, metadata, store_timestamps=store_timestamps)
+    table = _build_parent_table(
+        schema,
+        metadata,
+        timestamps=timestamps,
+        versioned_tables=versioned_tables,
+        supports_partial_unique_indexes=supports_partial_unique_indexes,
+    )
     for spec in schema.fields:
         if spec.child is not None:
-            _build_child_table(schema, spec, spec.child, metadata)
+            _build_child_table(schema, spec, spec.child, metadata, reverse_index=timestamps == "versioned")
     for target in schema.referenced_classes():
-        table_for(resolve_schema(target), metadata, store_timestamps=store_timestamps)
+        table_for(
+            resolve_schema(target),
+            metadata,
+            timestamps=timestamps,
+            versioned_tables=versioned_tables,
+            supports_partial_unique_indexes=supports_partial_unique_indexes,
+        )
     return table
 
 
@@ -186,8 +228,28 @@ def _column(spec: ColumnSpec) -> sqlalchemy.Column[Any]:
     return sqlalchemy.Column(spec.name, _TYPE_FOR_KIND[spec.kind](), nullable=spec.nullable)
 
 
-def _column_index(table_name: str, spec: ColumnSpec) -> sqlalchemy.Index | None:
+def _column_index(
+    table_name: str,
+    spec: ColumnSpec,
+    *,
+    versioned_family: bool = False,
+    supports_partial_unique_indexes: bool = True,
+) -> sqlalchemy.Index | None:
     if spec.unique:
+        if versioned_family:
+            if supports_partial_unique_indexes:
+                # Uniqueness is among current rows only; the partial predicate
+                # excludes superseded (ts_end IS NOT NULL) history.
+                return sqlalchemy.Index(
+                    _index_name("uq", table_name, (spec.name,)),
+                    spec.name,
+                    unique=True,
+                    sqlite_where=text(f"{TS_END_COLUMN} IS NULL"),
+                    postgresql_where=text(f"{TS_END_COLUMN} IS NULL"),
+                )
+            # No partial-index support (DuckDB): a plain lookup index instead;
+            # unique-among-current is enforced in the save transaction.
+            return sqlalchemy.Index(_index_name("ix", table_name, (spec.name,)), spec.name)
         return sqlalchemy.Index(_index_name("uq", table_name, (spec.name,)), spec.name, unique=True)
     if spec.indexed:
         return sqlalchemy.Index(_index_name("ix", table_name, (spec.name,)), spec.name)
@@ -195,9 +257,15 @@ def _column_index(table_name: str, spec: ColumnSpec) -> sqlalchemy.Index | None:
 
 
 def _build_parent_table(
-    schema: TableSchema, metadata: sqlalchemy.MetaData, *, store_timestamps: bool = True
+    schema: TableSchema,
+    metadata: sqlalchemy.MetaData,
+    *,
+    timestamps: _TimestampMode = "creation",
+    versioned_tables: frozenset[str] = frozenset(),
+    supports_partial_unique_indexes: bool = True,
 ) -> sqlalchemy.Table:
     name = schema.table_name
+    versioned = timestamps == "versioned" and name in versioned_tables
     items: list[Any] = [
         sqlalchemy.Column(
             SID_COLUMN,
@@ -213,12 +281,20 @@ def _build_parent_table(
     items.append(
         sqlalchemy.CheckConstraint(f"{ROLE_COLUMN} IN (0, 1)", name=_index_name("ck", name, (ROLE_COLUMN, "valid")))
     )
-    if store_timestamps:
+    if timestamps != "off":
         items.append(sqlalchemy.Column(TS_START_COLUMN, sqlalchemy.BigInteger, nullable=False))
         items.append(sqlalchemy.Index(_index_name("ix", name, (TS_START_COLUMN,)), TS_START_COLUMN))
+    if versioned:
+        items.append(sqlalchemy.Column(TS_END_COLUMN, sqlalchemy.BigInteger, nullable=True))
+        items.append(sqlalchemy.Index(_index_name("ix", name, (TS_END_COLUMN,)), TS_END_COLUMN))
+        # No index: replaced_by_sid is consulted only by fsck, never a hot path.
+        items.append(sqlalchemy.Column(REPLACED_BY_COLUMN, sqlalchemy.Integer, nullable=True))
     if schema.dedup == "content_id":
+        # The content-id unique index stays GLOBAL: dedup identity is store-wide,
+        # spanning both current and superseded rows.
         items.append(sqlalchemy.Column(CONTENT_ID_COLUMN, sqlalchemy.Text, nullable=False))
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))
+    reverse_index = timestamps == "versioned"
     for spec in schema.fields:
         if spec.role == "child":
             if spec.optional:
@@ -226,16 +302,30 @@ def _build_parent_table(
             continue
         for column_spec in spec.columns:
             items.append(_column(column_spec))
-            index = _column_index(name, column_spec)
+            index = _column_index(
+                name,
+                column_spec,
+                versioned_family=versioned,
+                supports_partial_unique_indexes=supports_partial_unique_indexes,
+            )
             if index is not None:
                 items.append(index)
+            elif reverse_index and spec.role == "reference":
+                # ponytail: superset indexing over all reference columns; narrow
+                # to ownership-path columns if index bloat matters.
+                items.append(sqlalchemy.Index(_index_name("ix", name, (column_spec.name,)), column_spec.name))
     for columns in schema.composite_indexes:
         items.append(sqlalchemy.Index(_index_name("ix", name, columns), *columns))
     return sqlalchemy.Table(name, metadata, *items)
 
 
 def _build_child_table(
-    schema: TableSchema, spec: FieldSpec, child: ChildTableSpec, metadata: sqlalchemy.MetaData
+    schema: TableSchema,
+    spec: FieldSpec,
+    child: ChildTableSpec,
+    metadata: sqlalchemy.MetaData,
+    *,
+    reverse_index: bool = False,
 ) -> sqlalchemy.Table:
     existing = metadata.tables.get(child.table_name)
     if existing is not None:
@@ -252,4 +342,8 @@ def _build_child_table(
     ]
     for column_spec in child.element_columns:
         items.append(_column(column_spec))
+        # ponytail: superset indexing over all reference columns; narrow to
+        # ownership-path columns if index bloat matters.
+        if reverse_index and child.target is not None and column_spec.name.endswith("_sid"):
+            items.append(sqlalchemy.Index(_index_name("ix", child.table_name, (column_spec.name,)), column_spec.name))
     return sqlalchemy.Table(child.table_name, metadata, *items)

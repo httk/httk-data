@@ -876,3 +876,30 @@ def test_bulk_incremental_cross_chunk_metadata_verified_against_stored(store_fac
     ):
         bulk.save(MetaScalar("k", "note1"))
         bulk.save(MetaScalar("k", "note2"))  # conflicting metadata against the stored row
+
+
+@pytest.mark.parametrize("backend", ["sqlite", "duckdb"])
+def test_bulk_versioned_store_lands_current_rows_and_dedups(backend):
+    """A versioned-store bulk ingest lands every family row current (ts_end NULL) and dedups a pre-existing row."""
+    from httk.store.db import Database, SqlStore
+    from httk.store.storage_layout import EntryFamilyDeclaration, EntryRecordDeclaration
+
+    class AuthorFamily:
+        pass
+
+    layout = EntryFamilyDeclaration(
+        name="test-bulk-versioned-family",
+        family=AuthorFamily,
+        records=(EntryRecordDeclaration(name="test-bulk-versioned-author", record=Author),),
+    )
+    database = Database.sqlite() if backend == "sqlite" else Database.duckdb()
+    with database:
+        store = SqlStore(database, entry_families=(layout,), store_timestamps="versioned")
+        pre = store.save(Author("Ada", 1852))
+        with store.bulk_ingest() as bulk:
+            bulk.save(Author("Ada", 1852))  # dedups against the pre-existing row
+            bulk.save(Author("Grace", 1906))
+        with database.engine.connect() as connection:
+            rows = connection.execute(sqlalchemy.text("SELECT name, ts_end FROM bulk_author ORDER BY name")).all()
+        assert rows == [("Ada", None), ("Grace", None)]
+        assert store.fetch(Author, pre) == Author("Ada", 1852)

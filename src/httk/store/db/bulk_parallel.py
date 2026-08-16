@@ -64,8 +64,10 @@ from httk.core.storage import StorageProjectionCycleError, resolve_storage_recor
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    REPLACED_BY_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    TS_END_COLUMN,
     TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
@@ -1313,7 +1315,9 @@ class _Merger:
 
     def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> bool:
         value_columns = [
-            column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN)
+            column.name
+            for column in table.columns
+            if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN, TS_END_COLUMN, REPLACED_BY_COLUMN)
         ]
         while True:
             keep = (

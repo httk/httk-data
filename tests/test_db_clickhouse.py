@@ -99,6 +99,12 @@ def clickhouse_database():
         admin.dispose()
 
 
+def test_clickhouse_refuses_versioned_store(clickhouse_database: Database) -> None:
+    # The refusal fires once the dialect is known, inside the open connection.
+    with pytest.raises(NotImplementedError, match="versioned stores are not supported"):
+        SqlStore(clickhouse_database, entry_records={}, store_timestamps="versioned")
+
+
 def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     assert tuple(int(part) for part in clickhouse_database.server_version.split(".")[:4]) >= (26, 8, 1, 1028)
