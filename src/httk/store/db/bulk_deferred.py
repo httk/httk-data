@@ -11,7 +11,7 @@ from __future__ import annotations
 import contextlib
 import time
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
@@ -37,6 +37,13 @@ class DeferredFinalizer:
         self.maps: dict[str, str] = {}
         self.finals: dict[str, str] = {}
         self.objects: list[str] = []
+        # Recorded relation kind ("view"/"table"/"index") per tracked object.
+        # PostgreSQL aborts the finalize transaction on a wrong-kind
+        # ``DROP ... IF EXISTS`` (IF EXISTS suppresses not-found, not
+        # wrong-kind), so cleanup must issue only the matching DROP.  Names
+        # without an entry here (ClickHouse projection relations injected via
+        # ``objects`` directly) keep the historical blind-drop behaviour.
+        self._object_kinds: dict[str, str] = {}
         self.finalize_timings: dict[str, float] = {}
         self._final_by_stage: dict[str, dict[int, int]] = {}
         self.root_stage: str | None = None
@@ -62,16 +69,39 @@ class DeferredFinalizer:
         operation()
         self.finalize_timings[name] = time.perf_counter() - started
 
+    _DROP_SQL: ClassVar[dict[str, str]] = {
+        "view": "DROP VIEW IF EXISTS",
+        "table": "DROP TABLE IF EXISTS",
+        "index": "DROP INDEX IF EXISTS",
+    }
+
+    def _drop_object(self, name: str) -> None:
+        """Drop ``name`` using only the DDL matching its recorded kind.
+
+        PostgreSQL raises (and aborts the whole transaction) on a wrong-kind
+        ``DROP ... IF EXISTS``.  Issuing the exact kind avoids that.  The blind
+        attempt across every relation kind is reserved for ClickHouse's
+        unkinded injected projection relations, which tolerate it; every other
+        dialect only ever drops kinds recorded here.
+        """
+        kind = self._object_kinds.get(name)
+        if kind is not None:
+            statements = [self._DROP_SQL[kind]]
+        elif self.connection.dialect.name == "clickhousedb":
+            statements = list(self._DROP_SQL.values())
+        else:
+            # No non-ClickHouse path leaves an object unkinded; default to the
+            # table DDL rather than a wrong-kind DROP that would abort the txn.
+            statements = [self._DROP_SQL["table"]]
+        for statement in statements:
+            with contextlib.suppress(Exception):
+                self.connection.execute(sqlalchemy.text(f"{statement} {self._q(name)}"))
+
     def cleanup(self) -> None:
         """Drop every main-database temporary relation before marker clear."""
         started = time.perf_counter()
         for name in reversed(self.objects):
-            with contextlib.suppress(Exception):
-                self.connection.execute(sqlalchemy.text(f'DROP VIEW IF EXISTS "{name}"'))
-            with contextlib.suppress(Exception):
-                self.connection.execute(sqlalchemy.text(f'DROP TABLE IF EXISTS "{name}"'))
-            with contextlib.suppress(Exception):
-                self.connection.execute(sqlalchemy.text(f'DROP INDEX IF EXISTS "{name}"'))
+            self._drop_object(name)
         self.objects.clear()
         self.finalize_timings["cleanup"] = time.perf_counter() - started
 
@@ -90,6 +120,7 @@ class DeferredFinalizer:
         else:
             self.connection.execute(sqlalchemy.text(f'CREATE TEMP VIEW {self._q(name)} AS {query}'))
         self.objects.append(name)
+        self._object_kinds[name] = "view"
 
     def _create_table(self, name: str, query: str) -> None:
         if self.connection.dialect.name == "clickhousedb":
@@ -102,6 +133,7 @@ class DeferredFinalizer:
         else:
             self.connection.execute(sqlalchemy.text(f'CREATE TEMP TABLE {self._q(name)} AS {query}'))
         self.objects.append(name)
+        self._object_kinds[name] = "table"
 
     def _index_relation(self, name: str, *columns: str, unique: bool = False) -> None:
         if not self.store.backend_facts.supports_adhoc_indexes:
@@ -115,6 +147,7 @@ class DeferredFinalizer:
             )
         )
         self.objects.append(index)
+        self._object_kinds[index] = "index"
 
     def _make_stage_views(self) -> None:
         """Expose every shard relation as one read-only logical stage view."""
@@ -160,13 +193,14 @@ class DeferredFinalizer:
 
     def _load_sqlite_stages(self) -> None:
         """Stream SQLite shards into transaction-local staging tables."""
-        from httk.store.db.bulk_parallel import _copy_sqlite_shard
+        from httk.store.db.bulk_parallel import _copy_sqlite_shard, _nan_cells_from_manifests
 
+        nan_cells = _nan_cells_from_manifests(self.manifests) if self.connection.dialect.name == "postgresql" else None
         table_names = sorted({table for manifest in self.manifests for table in manifest.shards.get("tables", ())})
         destinations: dict[str, sqlalchemy.Table] = {}
         for table in table_names:
             stage = self._temp_name("stage", table)
-            self._create_table(stage, f"SELECT * FROM {self._q(table)} WHERE 0")
+            self._create_table(stage, f"SELECT * FROM {self._q(table)} WHERE 1=0")
             self.ingest._staging_tables.add(stage)
             real = self.store._table(table)
             destinations[table] = sqlalchemy.Table(
@@ -179,7 +213,7 @@ class DeferredFinalizer:
             path = manifest.shards.get("db")
             tables = manifest.shards.get("tables", ())
             if path and tables:
-                _copy_sqlite_shard(self.connection, str(path), tables, destinations)
+                _copy_sqlite_shard(self.connection, str(path), tables, destinations, nan_cells)
 
     # ------------------------------------------------------------------ maps and conflict scan
 
@@ -396,7 +430,7 @@ class DeferredFinalizer:
     def _make_survivors(self) -> None:
         self.survivors: dict[str, str] = {}
         roots = self._temp_name("roots", "rows")
-        root_empty = "SELECT CAST(NULL AS TEXT) AS tbl, CAST(NULL AS INTEGER) AS stage_sid WHERE 0"
+        root_empty = "SELECT CAST(NULL AS TEXT) AS tbl, CAST(NULL AS INTEGER) AS stage_sid WHERE 1=0"
         if self.connection.dialect.name == "clickhousedb":
             root_empty = "SELECT CAST('' AS String) AS tbl, toInt64(0) AS stage_sid WHERE 0"
         self._create_table(roots, root_empty)
@@ -689,7 +723,7 @@ class DeferredFinalizer:
             real = self.store._table(dispatch_name)
             stage = self._temp_name("dispatch", dispatch_name)
             columns = ", ".join(self._q(column.name) for column in real.columns)
-            self._create_table(stage, f"SELECT {columns} FROM {self._q(dispatch_name)} WHERE 0")
+            self._create_table(stage, f"SELECT {columns} FROM {self._q(dispatch_name)} WHERE 1=0")
             if payload_stage is None:
                 payload: list[dict[str, Any]] = []
                 assert rows is not None
@@ -774,7 +808,15 @@ class DeferredFinalizer:
                 ).first()
                 if unexpected is not None:
                     raise RuntimeError(f"deferred dispatch {dispatch!r} refers to unstaged backing table {target!r}")
-                expressions.append(f"NULL AS {self._q(column.name)}")
+                if self.connection.dialect.name == "postgresql":
+                    # A bare NULL is ``text`` on PostgreSQL; the dispatch target
+                    # column is integer, so type the literal.  SQLite/DuckDB
+                    # coerce an untyped NULL and ClickHouse rejects a plain
+                    # CAST(NULL AS Int64), so keep the bare NULL for them.
+                    null_type = column.type.compile(dialect=self.connection.dialect)
+                    expressions.append(f"CAST(NULL AS {null_type}) AS {self._q(column.name)}")
+                else:
+                    expressions.append(f"NULL AS {self._q(column.name)}")
                 continue
             map_alias, final_alias = f"dm{index}", f"df{index}"
             joins.append(
@@ -809,10 +851,10 @@ class DeferredFinalizer:
             raise RuntimeError(f"deferred finalize lost staged {table!r} sid {stage_sid}") from None
 
     def _drop(self, name: str) -> None:
-        with contextlib.suppress(Exception):
-            self.connection.execute(sqlalchemy.text(f'DROP VIEW IF EXISTS {self._q(name)}'))
-        with contextlib.suppress(Exception):
-            self.connection.execute(sqlalchemy.text(f'DROP TABLE IF EXISTS {self._q(name)}'))
+        # Only by-value candidate tables reach here, and the first drop precedes
+        # their CREATE (so no kind is recorded yet); they are always tables.
+        self._object_kinds.setdefault(name, "table")
+        self._drop_object(name)
         with contextlib.suppress(ValueError):
             self.objects.remove(name)
 

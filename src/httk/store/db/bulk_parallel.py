@@ -233,6 +233,9 @@ class _WorkerManifest:
     shards: dict[str, Any]
     # (table, content_id, field) triples whose identity-excluded float held a NaN.
     nan_content: list[tuple[str, str, str]] = field(default_factory=list)
+    # (table, stage_sid, column) cells whose float held a NaN (SQLite shards only;
+    # restored on PostgreSQL load where NaN survives, unlike SQLite's NULL).
+    nan_floats: list[tuple[str, int, str]] = field(default_factory=list)
 
 
 # Fork-inherited handles the worker reads from module scope (never pickled).
@@ -521,6 +524,11 @@ class _WorkerEncoder:
         self._tables: set[str] = set()
         self._nan_content: set[tuple[str, str, str]] = set()
         self._nan_rows: list[dict[str, Any]] = []
+        # (table, stage_sid, column) cells that held a NaN float.  SQLite shards
+        # store NaN as NULL; only PostgreSQL (which keeps NaN) restores them at
+        # load time so bulk matches a serial ``save()``.  Recorded only for the
+        # SQLite shard backend (Parquet/DuckDB shards preserve NaN natively).
+        self._nan_floats: set[tuple[str, int, str]] = set()
         self._since_flush = 0
 
     @property
@@ -704,6 +712,7 @@ class _WorkerEncoder:
         elif schema.dedup == "by_value" and self._deduplicate_in_worker:
             self._value_index[table_name][tuple(sorted(values.items()))] = sid
         self._buffer(table_name, row)
+        self._record_nan_floats(table_name, row)
 
         for spec in schema.fields:
             if spec.role != "child":
@@ -738,6 +747,26 @@ class _WorkerEncoder:
         self._rows.setdefault(table_name, []).append(row)
         self._tables.add(table_name)
 
+    def _record_nan_floats(self, table_name: str, row: dict[str, Any]) -> None:
+        """Note any NaN float cell so a PostgreSQL load can reinstate it.
+
+        A SQLite shard flattens NaN to NULL; recording ``(table, sid, column)``
+        lets the PostgreSQL stage/merge load restore ``NaN`` and stay identical
+        to a serial ``save()``.  Only SQLite shards lose NaN -- both the SQLite
+        and PostgreSQL backends use them -- so this is keyed off the writer, not
+        the dialect name; the Parquet/DuckDB shard backend preserves NaN itself.
+
+        Scoped to sid-bearing parent rows, matching the ``_nan_content`` sidecar:
+        child element tables are keyed by ``(parent_sid, index)`` rather than a
+        sid, so a NaN inside a ``list[float]`` element is out of this path.
+        """
+        if not isinstance(self._writer, _SqliteShardWriter) or SID_COLUMN not in row:
+            return
+        sid = row[SID_COLUMN]
+        for column_name, candidate in row.items():
+            if isinstance(candidate, float) and math.isnan(candidate):
+                self._nan_floats.add((table_name, sid, column_name))
+
     def _flush(self) -> None:
         for table_name, rows in self._rows.items():
             if rows:
@@ -765,6 +794,7 @@ class _WorkerEncoder:
             tables=sorted(self._tables),
             shards=self._writer.finalize(),
             nan_content=sorted(self._nan_content),
+            nan_floats=sorted(self._nan_floats),
         )
 
 
@@ -1041,8 +1071,16 @@ def _copy_sqlite_shard(
     database: str,
     tables: list[str] | tuple[str, ...],
     destinations: dict[str, sqlalchemy.Table],
+    nan_cells: dict[str, dict[int, set[str]]] | None = None,
 ) -> None:
-    """Stream one SQLite shard into tables on the destination connection."""
+    """Stream one SQLite shard into tables on the destination connection.
+
+    ``nan_cells`` (``{table: {sid: {column, ...}}}``) names cells that held a NaN
+    float the SQLite shard flattened to NULL.  It is supplied only for a
+    PostgreSQL destination (which keeps NaN); each such cell is reinstated as
+    ``NaN`` during the insert so bulk matches a serial ``save()`` and a NOT NULL
+    float column never sees the intermediate NULL.
+    """
     uri = Path(database).resolve().as_uri() + "?mode=ro"
     source = sqlite3.connect(uri, uri=True)
     try:
@@ -1051,14 +1089,28 @@ def _copy_sqlite_shard(
             columns = [column.name for column in destination.columns]
             quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in columns)
             table = table_name.replace('"', '""')
+            table_nan = nan_cells.get(table_name) if nan_cells else None
             cursor = source.execute(f'SELECT {quoted} FROM "{table}"')
             while rows := cursor.fetchmany(_SQLITE_COPY_BATCH_SIZE):
-                connection.execute(
-                    sqlalchemy.insert(destination),
-                    [dict(zip(columns, row, strict=True)) for row in rows],
-                )
+                records = [dict(zip(columns, row, strict=True)) for row in rows]
+                if table_nan:
+                    for record in records:
+                        restore = table_nan.get(record[SID_COLUMN])
+                        if restore:
+                            for column_name in restore:
+                                record[column_name] = math.nan
+                connection.execute(sqlalchemy.insert(destination), records)
     finally:
         source.close()
+
+
+def _nan_cells_from_manifests(manifests: list[_WorkerManifest]) -> dict[str, dict[int, set[str]]]:
+    """Index every manifest's recorded NaN float cells as ``{table: {sid: {column}}}``."""
+    cells: dict[str, dict[int, set[str]]] = {}
+    for manifest in manifests:
+        for table_name, sid, column in manifest.nan_floats:
+            cells.setdefault(table_name, {}).setdefault(sid, set()).add(column)
+    return cells
 
 
 # --------------------------------------------------------------------- merge (main process)
@@ -1228,13 +1280,16 @@ class _Merger:
         # Read each shard through its own connection: SQLite's compiled ATTACH
         # ceiling is commonly ten and cannot always be raised at runtime.  The
         # destination inserts still belong to the merge's one spanning transaction.
+        nan_cells = (
+            _nan_cells_from_manifests(self._manifests) if self._connection.dialect.name == "postgresql" else None
+        )
         for manifest in self._manifests:
             database = manifest.shards.get("db")
             tables = manifest.shards.get("tables", [])
             if not database or not tables:
                 continue
             destinations = {table_name: self._store._table(table_name) for table_name in tables}
-            _copy_sqlite_shard(self._connection, str(database), tables, destinations)
+            _copy_sqlite_shard(self._connection, str(database), tables, destinations, nan_cells)
 
     # -- cross-worker collapse
 

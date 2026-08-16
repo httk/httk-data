@@ -848,7 +848,7 @@ class BulkIngest:
                 for name in reversed(self._created):
                     table = store._table(name)
                     cleanup.execute(sqlalchemy.schema.DropTable(table, if_exists=True))
-                    if cleanup.dialect.name == "duckdb":
+                    if cleanup.dialect.name in ("duckdb", "postgresql"):
                         sequence = _sid_sequence(table)
                         if sequence is not None:
                             cleanup.execute(sqlalchemy.text(f'DROP SEQUENCE IF EXISTS "{sequence.name}"'))
@@ -1355,14 +1355,25 @@ class BulkIngest:
 
     def _create_physical_table(self, table: sqlalchemy.Table) -> None:
         assert self._connection is not None
-        if self._connection.dialect.name == "duckdb":
+        if self._connection.dialect.name in ("duckdb", "postgresql"):
             sequence = _sid_sequence(table)
             if sequence is not None:
-                # The sid column renders as DEFAULT nextval(<seq>); DuckDB needs
-                # the sequence to exist at CREATE TABLE time for that default to
-                # bind, otherwise ordinary post-ingest saves lose their sid
-                # allocator. SQLite ignores the sequence entirely.
-                self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE IF NOT EXISTS "{sequence.name}"'))
+                # DuckDB renders the sid column as DEFAULT nextval(<seq>) and
+                # needs the sequence at CREATE TABLE time for that default to
+                # bind.  PostgreSQL's bare CreateTable emits no default, but an
+                # ordinary post-ingest save still draws its sid via nextval, so
+                # every built table (even one that stays empty this ingest) must
+                # own its sequence.  SQLite ignores the sequence entirely.
+                #
+                # This table is being created fresh, so PostgreSQL creates the
+                # sequence without IF NOT EXISTS: a leftover sequence is a stale
+                # remnant of a failed prior bulk and must be a hard error (like
+                # the bare CreateTable below), not silently reused.  DuckDB keeps
+                # IF NOT EXISTS to tolerate its rolled-back-DDL cleanup ordering.
+                if self._connection.dialect.name == "duckdb":
+                    self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE IF NOT EXISTS "{sequence.name}"'))
+                else:
+                    self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE "{sequence.name}"'))
         # A bare CreateTable (not create_all / Table.create) so the separable
         # indexes stay out until the deferred post-load build.
         self._connection.execute(sqlalchemy.schema.CreateTable(table))
@@ -1587,6 +1598,8 @@ class BulkIngest:
                 self._validate_deferred_sqlite_table(name, table)
             elif self._connection.dialect.name == "duckdb":
                 self._validate_deferred_duckdb_table(name, table)
+            elif self._connection.dialect.name == "postgresql":
+                self._validate_deferred_pg_table(name, table)
             else:
                 from httk.store.db.clickhouse import validate_bulk_tables
 
@@ -1663,6 +1676,20 @@ class BulkIngest:
     def _physical_check(cls, value: object) -> str:
         """Normalize non-semantic SQLite/DuckDB parenthesis and whitespace differences."""
         return (cls._physical_sql(value) or "").replace("(", "").replace(")", "").replace(" ", "")
+
+    @classmethod
+    def _pg_check_norm(cls, value: str) -> str:
+        """Canonicalize a check-constraint definition for cross-form comparison.
+
+        Reduces both a declared ``x IN (0, 1)`` and PostgreSQL's stored
+        ``CHECK ((x = ANY (ARRAY[0, 1])))`` rewrite to the same token string, so
+        a genuinely different predicate still compares unequal.
+
+        :param value: A ``pg_get_constraintdef`` string or a declared ``sqltext``.
+        :return: The canonical token string.
+        """
+        normalized = cls._physical_check(value).replace("[", "").replace("]", "")
+        return normalized.removeprefix("check").replace("=anyarray", "in")
 
     @classmethod
     def _sqlite_check_clauses(cls, sql: str) -> list[str]:
@@ -1855,6 +1882,139 @@ class BulkIngest:
             if sequence_row is None or int(sequence_row[0]) != self._next_sid.get(name, 1):
                 self._physical_failure(name, f"sequence {sequence.name!r}")
 
+    def _validate_deferred_pg_table(self, name: str, table: sqlalchemy.Table) -> None:
+        """Validate a deferred-built PostgreSQL table against its declaration.
+
+        Mirrors :meth:`_validate_deferred_duckdb_table` using the standard
+        ``information_schema`` (columns) and ``pg_catalog`` (constraints,
+        indexes, sequence).  Check constraints are compared by name rather than
+        expression text: PostgreSQL rewrites e.g. ``x IN (0, 1)`` to
+        ``x = ANY (ARRAY[0, 1])``, which no purely textual normalization
+        recovers, whereas the deterministic constraint names do not drift.
+        """
+        assert self._connection is not None
+        rows = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_catalog = current_database() AND table_schema = current_schema() "
+                    "AND table_name = :name ORDER BY ordinal_position"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        if [str(row["column_name"]) for row in rows] != [column.name for column in table.columns]:
+            self._physical_failure(name, "column declaration")
+        for row, column in zip(rows, table.columns, strict=True):
+            expected_type = self._physical_sql(column.type.compile(dialect=self._connection.dialect))
+            if self._physical_sql(row["data_type"]) != expected_type:
+                self._physical_failure(name, f"type for {column.name!r}")
+            if (str(row["is_nullable"]) == "YES") != column.nullable:
+                self._physical_failure(name, f"nullability for {column.name!r}")
+            # The internal table builder supplies only DefaultClause-compatible defaults here.
+            expected_default = self._physical_sql(
+                cast(sqlalchemy.DefaultClause, column.server_default).arg if column.server_default else None
+            )
+            if self._physical_sql(row["column_default"]) != expected_default:
+                self._physical_failure(name, f"default for {column.name!r}")
+        constraints = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT con.contype::text AS contype, con.conname AS conname, "
+                    "pg_get_constraintdef(con.oid) AS condef, "
+                    "ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) "
+                    "JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum "
+                    "ORDER BY k.ord) AS cols "
+                    "FROM pg_constraint con JOIN pg_class t ON t.oid = con.conrelid "
+                    "JOIN pg_namespace ns ON ns.oid = t.relnamespace "
+                    "WHERE t.relname = :name AND ns.nspname = current_schema()"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        by_type: dict[str, list[Any]] = {}
+        for constraint in constraints:
+            by_type.setdefault(str(constraint["contype"]), []).append(constraint)
+        # The mapper emits only primary-key, unique, and check constraints; any
+        # other constraint kind (e.g. a foreign key) is a corrupted schema. NOT
+        # NULL is tolerated: PostgreSQL 18 records it as a "n" pg_constraint row,
+        # and column nullability is already validated separately above.
+        if set(by_type) - {"p", "u", "c", "n"}:
+            self._physical_failure(name, "unexpected constraint kind")
+        expected_pk = [column.name for column in table.primary_key.columns]
+        actual_pk = next((list(row["cols"]) for row in by_type.get("p", ())), None)
+        if (actual_pk or []) != expected_pk:
+            self._physical_failure(name, "primary key")
+        actual_unique = {tuple(str(column) for column in row["cols"]) for row in by_type.get("u", ())}
+        if actual_unique != self._expected_unique_columns(table):
+            self._physical_failure(name, "unique constraints")
+        # Compare check constraints by definition, not merely by name: a
+        # same-named but semantically wrong check must fail.  ``_pg_check_norm``
+        # canonicalizes PostgreSQL's ``x = ANY (ARRAY[...])`` rewrite of the
+        # mapper's ``x IN (...)`` so the declared and stored forms compare equal.
+        actual_checks = {self._pg_check_norm(str(row["condef"])) for row in by_type.get("c", ())}
+        expected_checks = {
+            self._pg_check_norm(str(constraint.sqltext))
+            for constraint in table.constraints
+            if isinstance(constraint, sqlalchemy.CheckConstraint)
+        }
+        if actual_checks != expected_checks:
+            self._physical_failure(name, "check constraints")
+        # Only pure ``Index`` objects; exclude the indexes that back a primary
+        # key or unique constraint (validated above).  Compare each index's
+        # ordered column list, not just its name and uniqueness.
+        indexes = (
+            self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT c.relname AS index_name, i.indisunique AS is_unique, "
+                    "ARRAY(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord) "
+                    "JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum "
+                    "ORDER BY k.ord) AS cols "
+                    "FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+                    "JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace ns ON ns.oid = t.relnamespace "
+                    "WHERE t.relname = :name AND ns.nspname = current_schema() "
+                    "AND NOT EXISTS (SELECT 1 FROM pg_constraint con "
+                    "WHERE con.conindid = i.indexrelid AND con.contype IN ('p', 'u'))"
+                ),
+                {"name": name},
+            )
+            .mappings()
+            .all()
+        )
+        actual_indexes = {
+            str(row["index_name"]): (tuple(str(column) for column in row["cols"]), bool(row["is_unique"]))
+            for row in indexes
+        }
+        expected_indexes = {
+            index.name: (tuple(column.name for column in index.columns), bool(index.unique)) for index in table.indexes
+        }
+        if actual_indexes != expected_indexes:
+            self._physical_failure(name, "indexes")
+        sequence = _sid_sequence(table)
+        if sequence is not None:
+            exists = self._connection.execute(
+                sqlalchemy.text(
+                    "SELECT 1 FROM pg_sequences WHERE schemaname = current_schema() AND sequencename = :name"
+                ),
+                {"name": sequence.name},
+            ).first()
+            if exists is None:
+                self._physical_failure(name, f"sequence {sequence.name!r}")
+            else:
+                # ``is_called`` lives on the sequence relation, not pg_sequences:
+                # the next drawn value is ``last_value`` when it is false (fresh
+                # or ``setval(..., false)``), else ``last_value + 1``.
+                last_value, is_called = self._connection.execute(
+                    sqlalchemy.text(f'SELECT last_value, is_called FROM "{sequence.name}"')
+                ).one()
+                next_value = int(last_value) + (1 if is_called else 0)
+                if next_value != self._next_sid.get(name, 1):
+                    self._physical_failure(name, f"sequence {sequence.name!r}")
+
     def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:
         """Abort (never commit) if any dispatched task did not come back encoded in a worker manifest."""
         # Deferred Parquet stages carry one root row per submitted task.  Count
@@ -1965,17 +2125,30 @@ class BulkIngest:
 
     def _resync_sequences(self) -> None:
         assert self._connection is not None
-        if self._connection.dialect.name != "duckdb":
-            # SQLite's rowid self-syncs to max+1; only DuckDB's explicit
-            # sequence must be advanced past the pre-assigned sids.
+        dialect = self._connection.dialect.name
+        if dialect not in ("duckdb", "postgresql"):
+            # SQLite's rowid self-syncs to max+1; only the explicit DuckDB and
+            # PostgreSQL sequences must be advanced past the pre-assigned sids.
             return
         for name, next_sid in self._next_sid.items():
             sequence = _sid_sequence(self._store._table(name))
             if sequence is None:
                 continue
-            self._connection.execute(
-                sqlalchemy.text(f'CREATE OR REPLACE SEQUENCE "{sequence.name}" START WITH {next_sid}')
-            )
+            if dialect == "duckdb":
+                self._connection.execute(
+                    sqlalchemy.text(f'CREATE OR REPLACE SEQUENCE "{sequence.name}" START WITH {next_sid}')
+                )
+            else:
+                # A bare ``CreateTable`` does not emit the parent sequence, so
+                # create it and point it past the bulk-assigned sids: an
+                # ordinary ``save()`` afterwards then draws a fresh sid via
+                # ``nextval`` rather than colliding.  ``is_called=false`` makes
+                # the next drawn value exactly ``next_sid``.
+                self._connection.execute(sqlalchemy.text(f'CREATE SEQUENCE IF NOT EXISTS "{sequence.name}"'))
+                self._connection.execute(
+                    sqlalchemy.text("SELECT setval(:seq, :value, false)"),
+                    {"seq": sequence.name, "value": next_sid},
+                )
 
     def _assert_counts(self) -> None:
         assert self._connection is not None

@@ -17,6 +17,7 @@ from httk.core import (
     RelatedEntry,
 )
 from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store.db import Database, SqlStore, StoreEntryProvider
 from httk.store.validation import validate_record
@@ -81,11 +82,21 @@ BOOK_2 = Book(
 )
 
 
-@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM))
+@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM, POSTGRES_PARAM))
 def store(request):
     records = (ADA, BOOLE, CARA, BOOK_1, BOOK_2)
     if request.param == "clickhousedb":
         with bulk_store(records) as sql_store:
+            yield sql_store
+        return
+    if request.param == "postgresql":
+        with postgres_database() as database:
+            sql_store = SqlStore(database, entry_records={})
+            with sql_store.transaction():
+                for writer in (ADA, BOOLE, CARA):
+                    sql_store.save(writer)
+                sql_store.save(BOOK_1)
+                sql_store.save(BOOK_2)
             yield sql_store
         return
     with Database.sqlite() as database:

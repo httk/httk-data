@@ -10,6 +10,7 @@ import sqlalchemy
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import QueryLiteralError, StorageInfo, StoredPropertyProjection
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store.db import (
     Database,
@@ -266,13 +267,23 @@ SECOND = GenericCalculationSecond(
 )
 
 
-@pytest.fixture(scope="module", params=("sqlite", "duckdb", CLICKHOUSE_PARAM))
+@pytest.fixture(scope="module", params=("sqlite", "duckdb", CLICKHOUSE_PARAM, POSTGRES_PARAM))
 def plan(request):
     if request.param == "clickhousedb":
         with bulk_store(
             (FIRST, SECOND),
             entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
         ) as store:
+            yield stored_property_sql_plan(store, CalculationEntry)
+        return
+    if request.param == "postgresql":
+        with postgres_database() as database:
+            store = SqlStore(
+                database,
+                entry_records={CalculationEntry: (GenericCalculationFirst, GenericCalculationSecond)},
+            )
+            store.save(FIRST)
+            store.save(SECOND)
             yield stored_property_sql_plan(store, CalculationEntry)
         return
     if request.param == "duckdb":

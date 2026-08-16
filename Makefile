@@ -5,7 +5,7 @@ DIST_DIR ?= dist
 # between httk repositories (read by docs/conf.py via HTTK_DOCS_BASE_URL).
 DOCS_BASE_URL ?= https://docs.httk.org
 
-.PHONY: docs docs-live docs-clean docs-inventories docs-lock docs-lock-check clean dist-clean dist dist-check release-check format format-check typecheck typecheck_pyright lint test test_fastfail test-extended test-extended-fastfail benchmarks audit clickhouse-dev-server clickhouse-stop
+.PHONY: docs docs-live docs-clean docs-inventories docs-lock docs-lock-check clean dist-clean dist dist-check release-check format format-check typecheck typecheck_pyright lint test test_fastfail test-extended test-extended-fastfail benchmarks audit clickhouse-dev-server clickhouse-stop postgres-dev-server postgres-stop
 
 docs: docs-clean
 	HTTK_DOCS_BASE_URL=$(DOCS_BASE_URL) $(PYTHON) -m sphinx -E -a -b html -W --keep-going docs docs/_build/html
@@ -93,6 +93,12 @@ CLICKHOUSE_EXTENDED_TOTAL_GB ?= 24
 CLICKHOUSE_STANDARD_CLIENT_MEMGUARD_GB := $(shell expr $(CLICKHOUSE_STANDARD_TOTAL_GB) - $(CLICKHOUSE_SERVER_MEMGUARD_GB))
 CLICKHOUSE_EXTENDED_CLIENT_MEMGUARD_GB := $(shell expr $(CLICKHOUSE_EXTENDED_TOTAL_GB) - $(CLICKHOUSE_SERVER_MEMGUARD_GB))
 
+POSTGRES_DEV_IMAGE ?= postgres:16
+POSTGRES_DEV_CONTAINER ?= httk-postgres
+POSTGRES_DEV_PORT ?= 5432
+POSTGRES_DEV_PASSWORD ?= postgres
+POSTGRES_DEV_DATABASE ?= httk
+
 define TEST_MEMGUARD
 $(PYTHON) -m httk.core.memguard --max-rss-gb $(or $(HTTK_TEST_MAX_RSS_GB),$(if $(HTTK_TEST_CLICKHOUSE_URI),$(if $(filter 24,$(1)),$(CLICKHOUSE_EXTENDED_CLIENT_MEMGUARD_GB),$(CLICKHOUSE_STANDARD_CLIENT_MEMGUARD_GB)),$(1))) --
 endef
@@ -178,6 +184,25 @@ clickhouse-stop:
 		fi; \
 		rm -f "$(CLICKHOUSE_DEV_PID)"; \
 	else echo "ClickHouse is not running"; fi
+
+postgres-dev-server:
+	@set -eu; \
+	docker run --detach --name "$(POSTGRES_DEV_CONTAINER)" --network host \
+		-e POSTGRES_PASSWORD="$(POSTGRES_DEV_PASSWORD)" -e POSTGRES_DB="$(POSTGRES_DEV_DATABASE)" \
+		"$(POSTGRES_DEV_IMAGE)" >/dev/null; \
+	for attempt in $$(seq 1 60); do \
+		if docker exec "$(POSTGRES_DEV_CONTAINER)" pg_isready --host 127.0.0.1 --dbname "$(POSTGRES_DEV_DATABASE)" --username postgres >/dev/null 2>&1; then \
+			echo "PostgreSQL is ready; export the test URI with:"; \
+			echo "  export HTTK_TEST_POSTGRES_URI='postgresql+psycopg://postgres:$(POSTGRES_DEV_PASSWORD)@127.0.0.1:$(POSTGRES_DEV_PORT)/$(POSTGRES_DEV_DATABASE)'"; \
+			echo "Stop it with: make postgres-stop"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "PostgreSQL native readiness failed" >&2; docker logs "$(POSTGRES_DEV_CONTAINER)"; exit 1
+
+postgres-stop:
+	@docker rm --force "$(POSTGRES_DEV_CONTAINER)" >/dev/null 2>&1 && echo "PostgreSQL stopped" || echo "PostgreSQL is not running"
 
 test:
 	HTTK_DUCKDB_TEST_MEMORY_BUDGET_MB=$(TEST_DUCKDB_MEMORY_BUDGET_MB) timeout --foreground $(TEST_TIMEOUT_SECONDS) $(call TEST_MEMGUARD,8) $(PYTHON) -m pytest

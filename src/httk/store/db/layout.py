@@ -88,7 +88,7 @@ class BackendFacts:
     write_profiles: tuple[str, ...]
     metadata_backend: Literal["table", "keepermap"]
     supports_incremental_save: bool
-    system_catalog: Literal["sqlite", "duckdb", "clickhouse"]
+    system_catalog: Literal["sqlite", "duckdb", "clickhouse", "postgresql"]
     stage_load: Literal["attach", "duckdb-views", "client-stream"]
     finalize_map_maintenance: Literal["update", "swap"]
     supports_adhoc_indexes: bool
@@ -126,6 +126,23 @@ _BACKEND_FACTS: Final[dict[str, BackendFacts]] = {
         supports_incremental_save=True,
         system_catalog="duckdb",
         stage_load="duckdb-views",
+        finalize_map_maintenance="update",
+        supports_adhoc_indexes=True,
+    ),
+    "postgresql": BackendFacts(
+        transactional_ddl=True,
+        transactional_dml=True,
+        supports_sequences=True,
+        atomic_upsert=True,
+        serial_stage_format="sqlite",
+        parallel_shard_format="sqlite",
+        supports_deferred_finalize=True,
+        supports_degraded=False,
+        write_profiles=("transactional",),
+        metadata_backend="table",
+        supports_incremental_save=True,
+        system_catalog="postgresql",
+        stage_load="attach",
         finalize_map_maintenance="update",
         supports_adhoc_indexes=True,
     ),
@@ -246,6 +263,20 @@ def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, fro
                 "UNION ALL "
                 "SELECT sequence_name, 'sequence' FROM duckdb_sequences() "
                 "WHERE database_name = current_database() AND schema_name = current_schema()"
+            )
+        )
+    elif facts.system_catalog == "postgresql":
+        rows = connection.execute(
+            sqlalchemy.text(
+                "SELECT table_name, lower(table_type) FROM information_schema.tables "
+                "WHERE table_catalog = current_database() AND table_schema = current_schema() "
+                "UNION ALL "
+                "SELECT sequence_name, 'sequence' FROM information_schema.sequences "
+                "WHERE sequence_catalog = current_database() AND sequence_schema = current_schema() "
+                "UNION ALL "
+                # Materialized views are absent from information_schema.tables; a
+                # stray one must still count as a non-empty schema object.
+                "SELECT matviewname, 'view' FROM pg_matviews WHERE schemaname = current_schema()"
             )
         )
     else:

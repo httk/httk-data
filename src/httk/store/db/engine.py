@@ -90,6 +90,12 @@ class Database:
             from httk.store.db.clickhouse import install_connection_guards
 
             self._server_version = install_connection_guards(engine)
+        if engine.dialect.name == "postgresql":
+            # Register the @compiles hook that rewrites httk_fraction_scaled_equal
+            # to inline SQL. Done here (not only in Database.postgres) so a
+            # preconfigured PostgreSQL engine passed straight to Database(...) is
+            # covered too — PostgreSQL has no per-connection UDF to fall back on.
+            importlib.import_module("httk.store.db.postgres")
         _install_exact_fraction_functions(engine)
 
     @classmethod
@@ -202,6 +208,46 @@ class Database:
         except BaseException:
             engine.dispose()
             raise
+
+    @classmethod
+    def postgres(cls, url: str | sqlalchemy.URL, *, database: str | None = None) -> Self:
+        """Create a PostgreSQL database from a ``postgresql://`` URL.
+
+        PostgreSQL is fully transactional and rides the existing
+        ``"transactional"`` write profile with no special-casing. Only the
+        psycopg 3 driver is supported: a bare ``postgresql://`` URL is
+        normalized to ``postgresql+psycopg://`` (SQLAlchemy 2.0 would otherwise
+        select psycopg2), and any other explicit driver is rejected.
+
+        :param url: PostgreSQL SQLAlchemy URL or URL string.
+        :param database: Database name overriding the URL path, if supplied.
+        :return: The configured PostgreSQL database wrapper.
+        :raises ImportError: If ``psycopg`` (psycopg 3) is not installed; install
+            the ``httk-store[postgresql]`` extra to use ``Database.postgres()``.
+        :raises ValueError: If the URL names a driver other than
+            ``postgresql+psycopg`` (psycopg 3).
+        """
+        try:
+            importlib.import_module("psycopg")
+        except ImportError as error:
+            raise ImportError(
+                "the PostgreSQL backend needs psycopg (psycopg 3); install the 'httk-store[postgresql]' extra "
+                "to use Database.postgres()"
+            ) from error
+        from sqlalchemy.engine import make_url
+
+        postgres_url = make_url(url) if isinstance(url, str) else url
+        if postgres_url.drivername == "postgresql":
+            postgres_url = postgres_url.set(drivername="postgresql+psycopg")
+        elif postgres_url.drivername != "postgresql+psycopg":
+            raise ValueError(
+                f"Database.postgres() supports only the 'postgresql+psycopg' driver (psycopg 3), "
+                f"not {postgres_url.drivername!r}"
+            )
+        if database is not None:
+            postgres_url = postgres_url.set(database=database)
+        engine = sqlalchemy.create_engine(postgres_url)
+        return cls(engine)
 
     @property
     def degraded(self) -> bool:
@@ -340,6 +386,11 @@ def connection_uses_autocommit(connection: sqlalchemy.Connection) -> bool:
     SQLite's documented autocommit mode; the SQLAlchemy checks cover alternate
     DBAPI wrappers while still requiring the live connection to agree.
     """
+    if connection.dialect.name == "postgresql":
+        # psycopg 3 exposes the live autocommit flag on the DBAPI connection;
+        # the transactional-profile validator relies on this to reject a
+        # misconfigured AUTOCOMMIT Postgres engine.
+        return bool(getattr(connection.connection.driver_connection, "autocommit", False))
     if connection.dialect.name != "sqlite":
         return False
     raw = connection.connection.driver_connection

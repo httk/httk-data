@@ -66,6 +66,7 @@ db = ["sqlalchemy>=2.0,<3"]
 duckdb = ["httk-store[db]", "duckdb_engine>=0.13", "duckdb>=1.0"]
 # clickhouse-connect 1.6.0 was probed for G0/P5; keep the compatible major range.
 clickhouse = ["httk-store[db]", "clickhouse-connect>=1.6,<2"]
+postgresql = ["httk-store[db]", "psycopg[binary]>=3.1"]
 parallel = ["pyarrow>=15"]
 mongodb = ["pymongo>=4.6"]
 

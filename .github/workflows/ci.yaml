@@ -182,3 +182,59 @@ jobs:
       - name: Stop ClickHouse
         if: always()
         run: docker rm --force httk-clickhouse
+
+  test-postgres:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python-version || '3.12' }}
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Start PostgreSQL 16
+        run: |
+          docker run --detach --name httk-postgres --network host \
+            -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=httk \
+            postgres:16
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if docker exec httk-postgres pg_isready --host 127.0.0.1 --dbname httk --username postgres >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs httk-postgres
+          exit 1
+
+      - name: Export PostgreSQL test URI
+        run: echo 'HTTK_TEST_POSTGRES_URI=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/httk' >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,postgresql,parallel]"
+
+      - name: Run the default test profile
+        env:
+          HTTK_TEST_MAX_RSS_GB: "9"
+        run: timeout --foreground 900 python -m httk.core.memguard --max-rss-gb "$HTTK_TEST_MAX_RSS_GB" -- python -m pytest tests/ -q
+
+      - name: Run the extended test profile
+        env:
+          HTTK_TEST_PROFILE: extended
+          HTTK_TEST_MAX_RSS_GB: "9"
+        run: timeout --foreground 1200 python -m httk.core.memguard --max-rss-gb "$HTTK_TEST_MAX_RSS_GB" -- python -m pytest tests/ -q -m ""
+
+      - name: Dump PostgreSQL logs on failure
+        if: failure()
+        run: docker logs httk-postgres || true
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker rm --force httk-postgres

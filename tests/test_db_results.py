@@ -9,6 +9,7 @@ from fractions import Fraction
 import pytest
 import sqlalchemy
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store.db import (
     Database,
@@ -47,11 +48,18 @@ class IntRecord:
     value: int
 
 
-@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM))
+@pytest.fixture(scope="module", params=("sqlite", CLICKHOUSE_PARAM, POSTGRES_PARAM))
 def store(request):
     records = tuple(ResultRecord(str(index), Fraction(index, 3)) for index in range(6))
     if request.param == "clickhousedb":
         with bulk_store(records) as value:
+            yield value
+        return
+    if request.param == "postgresql":
+        with postgres_database() as database:
+            value = SqlStore(database, entry_records={})
+            for record in records:
+                value.save(record)
             yield value
         return
     with Database.sqlite() as database:

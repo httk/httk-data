@@ -17,6 +17,13 @@ KeeperMap bootstrap DDL, and recovery procedures are in the [ClickHouse
 testing guide](clickhouse-testing.md).  Start it with `make
 clickhouse-dev-server` and stop it with `make clickhouse-stop`.
 
+PostgreSQL is another opt-in test arm.  Set `HTTK_TEST_POSTGRES_URI` to a
+reachable admin URI (`postgresql+psycopg://` driver) and the parameterized
+backend suites include it; leave it unset and every PostgreSQL test skips.  The
+[PostgreSQL testing guide](postgres-testing.md) covers the server setup and the
+one known bulk-ingest limitation.  Start a local server with `make
+postgres-dev-server` and stop it with `make postgres-stop`.
+
 Performance investigations are separate from correctness testing. `make
 benchmarks` runs the opt-in harnesses in `benchmarks/`; benchmark code is not
 collected by pytest and is never invoked by `test`, `check`, or `ci`.

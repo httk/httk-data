@@ -127,6 +127,7 @@ nitpick_ignore = [
     # sqlalchemy is an optional dependency ([db] extra) whose docs inventory is
     # not vendored; the SQL layer's internal-facing signatures reference it.
     ("py:class", "sqlalchemy.Engine"),
+    ("py:class", "sqlalchemy.URL"),
     ("py:class", "sqlalchemy.Connection"),
     ("py:class", "sqlalchemy.MetaData"),
     ("py:class", "sqlalchemy.Table"),

@@ -138,7 +138,7 @@ def mongo_test_client():
         client.close()
 
 
-@pytest.fixture(params=["sqlite", "duckdb", "mongo"])
+@pytest.fixture(params=["sqlite", "duckdb", "mongo", "postgresql"])
 def store_backend(request):
     """Select each backend supported by the neutral store behavior suite."""
     if request.param == "duckdb":
@@ -146,6 +146,10 @@ def store_backend(request):
     if request.param == "mongo":
         yield request.param, request.getfixturevalue("mongo_test_client")
         return
+    if request.param == "postgresql":
+        from postgres_support import postgres_admin_uri
+
+        postgres_admin_uri()  # skip early when no admin URI is configured
     yield request.param, None
 
 
@@ -156,6 +160,7 @@ class _StoreFactory:
         self._backend = backend
         self._mongo_client = mongo_client
         self._databases = databases
+        self._postgres_isolated = []
         self._stores = {}
 
     def __call__(self, *, entry_records=None):
@@ -165,6 +170,14 @@ class _StoreFactory:
             store = SqlStore(database, entry_records=declaration)
         elif self._backend == "duckdb":
             database = Database.duckdb()
+            declaration = entry_records if entry_records is not None else {}
+            store = SqlStore(database, entry_records=declaration)
+        elif self._backend == "postgresql":
+            from postgres_support import IsolatedPostgresDatabase
+
+            isolated = IsolatedPostgresDatabase()
+            self._postgres_isolated.append(isolated)
+            database = Database.postgres(isolated.uri)
             declaration = entry_records if entry_records is not None else {}
             store = SqlStore(database, entry_records=declaration)
         else:
@@ -194,6 +207,10 @@ class _StoreFactory:
             mongo_database = MongoDatabase(self._mongo_client, database.database.name, transactions="never")
             self._databases.append(mongo_database)
             return MongoStore(mongo_database, entry_records=declaration)
+        if self._backend == "postgresql":
+            reopened = Database.postgres(database.engine.url)
+            self._databases.append(reopened)
+            return SqlStore(reopened, entry_records=declaration)
         return SqlStore(database, entry_records=declaration)
 
 
@@ -212,6 +229,9 @@ def store_factory(store_backend):
                 database.client.drop_database(database.database.name)
             else:
                 database.dispose()
+        # Pools disposed above; now drop each Postgres database (WITH FORCE).
+        for isolated in factory._postgres_isolated:
+            isolated.drop()
 
 
 @pytest.fixture

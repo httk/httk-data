@@ -9,6 +9,7 @@ import pytest
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from httk.core import FracVector
 from httk.core.storage import Shape, StorageInfo
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store.db import Database, SchemaError, SqlStore
 
@@ -95,11 +96,23 @@ LABELS = [
 ALL_LABELS = {label.text for label in LABELS}
 
 
-@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM])
+@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM, POSTGRES_PARAM])
 def store(request):
     """A populated store per supported dialect (duckdb skips where not installed)."""
     if request.param == "clickhousedb":
         with bulk_store((*RECORDS, *TAGS, *LABELS)) as sql_store:
+            yield sql_store
+        return
+    if request.param == "postgresql":
+        with postgres_database() as database:
+            sql_store = SqlStore(database, entry_records={})
+            with sql_store.transaction():
+                for rec in RECORDS:
+                    sql_store.save(rec)
+                for tag in TAGS:
+                    sql_store.save(tag)
+                for label in LABELS:
+                    sql_store.save(label)
             yield sql_store
         return
     if request.param == "duckdb":
@@ -647,7 +660,8 @@ def test_object_outputs_survive_reconstruction_on_every_row(store):
     and never queries — hence this test saves throwaway rows and drops all
     references to them before searching.
     """
-    if store._database.engine.dialect.name == "clickhousedb":
+    dialect = store._database.engine.dialect.name
+    if dialect == "clickhousedb":
         with bulk_store(
             tuple(Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]) for index in range(4))
         ) as isolated_store:
@@ -656,7 +670,12 @@ def test_object_outputs_survive_reconstruction_on_every_row(store):
             assert formulas(searcher) == {f"Throwaway{index}" for index in range(4)}
             assert searcher.count() == 4
         return
-    manager = Database.duckdb() if store._database.engine.dialect.name == "duckdb" else Database.sqlite()
+    if dialect == "postgresql":
+        manager = postgres_database()
+    elif dialect == "duckdb":
+        manager = Database.duckdb()
+    else:
+        manager = Database.sqlite()
     with manager as isolated_database:
         isolated_store = SqlStore(isolated_database, entry_records={})
         throwaways = [Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]) for index in range(4)]

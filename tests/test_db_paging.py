@@ -8,6 +8,7 @@ from functools import cmp_to_key
 
 import pytest
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
 from httk.store.db import Database, SqlStore
@@ -45,10 +46,18 @@ ROWS = (
 )
 
 
-@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM])
+@pytest.fixture(scope="module", params=["sqlite", "duckdb", CLICKHOUSE_PARAM, POSTGRES_PARAM])
 def store(request):
     if request.param == "clickhousedb":
         with bulk_store(ROWS) as value:
+            yield value
+        return
+    if request.param == "postgresql":
+        with postgres_database() as database:
+            value = SqlStore(database, entry_records={})
+            with value.transaction():
+                for row in ROWS:
+                    value.save(row)
             yield value
         return
     if request.param == "duckdb":

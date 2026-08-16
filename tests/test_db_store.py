@@ -14,6 +14,7 @@ import pytest
 import sqlalchemy
 from httk.core import FracScalar, FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
+from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store.db import Database, SqlStore, resolve_schema
 from httk.store.db.mapping import sqlalchemy_metadata, table_for
@@ -128,10 +129,13 @@ def make_sample(**overrides) -> Sample:
     return replace(sample, **overrides) if overrides else sample
 
 
-@pytest.fixture(params=["sqlite", "duckdb"])
+@pytest.fixture(params=["sqlite", "duckdb", POSTGRES_PARAM])
 def database(request):
-    """An in-memory database per supported dialect (duckdb skips where not installed)."""
-    if request.param == "duckdb":
+    """A fresh database per supported dialect (duckdb skips where not installed)."""
+    if request.param == "postgresql":
+        with postgres_database() as db:
+            yield db
+    elif request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
         with Database.duckdb() as db:
             yield db

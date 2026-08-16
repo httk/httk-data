@@ -14,8 +14,17 @@ The SQL layer is an optional extra (plain `import httk.store` works without it):
 ```bash
 python -m pip install "httk-store[db]"      # SQLite (built into Python) via sqlalchemy
 python -m pip install "httk-store[duckdb]"  # additionally the DuckDB backend
+python -m pip install "httk-store[postgresql]"  # PostgreSQL backend (psycopg 3)
 python -m pip install "httk-store[clickhouse]"  # ClickHouse backend
 ```
+
+`Database.postgres(url)` opens a PostgreSQL store from a `postgresql://` URL.
+It is fully transactional and rides the ordinary `transactional` write profile
+with no special-casing, and it supports bulk ingestion (`store.bulk_ingest()`)
+with the same parity/deferred/parallel behavior as SQLite and DuckDB. Only the
+psycopg 3 driver is supported: a bare `postgresql://` URL is normalized to
+`postgresql+psycopg://` and any other explicit driver is rejected. See the
+[PostgreSQL testing guide](../postgres-testing.md) for local setup.
 
 Touching a SQL-backed name (such as `httk.store.db.Database`) without the extra
 installed raises an `ImportError` naming it.
@@ -329,9 +338,9 @@ Do not delete values belonging to a live writer or use broad key-only deletes.
 
 ## Bulk ingestion
 
-For SQLite and DuckDB, `store.bulk_ingest()` is a faster path than a `save()`
-loop for **building a store from scratch or appending a large increment** to
-one. It returns a
+For SQLite, DuckDB, and PostgreSQL, `store.bulk_ingest()` is a faster path than
+a `save()` loop for **building a store from scratch or appending a large
+increment** to one. It returns a
 `httk.store.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
 encoded rows with pre-assigned sids and appends them in `executemany` batches
 inside one transaction, instead of one statement round-trip and an in-database
@@ -341,6 +350,14 @@ ClickHouse bulk ingestion is currently fresh-store-only and stops at the P2
 lease-plus-marker boundary until P3 supplies its nontransactional loader and
 finalizer. It does not provide rollback or exact restoration; marker residue
 fails closed and the default recovery is drop-and-reingest.
+
+**Known limitation — PostgreSQL bulk `NaN` in a list-of-floats field.** Under
+PostgreSQL bulk ingest, a `NaN` value inside a stored **list-of-floats (child)
+field** is not preserved: it reads back as `NULL`. Bulk ingest stages rows
+through SQLite shards, which cannot represent `NaN`, so the value is lost in the
+list column. A **scalar** float `NaN` IS preserved under bulk ingest, and the
+serial `save()` path preserves `NaN` in both scalar and list-of-floats fields on
+every backend.
 
 ```python
 # Per-record save loop
