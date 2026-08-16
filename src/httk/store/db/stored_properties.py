@@ -743,6 +743,22 @@ class StoredPropertySqlPlan:
                             None if value is None else int(value) * cast(int, self.store.store_timestamp_resolution)
                         )
                 continue
+            if name == "_httk_ts_end":
+                # NULL on the current row of a lineage; the ns-scaled close time
+                # on a superseded row. Only versioned family tables carry ts_end;
+                # anywhere else it is served as null. No candidate-stream fast
+                # path exists for ts_end, so it is read directly here.
+                sid = self.store.sid_of(record, as_record=backing)
+                if sid is None or not self.store._is_versioned_family_table(resolve_schema(backing).table_name):
+                    row[name] = None
+                else:
+                    table = self.store._table(resolve_schema(backing).table_name)
+                    with self.store._read_connection() as connection:
+                        value = connection.execute(
+                            sqlalchemy.select(table.c[TS_END_COLUMN]).where(table.c[SID_COLUMN] == sid)
+                        ).scalar_one_or_none()
+                    row[name] = None if value is None else int(value) * cast(int, self.store.store_timestamp_resolution)
+                continue
             projection = configured.projections.get(name)
             row[name] = None if projection is None else _response_json_value(projection.response(record))
         return row

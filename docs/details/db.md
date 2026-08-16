@@ -315,22 +315,128 @@ deliberately ignores the cutoff and serves that source's current state; sources
 with timestamps enabled apply their own-resolution cutoff. Existing layouts do
 not require an enable/disable migration for reading this capability.
 
-### Versioned stores: current view by default
+## Versioned stores
 
-Under `store_timestamps="versioned"`, `replace(old, new)` supersedes a family
-entry (see the `replace` API for lifetime intervals). Every query entered from
-the top then sees one consistent time slice by default: `store.searcher()` and
-`store.referring()` return only the current view (`as_of=T` returns the
-half-open `[ts_start, ts_end)` slice — at `T == successor.ts_start` the successor
-is visible and the closed predecessor is not). A non-family dependency row is
-current when it was saved standalone or is still owned by a live family entry;
-forward reference traversals and child joins inside a match are never
-lifecycle-filtered, so a pinned reference to a row later superseded in its own
-role stays a correct member of that aggregate. Pass `scoped=False` to
-`searcher()`/`referring()` to disable lifecycle filtering entirely (an `as_of`
-cutoff still applies). One documented approximation: role promotion (a
-dependency later saved top-level) is not timestamped, so a non-family row's
-`as_of` visibility reflects its current role.
+`store_timestamps="versioned"` extends creation-timestamp mode with lineage
+bookkeeping: each family row carries a half-open lifetime interval
+`[ts_start, ts_end)` plus a `replaced_by_sid` successor pointer. The mode is a
+strict superset — every creation-mode historic query keeps working — and is
+requested at first open:
+
+```python
+store = SqlStore(db, entry_records={}, store_timestamps="versioned")
+```
+
+`ts_end` is `NULL` while a row is current; superseding sets it to the successor's
+`ts_start`, so the closed predecessor interval abuts the open successor interval
+exactly. Half-open means the boundary belongs to the successor: at
+`T == successor.ts_start` the successor is visible and the closed predecessor is
+not.
+
+### Superseding a row with `replace()`
+
+```python
+store = SqlStore(db, entry_records={}, store_timestamps="versioned")
+new_sid = store.replace(old_entry, new_entry)   # in versioned mode only
+```
+
+`replace(old, new)` saves `new` as an ordinary top-level entry stamped with the
+transaction timestamp `T`, then closes `old` (`ts_end = T`, `replaced_by_sid =`
+the successor sid) in the same transaction. `old` may be a stored instance, a
+content id, or (single-backing families only) a sid; `old` and `new` need only
+share an entry *family*, not a backing class. Two lineage outcomes are allowed
+and leave the store consistent:
+
+- **Converging lineages.** If `new` deduplicates onto a *different* current row,
+  that row becomes the successor; `old` is still closed and pointed at it.
+- **Stable identity.** `old`'s content-id/dispatch entry is untouched, so its
+  content identity keeps resolving to its (now superseded) sid.
+
+**Reviving is refused.** If `new`'s content deduplicates onto a superseded row,
+or onto `old` itself, that row would need two lifetime intervals —
+`RecordReviveError`. Replacing a row inside the same `transaction()` that just
+saved it would ask for a zero-length `[T, T)` interval and raises `ValueError`;
+replace in a later transaction instead.
+
+### Current view by default
+
+Every query entered from the top sees one consistent time slice. By default
+`store.searcher()` and `store.referring()` return only the **current view**;
+`as_of=T` returns the `[ts_start, ts_end)` slice at `T`. A family-table root
+gets the interval predicate directly. A non-family (deduplicated
+dependency/content) root gets the derived
+`role = 1 [AND ts_start <= T] OR EXISTS(ownership chain to a live family row)`
+form: a dependency row is current when it was saved standalone (role promoted)
+or is still owned by a live family entry.
+
+Forward reference traversals and child joins *inside* a match are never
+lifecycle-filtered. A pinned reference points at an earlier-or-equal row from
+its own save transaction, and **a pinned reference to a row later superseded in
+its own entry role is still the correct member of the aggregate** — the
+aggregate is defined by what it pinned, not by what is current now. Model
+annotations the same way: an annotation row should point *at the annotated
+target*, so it travels with that target under scoping rather than being pruned
+independently.
+
+Pass `scoped=False` to `searcher()`/`referring()` to disable lifecycle filtering
+entirely and see every version (an `as_of` cutoff still applies as a plain
+`ts_start <= T` bound, matching creation-mode semantics):
+
+```python
+every_version = store.searcher(scoped=False)
+current_slice = store.searcher(as_of="2026-01-01T00:00:00Z")
+```
+
+`as_of` accepts the same forms as every other timestamp operand (canonical
+nanosecond integer, aware `datetime`, or RFC3339 string). **There is no
+OPTIMADE-level `as_of` parameter for versioned slicing** — historic slicing is a
+Python-API keyword only; the OPTIMADE surface serves the current view and the
+`_httk_ts_start` / `_httk_ts_end` properties (below).
+
+One documented approximation: `_httk_role` promotion (a dependency later saved
+top-level) is not itself timestamped, so a non-family root's role term under
+`as_of` reflects the row's *current* role and errs toward visibility.
+
+### Served lifecycle properties
+
+Versioned stores serve two store-managed integer properties per family entry,
+both filterable and outputtable through `optimade_filter_searcher` and the
+stored-property federation surface:
+
+- `_httk_ts_start` — the interval start (present in creation mode too).
+- `_httk_ts_end` — the interval end: `null` for the current row, the ns-scaled
+  close time for a superseded row. `_httk_ts_end IS UNKNOWN` selects the current
+  view; `IS KNOWN` selects superseded rows.
+
+```python
+current = optimade_filter_searcher(store, StructureRecord, "_httk_ts_end IS UNKNOWN")
+```
+
+The same names are queryable in the neutral DSL as pseudo-columns
+(`variable.ts_start`, `variable.ts_end`); `variable.ts_end == None` is the
+current-row predicate. `ts_end` exists only on versioned family tables —
+elsewhere it raises `AttributeError`.
+
+**OPTIMADE identity mapping (guidance for serving layers).** The served `id` is
+the logical entry identity minted at serving time (stable across versions of one
+lineage); `immutable_id` is the version-precise, store-independent `content_id`;
+`last_modified` corresponds to `ts_start`. This is the intended mapping for
+serving adapters, not behavior imposed by the store itself.
+
+### Backend limits and fsck
+
+Versioned mode requires a SQL backend and a transactional write profile.
+ClickHouse and the `bulk-fenced` profile refuse the mode outright; a `degraded`
+store refuses `replace()`. Uniqueness among current rows is enforced by a
+partial unique index (`ts_end IS NULL`) on SQLite and PostgreSQL, and by DuckDB's
+transactional unique enforcement.
+
+`store.fsck()` additionally verifies the lifecycle invariants (report-only, never
+repaired): `ts_end` and `replaced_by_sid` are set together, a closed interval is
+non-empty (`ts_end > ts_start`), each `replaced_by_sid` references an existing
+same-table row whose `ts_start` does not fall after the predecessor's `ts_end`,
+and at most one current row exists per uniqueness class. A future `ts_end` is
+clamped alongside `ts_start` under `clamp_future_timestamps=True`.
 
 ## Permanentization, degraded writes, and fsck
 

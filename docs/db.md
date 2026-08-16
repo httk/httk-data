@@ -27,6 +27,12 @@ as `ts_start <= T`; configure their unit size with
 The [detailed guide](details/db.md#store-timestamps) covers the query syntax,
 deduplication semantics, clock guard, and fsck repair behavior.
 
+`store_timestamps="versioned"` adds record versioning: `store.replace(old, new)`
+supersedes a family entry, queries return the current view by default (with
+`as_of=T` slicing and a `scoped=False` escape), and each entry serves
+`_httk_ts_start` / `_httk_ts_end` lifetime bounds. See
+[Versioned stores](details/db.md#versioned-stores).
+
 The full guide, {doc}`details/db`, covers declaring storable classes with the
 httk-core marker vocabulary, entry families and multi-record dispatch, the
 search DSL and stored properties, bulk ingestion (including

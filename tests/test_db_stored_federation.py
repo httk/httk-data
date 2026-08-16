@@ -42,6 +42,9 @@ class FederatedCalculation:
                 "_httk_ts_start": PropertyDefinition.from_simple(
                     "_httk_ts_start", description="A store timestamp test filter.", fulltype="timestamp"
                 ),
+                "_httk_ts_end": PropertyDefinition.from_simple(
+                    "_httk_ts_end", description="A versioned close-timestamp test filter.", fulltype="timestamp"
+                ),
             }
         )
 
@@ -81,6 +84,15 @@ def _store_timestamp_query(context, operator: str, literal: object):
     return context.compare(context.field("ts_start"), operator, context.constant(literal))
 
 
+def _ts_end_query(context, operator: str, literal: object):
+    value = context.field("ts_end")
+    if operator == "IS_UNKNOWN":
+        return context.is_null(value)
+    if operator == "IS_KNOWN":
+        return context.not_(context.is_null(value))
+    return context.compare(value, operator, context.constant(literal))
+
+
 @dataclass(frozen=True)
 class FederationFirst:
     __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="stored_federation_first")
@@ -103,6 +115,11 @@ class FederationFirst:
             response=lambda _record: None,
             query=_store_timestamp_query,
             sort=lambda context: context.field("ts_start"),
+        ),
+        "_httk_ts_end": StoredPropertyProjection(
+            response=lambda _record: None,
+            query=_ts_end_query,
+            sort=lambda context: context.field("ts_end"),
         ),
         "_httk_label": StoredPropertyProjection(
             response=_label_value,

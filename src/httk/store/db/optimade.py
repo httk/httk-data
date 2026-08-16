@@ -30,6 +30,7 @@ from httk.store.db.store import SqlStore
 from httk.store.query import Searcher, SearchExpression, SearchVariable
 from httk.store.query.optimade_filters import (
     FilterTranslationError,
+    field_unknown_handler,
     filter_searcher,
     known_unknown_handler,
     set_handler,
@@ -165,6 +166,12 @@ def optimade_filter_searcher(
     if store.store_timestamps:
         property_fulltypes[f"{prefix}ts_start"] = "integer"
         property_keys[f"{prefix}ts_start"] = "ts_start"
+        if store._is_versioned_family_table(schema.table_name):
+            # ts_end is nullable (NULL on the current row); it routes through the
+            # standard integer/unknown handlers, and IS NULL filtering works via
+            # the ts_end pseudo-column's None-tolerant operand converter.
+            property_fulltypes[f"{prefix}ts_end"] = "integer"
+            property_keys[f"{prefix}ts_end"] = "ts_end"
     if definition is not None:
         for name, prop in definition.properties.items():
             if name in ("id", "type"):
@@ -177,6 +184,15 @@ def optimade_filter_searcher(
     # on an ordinary store row, so filtering needs explicit extra_handlers.
     del handlers["id"]
     del handlers["type"]
+    if store.store_timestamps and store._is_versioned_family_table(schema.table_name):
+        # ts_end is genuinely nullable (NULL on the current row), unlike the
+        # always-known default: IS UNKNOWN must map to ts_end IS NULL (current
+        # rows) and IS KNOWN to ts_end IS NOT NULL (superseded rows).
+        ts_end_name = f"{prefix}ts_end"
+        handlers[ts_end_name] = {
+            **handlers[ts_end_name],
+            "unknown": lambda entry, sv, unknown_type: field_unknown_handler("ts_end", sv, unknown_type),
+        }
     entry_type = cls.__name__
 
     relationship_targets: tuple[str, ...] = ()

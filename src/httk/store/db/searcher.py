@@ -76,7 +76,7 @@ import sqlalchemy
 
 from httk.store.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
 from httk.store.db.lifecycle import lifecycle_clause
-from httk.store.db.mapping import SID_COLUMN, TS_START_COLUMN
+from httk.store.db.mapping import SID_COLUMN, TS_END_COLUMN, TS_START_COLUMN
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.store_timestamp import ns_operand_to_store_units
@@ -643,6 +643,24 @@ class SqlVariable:
                     if value is None
                     else cast(int, value) * cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
+            )
+        if name == TS_END_COLUMN:
+            store = self._searcher._store
+            if not store._is_versioned_family_table(self._schema.table_name):
+                raise AttributeError(
+                    "ts_end queries require a versioned family table (SqlStore(store_timestamps=\"versioned\"))"
+                )
+            resolution = cast(int, store.store_timestamp_resolution)
+            # ts_end is NULL for the current row of a lineage: the operand
+            # converter passes None through so ``variable.ts_end == None``
+            # renders as ``ts_end IS NULL`` (current view), and a value operand
+            # is scaled to store units like ts_start.
+            return SqlColumn(
+                self._searcher,
+                self._alias.c[TS_END_COLUMN],
+                variable=self,
+                operand_converter=lambda value: None if value is None else ns_operand_to_store_units(value, resolution),
+                presentation_converter=lambda value: None if value is None else cast(int, value) * resolution,
             )
         for spec in self._schema.fields:
             if spec.role == "child" and spec.optional and name == f"{spec.field}_present":

@@ -378,6 +378,75 @@ def test_optimade_related_semijoin_uses_pinned_superseded_target() -> None:
         assert [item[0][0].tag for item in optimade_filter_searcher(store, F2, '_httk_custom_tag = "t2"')] == ["t2"]
 
 
+# --------------------------------------------------------------------- ts_end column
+
+
+@pytest.mark.parametrize("backend", _BACKENDS)
+def test_ts_end_pseudo_column(backend: str) -> None:
+    with _database(backend) as database:
+        store = _entry_store(database)
+        block = Datablock("shared")
+        _at(store, 1_000_000)
+        store.save(Entry(name="e", note="v1", block=block, items=[]))
+        _at(store, 2_000_000)
+        store.replace(
+            Entry(name="e", note="v1", block=block, items=[]),
+            Entry(name="e", note="v2", block=block, items=[]),
+        )
+
+        # ts_end IS NULL selects the current row of the lineage.
+        current = store.searcher(scoped=False)
+        cur = current.variable(Entry)
+        current.add(cur.ts_end == None)  # noqa: E711
+        current.output(cur, "e")
+        assert sorted(row[0][0].note for row in current) == ["v2"]
+
+        # An ordering comparison works on the superseded (closed) row.
+        closed = store.searcher(scoped=False)
+        clo = closed.variable(Entry)
+        closed.add(clo.ts_end <= 2_000_000)
+        closed.output(clo, "e")
+        assert sorted(row[0][0].note for row in closed) == ["v1"]
+
+        # A non-family variable in versioned mode has no ts_end.
+        with pytest.raises(AttributeError, match="versioned family table"):
+            _ = store.searcher(scoped=False).variable(Datablock).ts_end
+
+
+def test_ts_end_pseudo_column_requires_versioned_mode() -> None:
+    with Database.sqlite() as database:
+        store = SqlStore(database, entry_families=(ENTRY_LAYOUT,), store_timestamps="creation")
+        with pytest.raises(AttributeError, match="versioned family table"):
+            _ = store.searcher().variable(Entry).ts_end
+
+
+@pytest.mark.parametrize("backend", _BACKENDS)
+def test_optimade_ts_end_unknown_and_ts_start_bound(backend: str) -> None:
+    with _database(backend) as database:
+        store = _entry_store(database)
+        block = Datablock("shared")
+        _at(store, 1_000_000)
+        store.save(Entry(name="e", note="v1", block=block, items=[]))
+        _at(store, 2_000_000)
+        store.replace(
+            Entry(name="e", note="v1", block=block, items=[]),
+            Entry(name="e", note="v2", block=block, items=[]),
+        )
+
+        # IS UNKNOWN (ts_end IS NULL) matches the current view; scoped default
+        # already hides the superseded row, so the current one is the only hit.
+        unknown = optimade_filter_searcher(store, Entry, "_httk_ts_end IS UNKNOWN")
+        assert [row[0][0].note for row in unknown] == ["v2"]
+
+        # IS KNOWN (ts_end IS NOT NULL) matches nothing in the current view; the
+        # only closed row is hidden by default scoping.
+        assert list(optimade_filter_searcher(store, Entry, "_httk_ts_end IS KNOWN")) == []
+
+        # A ts_start bound resolves against the current row.
+        bound = optimade_filter_searcher(store, Entry, "_httk_ts_start <= 2000000")
+        assert [row[0][0].note for row in bound] == ["v2"]
+
+
 # --------------------------------------------------------------------- as_of forms
 
 
@@ -452,6 +521,25 @@ def test_stored_entry_federation_hides_superseded_and_honors_as_of() -> None:
         assert [
             row["immutable_id"] for row in federation.query(as_of=2_000_000, sort=(("immutable_id", False),)).rows
         ] == ["new"]
+
+
+def test_stored_entry_federation_serves_ts_end() -> None:
+    from test_db_stored_federation import FederatedCalculation, FederationFirst
+
+    with Database.sqlite() as database:
+        source = SqlStore(database, entry_records={FederatedCalculation: FederationFirst}, store_timestamps="versioned")
+        source._clock = lambda: 1_000_000
+        source.save(FederationFirst("old", None))
+        source._clock = lambda: 2_000_000
+        source.replace(FederationFirst("old", None), FederationFirst("new", None))
+
+        federation = StoredEntryFederation((StoredEntrySource(source, FederatedCalculation, "src", "src:"),))
+        # Declared _httk_ts_end: null on the current row (served response path).
+        current = federation.query(sort=(("immutable_id", False),)).rows
+        assert [(row["immutable_id"], row["_httk_ts_end"]) for row in current] == [("new", None)]
+        # Its historic close time (ns-scaled) on the superseded row via as_of.
+        historic = federation.query(as_of=1_500_000, sort=(("immutable_id", False),)).rows
+        assert [(row["immutable_id"], row["_httk_ts_end"]) for row in historic] == [("old", 2_000_000)]
 
 
 # --------------------------------------------------------------------- smoke / e2e
