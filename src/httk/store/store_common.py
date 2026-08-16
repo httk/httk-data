@@ -45,17 +45,24 @@ class EntryStore(Protocol):
         """Return a backend searcher used to build candidate ID streams."""
         ...
 
-    def fetch(self, cls: type[_StoredRecord], sid: int) -> _StoredRecord:
-        """Fetch the stored record of ``cls`` identified by ``sid``."""
+    def fetch(self, cls: type[_StoredRecord], sid: int, *, eager: bool = False) -> _StoredRecord:
+        """Fetch the stored record of ``cls`` identified by ``sid``.
+
+        :param cls: The storable record class.
+        :param sid: The stored row identifier to fetch.
+        :param eager: Whether to fully materialize the record instead of returning a lazy row.
+        :return: The reconstructed instance.
+        """
         ...
 
-    def fetch_many(self, cls: type[_StoredRecord], sids: Sequence[int]) -> list[_StoredRecord]:
+    def fetch_many(self, cls: type[_StoredRecord], sids: Sequence[int], *, eager: bool = False) -> list[_StoredRecord]:
         """Fetch the stored records of ``cls`` identified by ``sids``.
 
         Batched counterpart of :meth:`fetch`.
 
         :param cls: The storable record class.
         :param sids: The stored row identifiers to fetch.
+        :param eager: Whether to fully materialize each record instead of returning lazy rows.
         :return: The reconstructed instances in ``sids`` order.
         :raises KeyError: When any requested row is absent.
         """

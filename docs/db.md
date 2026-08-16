@@ -15,7 +15,7 @@ store = SqlStore(db, entry_records={})   # first open declares the store
 with store.transaction():
     sid = store.save(record)             # dedups and recurses automatically
 
-same_record = store.fetch(type(record), sid)   # reconstructed exactly
+same_record = store.fetch(type(record), sid)   # a lazy row; add eager=True to materialize
 ```
 
 Records are content-addressed (`content_id`) as well as locally numbered

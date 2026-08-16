@@ -75,7 +75,7 @@ Against records `NaCl`, `CaTiO3` and `NaTiO2`, `has_any` matches `NaCl` and
 | `for match, header in search:` then `match[0]` | iteration yields a `SearchResult`; use `result.values` / `result.names` — `result[0][0]` still works |
 | `obj.db.sid` | `store.sid_of(obj)` |
 | `hexhash` deduplication | content-id deduplication; look a record up with `store.fetch_by_content_id(cls, key)` |
-| `struct.get_tags()`, `struct.get_refs()` (lazy codependent fetch) | explicit `store.referring(TagCls, field="structure", to=struct)` |
+| `struct.get_tags()`, `struct.get_refs()` (lazy codependent fetch) | explicit `store.referring(TagCls, field="structure", to=struct)`, the reverse lookup; and `fetch()` is itself lazy by default now — fields decode on access, `eager=True` materializes |
 
 One v1 trap is worth naming because it looked like a query bug: because the v1
 table name came from `cls.__name__`, the storable class had to be re-declared

@@ -57,6 +57,7 @@ __all__ = [
     "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "ExpiredLazyRecordError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "FsckSummary",  # pyright: ignore[reportUnsupportedDunderAll]
     "MultipleResultsError",
     "NoResultError",
@@ -103,6 +104,7 @@ _SQL_EXPORTS = {
     "optimade_filter_searcher": ".optimade",
     "stored_property_sql_plan": ".stored_properties",
     "StaleResultError": ".rows",
+    "ExpiredLazyRecordError": ".rows",
     "ExpiredCursorRowError": ".results",
     "FsckSummary": ".fsck",
     "ResultColumn": ".results",

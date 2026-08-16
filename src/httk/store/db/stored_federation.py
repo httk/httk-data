@@ -525,7 +525,9 @@ class StoredEntryFederation:
         for group in groups.values():
             store = group[0].stream.source.source.store
             backing = group[0].stream.backing
-            records: list[object] = store.fetch_many(backing, [candidate.sid for candidate in group])
+            # Serving reads every configured property, so laziness buys nothing;
+            # eager keeps the shipped batched-hydration profile exactly.
+            records: list[object] = store.fetch_many(backing, [candidate.sid for candidate in group], eager=True)
             for candidate, record in zip(group, records, strict=True):
                 record_by_candidate[id(candidate)] = record
         return tuple(
@@ -552,7 +554,7 @@ class StoredEntryFederation:
     @staticmethod
     def _row(candidate: _Candidate) -> Mapping[str, Any]:
         source = candidate.stream.source
-        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid)
+        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid, eager=True)
         return StoredEntryFederation._render(candidate, record)
 
 

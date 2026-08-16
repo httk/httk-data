@@ -960,21 +960,31 @@ class MongoStore:
 
     # ------------------------------------------------------------------ reads
 
-    def fetch[T](self, cls: type[T], sid: int) -> T:
-        """Fetch and eagerly hydrate ``cls`` at ``sid``.
+    def fetch[T](self, cls: type[T], sid: int, *, eager: bool = False) -> T:
+        """Fetch and hydrate ``cls`` at ``sid``.
+
+        The ``eager`` flag is accepted for backend transparency with
+        :class:`~httk.store.db.store.SqlStore`; the Mongo document is fully in
+        memory at read, so the returned record is always materialized and its
+        values and semantics are identical either way.
 
         :param cls: The storable record class.
         :param sid: The integer sid.
+        :param eager: Accepted for interface parity; a materialized record is always returned.
         :return: The hydrated record.
         :raises KeyError: If the record does not exist.
         """
         return typing.cast(T, self._fetch(cls, int(sid), _HydrationContext()))
 
-    def fetch_many[T](self, cls: type[T], sids: Sequence[int]) -> list[T]:
-        """Fetch and eagerly hydrate ``cls`` at each sid in ``sids``.
+    def fetch_many[T](self, cls: type[T], sids: Sequence[int], *, eager: bool = False) -> list[T]:
+        """Fetch and hydrate ``cls`` at each sid in ``sids``.
+
+        The ``eager`` flag is accepted for backend transparency; Mongo always
+        returns materialized records (see :meth:`fetch`).
 
         :param cls: The storable record class.
         :param sids: The integer sids to fetch.
+        :param eager: Accepted for interface parity; materialized records are always returned.
         :return: The hydrated records in ``sids`` order.
         :raises KeyError: If any record does not exist.
         """
@@ -1037,11 +1047,15 @@ class MongoStore:
             ):
                 cache[(target, int(item["_id"]))] = item
 
-    def fetch_by_content_id[T](self, cls: type[T], key: str) -> T | None:
+    def fetch_by_content_id[T](self, cls: type[T], key: str, *, eager: bool = False) -> T | None:
         """Fetch a content-addressed record, or return ``None``.
+
+        The ``eager`` flag is accepted for backend transparency; Mongo always
+        returns a materialized record (see :meth:`fetch`).
 
         :param cls: The storable record class.
         :param key: The content identity.
+        :param eager: Accepted for interface parity; a materialized record is always returned.
         :return: The hydrated record or ``None``.
         :raises ~httk.store.db.schema.SchemaError: If ``cls`` is not content-id deduplicated.
         """
@@ -1056,11 +1070,15 @@ class MongoStore:
         )
         return None if document is None else self.fetch(cls, int(document["_id"]))
 
-    def fetch_entry(self, family_cls: type, content_id: str) -> object | None:
+    def fetch_entry(self, family_cls: type, content_id: str, *, eager: bool = False) -> object | None:
         """Fetch the concrete backing record for an entry-family identity.
+
+        The ``eager`` flag is accepted for backend transparency; Mongo always
+        returns a materialized record (see :meth:`fetch`).
 
         :param family_cls: The configured entry-family class.
         :param content_id: The entry content identity.
+        :param eager: Accepted for interface parity; a materialized record is always returned.
         :return: The backing record or ``None``.
         :raises ValueError: If the family is not configured.
         :raises ~httk.store.store_common.EntryDispatchIntegrityError: If dispatch and backing disagree.
@@ -1171,12 +1189,16 @@ class MongoStore:
 
         return stored_property_mongo_plan(self, family)
 
-    def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
+    def referring(self, cls: type, *, field: str, to: Any, eager: bool = False) -> list[Any]:
         """Return records whose reference field points at ``to``, ordered by sid.
+
+        The ``eager`` flag is accepted for backend transparency; Mongo always
+        returns materialized records (see :meth:`fetch`).
 
         :param cls: The referring record class.
         :param field: The reference field.
         :param to: The stored target instance.
+        :param eager: Accepted for interface parity; materialized records are always returned.
         :return: Matching records ordered by sid.
         :raises ~httk.store.db.schema.SchemaError: If the field or target class is incompatible.
         :raises ValueError: If ``to`` is not stored or fetched here.

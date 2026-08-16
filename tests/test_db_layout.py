@@ -517,3 +517,16 @@ def test_registry_normalization_and_single_record_dispatch_free_storage(database
     assert store.fetch_entry(LayoutFamily, content_id(record)) is record
     assert store.fetch_by_content_id(LayoutSingle, content_id(record)) is record
     assert sid == store.sid_of(record)
+
+
+def test_fetch_entry_lazy_default_and_eager(database: Database) -> None:
+    from httk.store.db.rows import is_lazy_row
+
+    store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
+    record = LayoutSingle("single")
+    key = content_id(record)
+    store.save(record)
+    store._clear_identity_caches()
+    assert is_lazy_row(store.fetch_entry(LayoutFamily, key))
+    store._clear_identity_caches()
+    assert type(store.fetch_entry(LayoutFamily, key, eager=True)) is LayoutSingle

@@ -101,7 +101,11 @@ reserved counters collection; they are local to a store and are never reused.
 
 `save()` recursively stores a record graph and returns its integer sid.
 `fetch()` reconstructs the record, while `fetch_by_content_id()` and
-`fetch_entry()` provide content-addressed and entry-family access. The three
+`fetch_entry()` provide content-addressed and entry-family access. `MongoStore`
+has no lazy-row machinery: the whole document is already in memory at read, so
+the fetch verbs accept the `eager` keyword for backend transparency with
+`SqlStore` but always return a fully materialized record (values and semantics
+are identical either way). The three
 `StorageInfo.dedup` policies are supported with the same content, value, and
 non-deduplicating meanings as `SqlStore`; identity-excluded metadata conflicts
 are still checked. Nested non-storable children are embedded in the owning

@@ -268,3 +268,16 @@ def test_record_document_shape(mongo_test_database):
         {"_id": sid}
     )
     assert set(document) == {"_id", "content_id", "_httk_role", "store_timestamp", "f"}
+
+
+def test_eager_kwarg_is_accepted_and_always_materialized(mongo_test_database):
+    store = _store(mongo_test_database)
+    sid = store.save(MongoRoleDependency("shape"))
+    store._clear_identity_caches()
+    # Mongo has no lazy machinery: the flag is accepted for interface parity and
+    # both paths return the exact base type.
+    default = store.fetch(MongoRoleDependency, sid)
+    eager = store.fetch(MongoRoleDependency, sid, eager=True)
+    assert type(default) is MongoRoleDependency
+    assert type(eager) is MongoRoleDependency
+    assert default == eager == MongoRoleDependency("shape")

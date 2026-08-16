@@ -558,14 +558,14 @@ def test_page_render_batches_into_one_fetch_per_source(databases, monkeypatch):
     original_many = SqlStore.fetch_many
     original_fetch = SqlStore.fetch
 
-    def tracked_many(self, cls, sids):
+    def tracked_many(self, cls, sids, *, eager=False):
         materialized = list(sids)
         fetch_many_sizes.append(len(materialized))
-        return original_many(self, cls, materialized)
+        return original_many(self, cls, materialized, eager=eager)
 
-    def tracked_fetch(self, cls, sid):
+    def tracked_fetch(self, cls, sid, *, eager=False):
         per_row_fetches.append(sid)
-        return original_fetch(self, cls, sid)
+        return original_fetch(self, cls, sid, eager=eager)
 
     monkeypatch.setattr(SqlStore, "fetch_many", tracked_many)
     monkeypatch.setattr(SqlStore, "fetch", tracked_fetch)

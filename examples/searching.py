@@ -59,7 +59,8 @@ The low-level protocol yields `SearchResult`, a named 2-tuple of `values` (one
 per `output()`, in declaration order) and `names`. The canonical `results()`
 API yields named lazy rows; use the portable protocol form
 `for (structure,), _names in search:` when needed. Result rows bypass the
-identity cache; `fetch()` retains the same-object-while-alive guarantee.
+identity cache; `fetch()` returns lazy rows too (`eager=True` materializes),
+and repeated default fetches of one live sid return the same object.
 
 Sorting on a rational field runs on its float companion column, so it is
 documented-approximate; the values themselves are still exact.

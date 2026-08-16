@@ -9,9 +9,10 @@ mapping (:mod:`httk.store.db.mapping`):
   child-element storables) and returns its integer ``sid``, deduplicating per
   the class's :attr:`~httk.core.storage.StorageInfo.dedup` policy;
 - :meth:`SqlStore.fetch` reconstructs the instance stored under a ``sid`` —
-  exactly, via the ``*_exact`` companion columns for rationals — with an
-  identity guarantee: while an instance is alive, fetching its sid again
-  returns the very same object;
+  exactly, via the ``*_exact`` companion columns for rationals — as a lazy row
+  by default (fields decode on first access) or, with ``eager=True``, fully
+  materialized; repeated live default fetches of one sid return the same
+  object, with a materialized instance taking precedence over a proxy;
 - :meth:`SqlStore.transaction` scopes several operations into one database
   transaction (commit on exit, roll back on exception); outside of it every
   operation autocommits;
@@ -134,6 +135,21 @@ class _DegradedWriteCrash(BaseException):
     def __init__(self, point: str) -> None:
         self.point = point
         super().__init__(f"injected degraded hard crash after {point}")
+
+
+class _TransactionToken:
+    """Marks whether the transaction that produced a batch of lazy rows rolled back.
+
+    A :class:`~httk.store.db.rows._Chunk` records the current token at birth (and
+    per deferred child read); the outermost :meth:`SqlStore._transaction_scope`
+    sets ``rolled_back`` on failure, so accessing a lazy row built inside that
+    transaction raises :class:`~httk.store.db.rows.ExpiredLazyRecordError`.
+    """
+
+    __slots__ = ("rolled_back",)
+
+    def __init__(self) -> None:
+        self.rolled_back = False
 
 
 def _schema_object_type(kinds: frozenset[str]) -> object:
@@ -310,6 +326,8 @@ class SqlStore:
             # skips re-registration, so it must be dropped with _metadata.
             self._candidate_names.clear()
             self._initialized = False
+            # No rollback token here: this runs during initialization, before any
+            # user code could hold a lazy row read on this thread-local connection.
             self._clear_identity_caches()
             raise
         self._initialization_ddl_journal.clear()
@@ -834,10 +852,17 @@ class SqlStore:
         self._reject_during_bulk()
         stack = self._connection_stack()
         if stack:
+            # Nested scopes are bare passthroughs: they share the outermost
+            # scope's connection and its single rollback token, so they neither
+            # allocate a token nor clear it.
             yield
             return
         pending = self._pending_table_names()
         timestamp_state = {"initialized": False, "captured": None}
+        # One token per outermost transaction; lazy rows built inside it record
+        # it and expire if this scope rolls back.
+        token = _TransactionToken()
+        self._local.transaction_token = token
         try:
             with self._mutation_lock:
                 with self._database.engine.begin() as connection:
@@ -857,11 +882,13 @@ class SqlStore:
                 self._advance_store_timestamp_mark(timestamp_state["captured"])
                 self._tables_present.update(pending)
         except BaseException:
+            token.rolled_back = True
             pending.clear()
             self._tables_present.clear()
             self._clear_identity_caches()
             raise
         finally:
+            self._local.transaction_token = None
             self._local.store_timestamp_transaction = None
             pending.clear()
 
@@ -875,6 +902,10 @@ class SqlStore:
     def _current_connection(self) -> sqlalchemy.Connection | None:
         stack = self._connection_stack()
         return stack[-1] if stack else None
+
+    def _current_transaction_token(self) -> "_TransactionToken | None":
+        """Return the outermost transaction's rollback token, or None outside one."""
+        return getattr(self._local, "transaction_token", None)
 
     @contextlib.contextmanager
     def _write_connection(
@@ -910,6 +941,9 @@ class SqlStore:
                     _publish_after_commit()
                 self._tables_present.update(pending)
         except BaseException:
+            # No rollback token here: a failed write runs inside save()/ensure_tables,
+            # where no user code can perform a deferred lazy read on this
+            # thread-local connection before the cache clear completes.
             pending.clear()
             self._tables_present.clear()
             self._clear_identity_caches()
@@ -1374,6 +1408,20 @@ class SqlStore:
             family = self._family_for_backing(record_type)
             if family is not None:
                 self._save_entry_dispatch(connection, family, record_type, sid, projection.content_id(record_type, obj))
+        # A saved lazy row of this store's own base type is registered directly
+        # (not via _remember, whose _sids write would hash it) so a subsequent
+        # default fetch of its sid returns the same proxy.  Only when save()
+        # returned the proxy's OWN sid: a dedup="none" re-save mints a new sid
+        # whose row is a fresh copy, and caching the proxy (which reads its
+        # original row) under it would make fetch() of the new sid read the old.
+        identity = lazy_row_identity(obj)
+        if (
+            identity is not None
+            and identity[0] is self
+            and identity[1] == sid
+            and getattr(type(obj), "__httk_row_base__", None) is record_type
+        ):
+            self._identity._instances[(record_type, sid)] = obj
         return sid
 
     def _save(
@@ -1619,44 +1667,75 @@ class SqlStore:
 
     # ------------------------------------------------------------------ fetching
 
-    def fetch[T](self, cls: type[T], sid: int) -> T:
+    def fetch[T](self, cls: type[T], sid: int, *, eager: bool = False) -> T:
         """Reconstruct the ``cls`` instance stored under ``sid``.
 
-        While a previously fetched (or saved) instance for this ``(class,
-        sid)`` is alive, the very same object is returned. Raises
-        :class:`KeyError` (carrying the class and sid) when no such row exists.
-        A missing table therefore has the same result as a missing row.
+        By default a lazy row is returned: the parent row is loaded now, but
+        every child, reference and derived field decodes only when first
+        accessed (recursively, so a lazy record's children are lazy too). Pass
+        ``eager=True`` to fully materialize the base dataclass up front — the
+        behaviour required for records that must outlive the fetching
+        transaction, connection or engine.
+
+        Repeated default fetches of a live ``(class, sid)`` return the same
+        object; a live materialized instance takes precedence over creating a
+        new proxy. Mixing eager and lazy access may hand out two distinct but
+        equal objects when a caller still holds the older one, and internal
+        cache maintenance (a failed write, dedup compensation) may
+        re-materialize a later fetch — strict ``is`` identity across arbitrary
+        call sequences is not promised.
+
+        Raises :class:`KeyError` (carrying the class and sid) when no such
+        parent row exists. A missing table therefore has the same result as a
+        missing row. Under the lazy default, abnormal external deletion of a
+        *referenced* row surfaces at attribute access as
+        :class:`~httk.store.db.rows.StaleResultError`; abnormally deleted
+        *child* rows are indistinguishable from an empty sequence.
 
         :param cls: The storable class to reconstruct.
         :param sid: The stored row identifier.
+        :param eager: Whether to fully materialize the record instead of returning a lazy row.
         :return: The reconstructed instance.
         :raises KeyError: If no row exists for ``cls`` and ``sid``.
         """
-        with self._read_connection() as connection:
-            return cast(T, self._fetch(connection, cls, sid))
+        if eager:
+            with self._read_connection() as connection:
+                return cast(T, self._fetch(connection, cls, sid))
+        return cast(T, self._fetch_lazy(cls, sid))
 
-    def fetch_many[T](self, cls: type[T], sids: Sequence[int]) -> list[T]:
+    def fetch_many[T](self, cls: type[T], sids: Sequence[int], *, eager: bool = False) -> list[T]:
         """Reconstruct every ``cls`` instance stored under ``sids`` in one batch.
 
         The batched counterpart of :meth:`fetch`: child-element and reference
         reads are shared across the requested rows instead of re-queried per
-        sid.  Mirroring :meth:`fetch`, a live cached object is returned for any
-        ``(class, sid)`` still alive without touching the database (so a fully
-        cached call issues no SQL); the remaining rows share one connection.
-        Memory is O(``len(sids)``) — every chunk stays pinned for the batch —
-        so callers pass bounded pages.
+        sid.  By default lazy rows are returned; they share one
+        :class:`~httk.store.db.rows.RowHydrator`, so a deferred child or
+        reference read stays chunk-batched (one SELECT per child table per
+        500-row chunk on first touch) exactly as the eager path batches it,
+        merely deferred. Pass ``eager=True`` to fully materialize every record
+        up front.
+
+        Mirroring :meth:`fetch`, a live cached object (proxy or materialized)
+        is returned for any ``(class, sid)`` still alive without touching the
+        database (so a fully cached call issues no SQL); the remaining rows
+        share one connection. Memory is O(``len(sids)``) — every chunk stays
+        pinned for the batch — so callers pass bounded pages.
 
         :param cls: The storable class to reconstruct.
         :param sids: The stored row identifiers to reconstruct.
+        :param eager: Whether to fully materialize each record instead of returning lazy rows.
         :return: The reconstructed instances in ``sids`` order.
         :raises KeyError: If any requested row does not exist.
         """
+        if not eager:
+            return cast(list[T], self._fetch_many_lazy(cls, sids))
         resolved = [int(sid) for sid in sids]
         instances: dict[int, Any] = {}
         missing: list[int] = []
         for sid in resolved:
             cached = self._identity._instances.get((cls, sid))
-            if cached is None:
+            # A lazy proxy hit is not a materialized instance; re-materialize it.
+            if cached is None or type(cached) is not cls:
                 missing.append(sid)
             else:
                 instances[sid] = cached
@@ -1670,15 +1749,64 @@ class SqlStore:
             instances.update(zip(missing, hydrated, strict=True))
         return cast(list[T], [instances[sid] for sid in resolved])
 
-    def fetch_by_content_id[T](self, cls: type[T], key: str) -> T | None:
+    def _fetch_lazy(self, cls: type, sid: int) -> Any:
+        sid = int(sid)
+        cached = self._identity._instances.get((cls, sid))
+        if cached is not None:
+            return cached
+        with self._read_connection():
+            try:
+                # row() loads the parent chunk (the KeyError-bearing SELECT);
+                # child/reference fields decode lazily on first access.
+                proxy = RowHydrator(self, cls, (sid,)).row(sid)
+            except StaleResultError as error:
+                raise KeyError(cls, sid) from error
+        # Register the proxy directly (never via _remember, whose _sids write
+        # would hash the row and force-decode its hash fields).
+        self._identity._instances[(cls, sid)] = proxy
+        return proxy
+
+    def _fetch_many_lazy(self, cls: type, sids: Sequence[int]) -> list[Any]:
+        resolved = [int(sid) for sid in sids]
+        instances: dict[int, Any] = {}
+        missing: list[int] = []
+        for sid in resolved:
+            cached = self._identity._instances.get((cls, sid))
+            if cached is None:
+                missing.append(sid)
+            else:
+                instances[sid] = cached
+        if missing:
+            # One hydrator over every miss keeps deferred child/reference reads
+            # chunk-batched; one-hydrator-per-sid would reintroduce N+1.
+            with self._read_connection():
+                hydrator = RowHydrator(self, cls, missing)
+                try:
+                    for sid in missing:
+                        proxy = hydrator.row(sid)
+                        self._identity._instances[(cls, sid)] = proxy
+                        instances[sid] = proxy
+                except StaleResultError as error:
+                    raise KeyError(cls, tuple(missing)) from error
+        return [instances[sid] for sid in resolved]
+
+    def _fetch_result(self, connection: sqlalchemy.Connection, cls: type, sid: int, *, eager: bool) -> Any:
+        """Hydrate one sid eagerly or lazily, reusing the current stacked connection."""
+        if eager:
+            return self._fetch(connection, cls, sid)
+        return self._fetch_lazy(cls, sid)
+
+    def fetch_by_content_id[T](self, cls: type[T], key: str, *, eager: bool = False) -> T | None:
         """Return the ``cls`` instance whose content identity is ``key``, or None if not stored.
 
         Only classes with the ``"content_id"`` dedup policy carry a content
         identity column; :class:`~httk.store.db.schema.SchemaError` is raised
-        for any other class.
+        for any other class. A lazy row is returned by default; pass
+        ``eager=True`` to fully materialize it.
 
         :param cls: The storable class to search.
         :param key: The content identity to find.
+        :param eager: Whether to fully materialize the record instead of returning a lazy row.
         :return: The stored instance, or ``None`` when no row matches.
         :raises httk.store.db.schema.SchemaError: If the class does not use content-id deduplication.
         """
@@ -1697,18 +1825,21 @@ class SqlStore:
             ).first()
             if found is None:
                 return None
-            return cast(T, self._fetch(connection, cls, int(found[0])))
+            return cast(T, self._fetch_result(connection, cls, int(found[0]), eager=eager))
 
-    def fetch_entry(self, family_cls: type, content_id: str) -> object | None:
+    def fetch_entry(self, family_cls: type, content_id: str, *, eager: bool = False) -> object | None:
         """Return the concrete configured record for an entry-family content identity.
 
         The result is the actual frozen record class, not the family protocol.
         A single-record family can query that record directly; only
         multi-record families use their reserved one-of-many dispatch table,
         whose constraint permits exactly one backing sid per content identity.
+        A lazy row is returned by default; pass ``eager=True`` to fully
+        materialize it.
 
         :param family_cls: The configured entry-family class.
         :param content_id: The entry content identity to find.
+        :param eager: Whether to fully materialize the record instead of returning a lazy row.
         :return: The concrete stored record, or ``None`` when no row matches.
         :raises ValueError: If ``family_cls`` is not configured for this store.
         :raises EntryDispatchIntegrityError: If a dispatch row is inconsistent with its backing row.
@@ -1726,7 +1857,7 @@ class SqlStore:
                 sid = connection.execute(
                     sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == content_id)
                 ).scalar_one_or_none()
-                return None if sid is None else self._fetch(connection, backing, int(sid))
+                return None if sid is None else self._fetch_result(connection, backing, int(sid), eager=eager)
             table = self._table(entry_dispatch_table_name(family.name))
             row = (
                 connection.execute(sqlalchemy.select(table).where(table.c[DISPATCH_CONTENT_ID_COLUMN] == content_id))
@@ -1756,7 +1887,7 @@ class SqlStore:
                     f"entry dispatch {family.name!r} maps content_id {content_id!r} to backing sid {sid} "
                     f"whose content_id is {backing_content_id!r}"
                 )
-            return self._fetch(connection, backing, sid)
+            return self._fetch_result(connection, backing, sid, eager=eager)
 
     def sid_of(self, obj: Any, *, as_record: type | None = None) -> int | None:
         """Return this store's sid for ``obj``'s record identity, if present.
@@ -1801,8 +1932,8 @@ class SqlStore:
 
         The searcher runs on this store's read path — inside an open
         :meth:`transaction` block it sees uncommitted writes — and
-        reconstructs matched objects through :meth:`fetch`, so the identity
-        cache applies.
+        reconstructs matched objects as lazy rows, decoding each field on first
+        access exactly as the lazy default of :meth:`fetch` does.
 
         :param as_of: Optional historic cutoff in canonical timestamp form.
         :return: A new SQL searcher bound to this store.
@@ -1852,17 +1983,20 @@ class SqlStore:
 
         return stored_property_sql_plan(self, family)
 
-    def referring(self, cls: type, *, field: str, to: Any) -> list[Any]:
+    def referring(self, cls: type, *, field: str, to: Any, eager: bool = False) -> list[Any]:
         """Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
 
         ``field`` must be a reference field of ``cls`` targeting ``to``'s class
         (:class:`~httk.store.db.schema.SchemaError` otherwise), and ``to`` must
         be known to this store — saved or fetched through it — else
-        :class:`ValueError` is raised. Results are ordered by sid.
+        :class:`ValueError` is raised. Results are ordered by sid. Lazy rows are
+        returned by default (batched over the matched sids); pass ``eager=True``
+        to fully materialize them.
 
         :param cls: The storable class whose references should be searched.
         :param field: The reference field to match.
         :param to: The stored target instance.
+        :param eager: Whether to fully materialize the records instead of returning lazy rows.
         :return: The referring stored instances ordered by sid.
         :raises httk.store.db.schema.SchemaError: If ``field`` is not a compatible reference field.
         :raises ValueError: If ``to`` is not known to this store.
@@ -1886,12 +2020,19 @@ class SqlStore:
                 .where(table.c[spec.columns[0].name] == sid)
                 .order_by(table.c[SID_COLUMN])
             ).all()
-            return [self._fetch(connection, cls, int(row[0])) for row in found]
+            found_sids = [int(row[0]) for row in found]
+            if eager:
+                return [self._fetch(connection, cls, referring_sid) for referring_sid in found_sids]
+            return self._fetch_many_lazy(cls, found_sids)
 
     def _fetch(self, connection: sqlalchemy.Connection, cls: type, sid: int) -> Any:
         sid = int(sid)
         cached = self._identity._instances.get((cls, sid))
-        if cached is not None:
+        # A lazy proxy registered under this key must never satisfy an eager
+        # fetch: treat a proxy hit as a miss and re-materialize the base type.
+        # Materialization then _remember()s the base instance, overwriting the
+        # proxy's cache slot (materialized-wins precedence).
+        if cached is not None and type(cached) is cls:
             return cached
         # The hydrator owns exact decoding and child/reference batching; this
         # path still materializes and validates the real base dataclass.
@@ -2278,6 +2419,9 @@ class SqlStore:
             table = self._table(schema.table_name)
             connection.execute(sqlalchemy.delete(table).where(table.c[SID_COLUMN] == sid))
         del projection.inserted[checkpoint:]
+        # No rollback token here: dedup compensation runs inside save(), where no
+        # user code can perform a deferred lazy read on this thread-local
+        # connection before the cache clear completes.
         self._clear_identity_caches()
 
     def _clear_identity_caches(self) -> None:

@@ -19,17 +19,22 @@ from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_sc
 if typing.TYPE_CHECKING:
     from httk.store.db.store import SqlStore
 
-__all__ = ["RowHydrator", "StaleResultError", "decode_field", "row_class"]
+__all__ = ["ExpiredLazyRecordError", "RowHydrator", "StaleResultError", "decode_field", "row_class"]
 
 _CHUNK = 500
 _ROW_CHUNK = "_httk_row_chunk_6f4a"
 _ROW_SID = "_httk_row_sid_6f4a"
 _ROW_STORE = "_httk_row_store_6f4a"
 _ROW_BASE = "_httk_row_base_6f4a"
+_ROW_VALUE = "_httk_row_value_6f4a_"
 
 
 class StaleResultError(RuntimeError):
     """A search result sid disappeared before its lazy row was hydrated."""
+
+
+class ExpiredLazyRecordError(RuntimeError):
+    """A lazy row was accessed after its originating transaction rolled back."""
 
 
 class _Context:
@@ -56,6 +61,14 @@ class _Chunk:
         self.references: dict[str, dict[int, RowHydrator]] = {}
 
         store = hydrator._store
+        # The token of the transaction that produced this chunk's parent rows,
+        # captured at chunk birth (None outside a transaction); rollback marks
+        # it and every field read from these rows then raises.
+        self.parent_token: Any = store._current_transaction_token()
+        # Per-field tokens for deferred child reads, captured at read time so a
+        # chunk born outside a transaction that later reads child rows inside a
+        # (rolled-back) transaction expires only those fields.
+        self.child_tokens: dict[str, Any] = {}
         schema = hydrator._schema
         if store._missing_tables_for_read((hydrator._cls,)):
             raise StaleResultError(f"{schema.cls.__name__} table is not present")
@@ -103,7 +116,28 @@ class _Chunk:
             grouped[int(row[columns[parent_column]])].append(tuple(row))
         self.children[spec.field] = grouped
         self.child_columns[spec.field] = columns
+        # Record the token only inside a transaction; outside one the common
+        # case leaves child_tokens empty for the fast-path liveness check.
+        token = self.hydrator._store._current_transaction_token()
+        if token is not None:
+            self.child_tokens[spec.field] = token
         return grouped, columns
+
+    def _check_live(self, sid: int, field: str) -> None:
+        """Raise if this chunk's rows for ``field`` came from a rolled-back transaction."""
+        token = self.parent_token
+        if token is not None and token.rolled_back:
+            self._raise_expired(sid)
+        if self.child_tokens:
+            child_token = self.child_tokens.get(field)
+            if child_token is not None and child_token.rolled_back:
+                self._raise_expired(sid)
+
+    def _raise_expired(self, sid: int) -> None:
+        raise ExpiredLazyRecordError(
+            f"{self.hydrator._cls.__name__} sid {sid} came from a transaction that rolled back; "
+            f"re-fetch it, or use eager=True for records that must outlive a transaction"
+        )
 
     def value(self, sid: int, spec: FieldSpec, *, eager: bool = False) -> Any:
         row = self.parent_rows[sid]
@@ -280,7 +314,10 @@ class RowHydrator:
         sid = int(sid)
         key = (self._cls, sid)
         cached = self._store._instances.get(key)
-        if cached is not None:
+        # A lazy proxy registered under this key is a fetch-default handout, not
+        # a materialized instance; eager hydration must skip it (treating the
+        # hit as a miss) and re-materialize the base dataclass.
+        if cached is not None and type(cached) is self._cls:
             self._context.rows[key] = cached
             return cached
         existing = self._context.rows.get((self._cls, sid))
@@ -329,19 +366,39 @@ def decode_field(store: "SqlStore", schema: TableSchema, spec: FieldSpec, sid: i
 
 
 class _Field:
+    # A lazy row memoizes decoded values under a private ``_ROW_VALUE`` key, not
+    # the field name.  Were the field name used, the instance-dict value would
+    # shadow this non-data descriptor and ``__get__`` would stop running after
+    # the first read — but the expiry check lives here and must fire on EVERY
+    # access, including fields already read before a rollback.  Keeping the field
+    # name out of ``__dict__`` also leaves the inherited frozen ``__setattr__``
+    # in charge of explicit assignment and lets ``replace()`` populate a plain
+    # instance normally.
     def __init__(self, spec: FieldSpec) -> None:
         self.spec = spec
+        self.memo = _ROW_VALUE + spec.field
 
     def __get__(self, instance: Any, owner: type | None = None) -> Any:
         if instance is None:
             return self
-        cached = instance.__dict__.get(self.spec.field, _MISSING)
+        chunk = instance.__dict__.get(_ROW_CHUNK)
+        if chunk is None:
+            # A replace()-created plain instance carries the field name in
+            # __dict__ and no chunk; it is exempt from the lazy path and guard.
+            return instance.__dict__[self.spec.field]
+        # The expiry check runs BEFORE the memo lookup: a field already read
+        # before a rollback is cached, so a check placed after the memo would
+        # serve that phantom value.  Inline the no-transaction fast path so the
+        # common memoized read pays only two attribute tests, not a call.
+        if chunk.parent_token is not None or chunk.child_tokens:
+            chunk._check_live(instance.__dict__[_ROW_SID], self.spec.field)
+        cached = instance.__dict__.get(self.memo, _MISSING)
         if cached is not _MISSING:
             return cached
         value = instance._httk_decode(self.spec)
         # Frozen base dataclasses reject normal assignment; object.__setattr__ is
         # the required cache write and does not invoke the inherited frozen setter.
-        object.__setattr__(instance, self.spec.field, value)
+        object.__setattr__(instance, self.memo, value)
         return value
 
 
@@ -454,7 +511,9 @@ def _is_generated_dataclass_method(method: Any) -> bool:
 
 
 def _reject_copy(operation: str) -> Any:
-    raise TypeError(f"lazy storage rows do not support {operation}; materialize with store.fetch first")
+    raise TypeError(
+        f"lazy storage rows do not support {operation}; materialize with store.fetch(..., eager=True) first"
+    )
 
 
 def lazy_row_identity(obj: Any) -> tuple[Any, int] | None:

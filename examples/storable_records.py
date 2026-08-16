@@ -31,8 +31,9 @@ The markers below are `typing.Annotated` metadata plus one class variable:
 
 ## Round-tripping, exactly
 
-`fetch` gives back an equal instance, and for rational values it gives back an
-*exactly* equal one. `Fraction(1, 3)` is not representable as a float, so the
+`fetch` gives back an equal instance — a lazy row by default, decoded field by
+field on access (`eager=True` materializes it up front) — and for rational
+values it gives back an *exactly* equal one. `Fraction(1, 3)` is not representable as a float, so the
 example prints both the reconstructed value and what a float round-trip would
 have cost. This is not an accident of the encoding: every rational field is
 stored as a canonical exact text column (the round-trip source of truth)
