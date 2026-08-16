@@ -2323,6 +2323,15 @@ class SqlStore:
 
         Only tables attributable to the persisted layout or ``known_types``
         are swept; unrelated application tables make collection refuse.
+
+        In ``store_timestamps="versioned"`` mode the versioning invariants are
+        additionally verified and reported (never repaired): ``ts_end`` and
+        ``replaced_by_sid`` are set together, closed intervals are non-empty,
+        each ``replaced_by_sid`` references an existing same-table row that does
+        not start after the predecessor closed, and — on backends without
+        partial unique indexes — no author-Unique value repeats among current
+        rows. A future ``ts_end`` is clamped alongside ``ts_start`` under
+        ``clamp_future_timestamps``.
         """
         self._check_mutation_policy("fsck")
         self._reject_during_bulk()

@@ -14,8 +14,10 @@ from httk.store.db.graph import LogicalEdgeGraph
 from httk.store.db.layout import METADATA_TABLE_NAME, actual_table_names
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
+    REPLACED_BY_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
+    TS_END_COLUMN,
     TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
@@ -119,6 +121,8 @@ def run_fsck(
             violations,
             clamp_future_timestamps and repair and mutation_allowed,
         )
+        if store.store_timestamp_mode == "versioned":
+            _check_version_invariants(store, connection, present, graph, schemas, counters, violations)
         if repair and mutation_allowed:
             _repair_dispatches(store, connection, present, counters, violations, True, repair_conflicts)
         else:
@@ -177,28 +181,125 @@ def _check_future_timestamps(
         table = store._table(name)
         if ROLE_COLUMN not in table.c or TS_START_COLUMN not in table.c:
             continue
-        rows = connection.execute(
-            sqlalchemy.select(table.c[SID_COLUMN], table.c[TS_START_COLUMN]).where(
-                table.c[TS_START_COLUMN] > limit_units
-            )
-        ).all()
-        for sid, value in rows:
-            counters[name].examined += 1
-            future_ns = int(value) * resolution
-            limit_ns = limit_units * resolution
-            if clamp:
-                connection.execute(
-                    sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({TS_START_COLUMN: now_units})
-                )
-                repaired_any = True
-                counters[name].repaired += 1
-                violations.append(
-                    f"table {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns; clamped to {now_ns} ns"
-                )
-            else:
-                counters[name].conflicts += 1
-                violations.append(f"table {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns")
+        # Both lifecycle bounds are checked; ts_end exists only on versioned
+        # family tables. Clamping ts_end down to now can make a successor's
+        # ts_start exceed its predecessor's (now clamped) ts_end — the lineage
+        # check reports that as a <= violation, which is acceptable for a store
+        # written under a badly skewed clock.
+        for column_name in (TS_START_COLUMN, TS_END_COLUMN):
+            if column_name not in table.c:
+                continue
+            column = table.c[column_name]
+            rows = connection.execute(
+                sqlalchemy.select(table.c[SID_COLUMN], column).where(column.is_not(None), column > limit_units)
+            ).all()
+            for sid, value in rows:
+                counters[name].examined += 1
+                future_ns = int(value) * resolution
+                limit_ns = limit_units * resolution
+                if clamp:
+                    connection.execute(
+                        sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({column_name: now_units})
+                    )
+                    repaired_any = True
+                    counters[name].repaired += 1
+                    violations.append(
+                        f"table {name!r} sid {sid} {column_name} {future_ns} ns exceeds {limit_ns} ns; "
+                        f"clamped to {now_ns} ns"
+                    )
+                else:
+                    counters[name].conflicts += 1
+                    violations.append(f"table {name!r} sid {sid} {column_name} {future_ns} ns exceeds {limit_ns} ns")
     return repaired_any
+
+
+def _check_version_invariants(
+    store: SqlStore,
+    connection: sqlalchemy.Connection,
+    present: set[str] | frozenset[str],
+    graph: LogicalEdgeGraph,
+    schemas: Mapping[str, TableSchema],
+    counters: defaultdict[str, _Counter],
+    violations: list[str],
+) -> None:
+    """Report versioning-invariant violations on versioned family tables (report-only).
+
+    Checks the half-open lifetime interval bookkeeping: ``ts_end`` and
+    ``replaced_by_sid`` are set together (pairing), a closed interval is
+    non-empty (ordering), the successor exists and does not start after the
+    predecessor closed (lineage), and — only on backends without partial unique
+    indexes — no author-Unique value repeats among current rows.
+    """
+    for name in graph.tables:
+        if name not in store._versioned_tables or name not in present or name not in store._metadata.tables:
+            continue
+        table = store._table(name)
+        sid_col = table.c[SID_COLUMN]
+        start_col = table.c[TS_START_COLUMN]
+        end_col = table.c[TS_END_COLUMN]
+        repl_col = table.c[REPLACED_BY_COLUMN]
+        # Pairing: ts_end and replaced_by_sid must both be set or both be null.
+        for sid, end, repl in connection.execute(
+            sqlalchemy.select(sid_col, end_col, repl_col).where(
+                sqlalchemy.or_(
+                    sqlalchemy.and_(end_col.is_(None), repl_col.is_not(None)),
+                    sqlalchemy.and_(end_col.is_not(None), repl_col.is_(None)),
+                )
+            )
+        ):
+            counters[name].conflicts += 1
+            if end is None:
+                violations.append(f"table {name!r} sid {sid} has replaced_by_sid {repl} but no ts_end")
+            else:
+                violations.append(f"table {name!r} sid {sid} has ts_end {end} but no replaced_by_sid")
+        # Ordering: a closed interval must be non-empty (ts_end > ts_start).
+        for sid, start, end in connection.execute(
+            sqlalchemy.select(sid_col, start_col, end_col).where(end_col.is_not(None), end_col <= start_col)
+        ):
+            counters[name].conflicts += 1
+            violations.append(f"table {name!r} sid {sid} ts_end {end} is not after ts_start {start}")
+        # Lineage: replaced_by_sid must reference an existing row in the same
+        # table whose ts_start does not fall after the predecessor's ts_end
+        # (equality is a fresh insert; earlier is a converged lineage).
+        successor = table.alias("successor")
+        for sid, repl, end, succ_sid, succ_start in connection.execute(
+            sqlalchemy.select(sid_col, repl_col, end_col, successor.c[SID_COLUMN], successor.c[TS_START_COLUMN])
+            .select_from(table.outerjoin(successor, repl_col == successor.c[SID_COLUMN]))
+            .where(repl_col.is_not(None))
+        ):
+            if succ_sid is None:
+                counters[name].conflicts += 1
+                violations.append(f"table {name!r} sid {sid} replaced_by_sid {repl} references a missing row")
+            elif end is not None and succ_start > end:
+                counters[name].conflicts += 1
+                violations.append(
+                    f"table {name!r} sid {sid} successor {repl} ts_start {succ_start} is after ts_end {end}"
+                )
+        # Unique-among-current: partial unique indexes (ts_end IS NULL) enforce
+        # this in the engine, so it is only re-checked on backends without them.
+        if store.backend_facts.supports_partial_unique_indexes:
+            continue
+        schema = schemas.get(name)
+        if schema is None:
+            continue
+        for spec in schema.fields:
+            if spec.role == "child":
+                continue
+            for column_spec in spec.columns:
+                if not column_spec.unique:
+                    continue
+                column = table.c[column_spec.name]
+                # NULLs never conflict, mirroring SQL unique-index semantics.
+                for value, count in connection.execute(
+                    sqlalchemy.select(column, sqlalchemy.func.count())
+                    .where(end_col.is_(None), column.is_not(None))
+                    .group_by(column)
+                    .having(sqlalchemy.func.count() > 1)
+                ):
+                    counters[name].conflicts += 1
+                    violations.append(
+                        f"table {name!r} column {column_spec.name!r} value {value!r} appears in {count} current rows"
+                    )
 
 
 def _repair_dispatches(
