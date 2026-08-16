@@ -131,6 +131,7 @@ from httk.store.db.store import (
 from httk.store.store_common import (
     EntryDispatchIntegrityError,
     EntryMetadataConflictError,
+    RecordReviveError,
     SaveProjection,
     _metadata_plan,
     reject_cursor_proxy,
@@ -2266,9 +2267,34 @@ class BulkIngest:
             statement = sqlalchemy.select(
                 stage.c[SID_COLUMN], stage.c[CONTENT_ID_COLUMN], table.c[SID_COLUMN]
             ).join_from(stage, table, stage.c[CONTENT_ID_COLUMN] == table.c[CONTENT_ID_COLUMN])
-            return [(int(row[0]), int(row[2]), str(row[1])) for row in self._connection.execute(statement).all()]
+            hits = [(int(row[0]), int(row[2]), str(row[1])) for row in self._connection.execute(statement).all()]
+            self._reject_superseded_hits(table, stage)
+            return hits
         finally:
             self._drop_stage(stage)
+
+    def _reject_superseded_hits(self, table: sqlalchemy.Table, stage: sqlalchemy.Table) -> None:
+        """Fail the ingest if any staged content id deduplicates onto a superseded existing row.
+
+        Only serial-parity incremental appends into a populated store can hit a
+        pre-existing superseded row (``ts_end`` set); parallel and deferred
+        ingests require a physically empty target, so no such row can exist.
+        Equal content cannot revive a closed lifetime interval.
+        """
+        assert self._connection is not None
+        if table.name not in self._store._versioned_tables or TS_END_COLUMN not in table.c:
+            return
+        offender = self._connection.execute(
+            sqlalchemy.select(table.c[CONTENT_ID_COLUMN])
+            .join_from(stage, table, stage.c[CONTENT_ID_COLUMN] == table.c[CONTENT_ID_COLUMN])
+            .where(table.c[TS_END_COLUMN].is_not(None))
+            .limit(1)
+        ).scalar_one_or_none()
+        if offender is not None:
+            raise RecordReviveError(
+                f"bulk_ingest content_id {offender!r} deduplicates onto a superseded row in {table.name!r}; "
+                "a superseded record cannot be revived"
+            )
 
     def _stage_by_value_hits(self, table: sqlalchemy.Table, rows: list[dict[str, Any]]) -> list[tuple[int, int]]:
         """Stage ``rows`` and return ``(staged_sid, existing_sid)`` for each whole-parent-column hit."""

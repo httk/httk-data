@@ -19,6 +19,9 @@ __all__ = [
     "EntryMetadataConflictError",
     "EntryStore",
     "IdentityCaches",
+    "RecordReviveError",
+    "RecordSupersededError",
+    "ReplaceConflictError",
     "SaveProjection",
     "reject_cursor_proxy",
 ]
@@ -83,6 +86,32 @@ class EntryMetadataConflictError(ValueError):
 
 class EntryDispatchIntegrityError(RuntimeError):
     """A persisted entry dispatch row does not name exactly its expected backing."""
+
+
+class RecordSupersededError(ValueError):
+    """A versioned-mode ``replace`` names a target row that is already superseded.
+
+    A superseded row (``ts_end`` set) has a closed lifetime interval and cannot
+    be replaced again; replace its current successor instead.
+    """
+
+
+class RecordReviveError(ValueError):
+    """Content in versioned mode deduplicates onto an already-superseded row.
+
+    A superseded row's content identity carries a closed lifetime interval;
+    re-saving equal content would ask one row to hold two intervals. Raised by
+    ``save``/``bulk_ingest`` and by ``replace`` when the replacement content is
+    identical to the row being replaced.
+    """
+
+
+class ReplaceConflictError(RuntimeError):
+    """A concurrent ``replace`` closed the target's lifetime before this one did.
+
+    The end-of-life update matched no current row, so another transaction won
+    the race; retry against the target's new successor.
+    """
 
 
 class SaveProjection:

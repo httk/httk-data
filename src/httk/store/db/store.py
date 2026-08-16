@@ -81,6 +81,7 @@ from httk.store.db.layout import (
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    REPLACED_BY_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
     TS_END_COLUMN,
@@ -99,6 +100,9 @@ from httk.store.store_common import (
     EntryDispatchIntegrityError,
     EntryMetadataConflictError,
     IdentityCaches,
+    RecordReviveError,
+    RecordSupersededError,
+    ReplaceConflictError,
     SaveProjection,
     _metadata_plan,
     _MetadataPlan,
@@ -1420,11 +1424,18 @@ class SqlStore:
         Nested plans are cached per record type, and a mismatch raises
         :class:`~httk.store.db.store.EntryMetadataConflictError` without replacing the row.
 
+        In ``store_timestamps="versioned"`` mode, saving content that
+        deduplicates onto a superseded family row (one already closed by
+        :meth:`replace`) raises
+        :class:`~httk.store.store_common.RecordReviveError`: one row cannot carry
+        two lifetime intervals.
+
         :param obj: The object to store.
         :param as_record: The alternate record representation to use, if any.
         :return: The stored row's sid.
         :raises TypeError: If ``obj`` is a cursor row that must be materialized first.
         :raises httk.store.db.store.EntryMetadataConflictError: If a deduplication hit has conflicting metadata.
+        :raises httk.store.store_common.RecordReviveError: If content deduplicates onto a superseded versioned row.
         :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
         :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
@@ -1469,6 +1480,196 @@ class SqlStore:
             self._identity._instances[(record_type, sid)] = obj
         return sid
 
+    def replace(self, old: Any, new_obj: Any, *, as_record: type | None = None) -> int:
+        """Supersede a current family entry ``old`` with ``new_obj`` in one transaction.
+
+        Versions form half-open lifetime intervals ``[ts_start, ts_end)``. This
+        saves ``new_obj`` as an ordinary top-level entry with the pinned
+        transaction timestamp ``T`` as its ``ts_start``, then closes ``old`` by
+        setting its ``ts_end`` to ``T`` and its ``replaced_by_sid`` to the new
+        sid — atomically, so the closed interval of ``old`` abuts the open
+        interval of the successor exactly. Only available in
+        ``store_timestamps="versioned"`` mode and only on a transactional store
+        profile.
+
+        ``old`` selects the target row and may be:
+
+        - a stored instance (a domain object or its record) of a backing of the
+          same entry family as ``new_obj`` — resolved through :meth:`sid_of`;
+        - a ``str`` content identity — resolved against the family's single
+          backing table, or via the one-of-many dispatch table for a
+          multi-backing family;
+        - an ``int`` sid — only for a single-backing family, since a bare sid is
+          ambiguous across a multi-backing family's tables (pass an instance or
+          content id there instead).
+
+        ``old`` and ``new_obj`` need not share a backing class, only the family.
+
+        Two lineage outcomes are deliberately allowed and leave the store
+        consistent:
+
+        - **Converging lineages.** If ``new_obj`` deduplicates onto a *different*
+          current row, that row's sid is the successor; ``old`` is still closed
+          and pointed at it.
+        - **Stable identity.** ``old``'s dispatch/content-id entry is untouched,
+          so its content identity keeps resolving to its (now superseded) sid.
+
+        Reviving is refused: if ``new_obj``'s content deduplicates onto a
+        superseded row, or onto ``old`` itself, a superseded row would have to
+        carry two intervals — :class:`~httk.store.store_common.RecordReviveError`.
+
+        Inside an open :meth:`transaction` block ``replace`` shares that
+        transaction's single pinned timestamp with every other save, so a save
+        followed by a ``replace`` of that same just-saved row would ask for a
+        zero-length ``[T, T)`` interval; that is refused with a :class:`ValueError`
+        (remedy: replace in a later transaction).
+
+        :param old: The current family entry to supersede — instance, content id, or sid.
+        :param new_obj: The replacement object, saved as a new top-level entry.
+        :param as_record: The alternate record representation of ``new_obj`` to use, if any.
+        :return: The successor row's sid.
+        :raises TypeError: If ``new_obj`` is a cursor row that must be materialized first.
+        :raises ValueError: If not in versioned mode, ``new_obj`` has no entry family, ``old`` cannot be resolved,
+            or the successor would form a zero-length interval with ``old``.
+        :raises RuntimeError: If a :meth:`bulk_ingest` context is open or the store profile is not transactional.
+        :raises httk.store.store_common.RecordSupersededError: If ``old`` is already superseded.
+        :raises httk.store.store_common.RecordReviveError: If ``new_obj``'s content revives a superseded row.
+        :raises httk.store.store_common.ReplaceConflictError: If a concurrent replace closed ``old`` first.
+        """
+        self._check_mutation_policy("replace")
+        self._reject_during_bulk()
+        reject_cursor_proxy(new_obj)
+        if self._store_timestamps != "versioned":
+            raise ValueError('replace requires SqlStore(store_timestamps="versioned")')
+        if self._write_profile != "transactional":
+            raise RuntimeError("replace requires a transactional store profile")
+        record_type = resolve_storage_record(new_obj, as_record=as_record)
+        family = self._family_for_backing(record_type)
+        if family is None:
+            raise ValueError("replace requires a record belonging to an entry family")
+        projection = SaveProjection()
+        timestamp_state = getattr(self._local, "store_timestamp_transaction", None)
+        _publish_after_commit = (
+            None
+            if timestamp_state is not None
+            else lambda: self._advance_store_timestamp_mark(projection.store_timestamp)
+        )
+        with self._write_connection(_publish_after_commit=_publish_after_commit) as connection:
+            self._create_tables_for_write(connection, (record_type,))
+            _old_backing, table_name, old_sid = self._resolve_replace_target(connection, old, family)
+            table = self._table(table_name)
+            if timestamp_state is None:
+                projection.store_timestamp = self._capture_store_timestamp(connection)
+            elif not timestamp_state["initialized"]:
+                projection.store_timestamp = self._capture_store_timestamp(connection)
+                timestamp_state["captured"] = projection.store_timestamp
+                timestamp_state["initialized"] = True
+            else:
+                projection.store_timestamp = timestamp_state["captured"]
+            captured = projection.store_timestamp
+            assert captured is not None  # versioned mode always captures a timestamp
+            old_row = connection.execute(
+                sqlalchemy.select(table.c[TS_START_COLUMN], table.c[TS_END_COLUMN]).where(
+                    table.c[SID_COLUMN] == old_sid
+                )
+            ).first()
+            if old_row is None:
+                raise ValueError(f"replace target sid {old_sid} is not present in {table_name!r}")
+            if old_row[1] is not None:
+                raise RecordSupersededError(
+                    f"replace target sid {old_sid} in {table_name!r} is already superseded (ts_end set)"
+                )
+            if int(old_row[0]) == captured:
+                raise ValueError(
+                    f"replace of sid {old_sid} would form a zero-length interval [T, T); the target was created "
+                    "in this same transaction — replace it in a later transaction"
+                )
+            # Close the old row FIRST so it stops occupying the unique-among-current
+            # slot: a new version that keeps the same author-Unique key must be
+            # insertable, which the partial unique index (ts_end IS NULL) would
+            # forbid while the old row is still current. replaced_by_sid is set in
+            # a second update once the successor's sid is known; it is fsck-only.
+            closed = connection.execute(
+                sqlalchemy.update(table)
+                .where(table.c[SID_COLUMN] == old_sid, table.c[TS_END_COLUMN].is_(None))
+                .values({TS_END_COLUMN: captured})
+            )
+            if closed.rowcount == 0:
+                raise ReplaceConflictError(
+                    f"replace of sid {old_sid} in {table_name!r} lost a race: the row was superseded concurrently"
+                )
+            # With the old row now superseded, content equal to it deduplicates
+            # onto a closed interval and _save raises RecordReviveError.
+            new_sid = self._save(connection, record_type, new_obj, projection, "", top_level=True)
+            self._save_entry_dispatch(
+                connection, family, record_type, new_sid, projection.content_id(record_type, new_obj)
+            )
+            connection.execute(
+                sqlalchemy.update(table).where(table.c[SID_COLUMN] == old_sid).values({REPLACED_BY_COLUMN: new_sid})
+            )
+        identity = lazy_row_identity(new_obj)
+        if (
+            identity is not None
+            and identity[0] is self
+            and identity[1] == new_sid
+            and getattr(type(new_obj), "__httk_row_base__", None) is record_type
+        ):
+            self._identity._instances[(record_type, new_sid)] = new_obj
+        return new_sid
+
+    def _resolve_replace_target(
+        self,
+        connection: sqlalchemy.Connection,
+        old: Any,
+        family: EntryFamilyLayout,
+    ) -> tuple[type, str, int]:
+        """Resolve ``old`` to ``(backing_record_cls, table_name, sid)`` within ``family``."""
+        if isinstance(old, str):
+            if len(family.records) == 1:
+                backing = family.records[0]
+                schema = resolve_schema(backing)
+                sid = connection.execute(
+                    sqlalchemy.select(self._table(schema.table_name).c[SID_COLUMN]).where(
+                        self._table(schema.table_name).c[CONTENT_ID_COLUMN] == old
+                    )
+                ).scalar_one_or_none()
+                if sid is None:
+                    raise ValueError(f"replace target content_id {old!r} is not stored in family {family.name!r}")
+                return backing, schema.table_name, int(sid)
+            dispatch = self._table(entry_dispatch_table_name(family.name))
+            row = (
+                connection.execute(sqlalchemy.select(dispatch).where(dispatch.c[DISPATCH_CONTENT_ID_COLUMN] == old))
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                raise ValueError(f"replace target content_id {old!r} is not stored in family {family.name!r}")
+            backing, sid = self._dispatch_target(family, row, old)
+            return backing, resolve_schema(backing).table_name, sid
+        if type(old) is int:
+            if len(family.records) != 1:
+                raise ValueError(
+                    f"replace target for multi-backing family {family.name!r} is ambiguous by sid; "
+                    "pass the instance or its content id instead"
+                )
+            backing = family.records[0]
+            schema = resolve_schema(backing)
+            found = connection.execute(
+                sqlalchemy.select(self._table(schema.table_name).c[SID_COLUMN]).where(
+                    self._table(schema.table_name).c[SID_COLUMN] == old
+                )
+            ).scalar_one_or_none()
+            if found is None:
+                raise ValueError(f"replace target sid {old} is not present in {schema.table_name!r}")
+            return backing, schema.table_name, int(found)
+        old_record_type = resolve_storage_record(old)
+        if old_record_type not in family.records:
+            raise ValueError(f"replace target {old_record_type.__name__} is not a backing of family {family.name!r}")
+        old_sid = self.sid_of(old)
+        if old_sid is None:
+            raise ValueError(f"replace target {old_record_type.__name__} is not stored in this SqlStore")
+        return old_record_type, resolve_schema(old_record_type).table_name, old_sid
+
     def _save(
         self,
         connection: sqlalchemy.Connection,
@@ -1500,6 +1701,7 @@ class SqlStore:
     ) -> int:
         schema = resolve_schema(record_type)
         table = self._table(schema.table_name)
+        versioned_family = self._is_versioned_family_table(schema.table_name)
         projected = projection.projector(record_type, source)
         validation_key = (record_type, id(source))
         if type(source) is record_type and validation_key not in projection.validated:
@@ -1513,10 +1715,20 @@ class SqlStore:
         key: str | None = None
         if schema.dedup == "content_id":
             key = projection.content_id(record_type, source)
+            select_columns = [table.c[SID_COLUMN], table.c[ROLE_COLUMN]]
+            if versioned_family:
+                select_columns.append(table.c[TS_END_COLUMN])
             found = connection.execute(
-                sqlalchemy.select(table.c[SID_COLUMN], table.c[ROLE_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
+                sqlalchemy.select(*select_columns).where(table.c[CONTENT_ID_COLUMN] == key)
             ).first()
             if found is not None:
+                if versioned_family and found[2] is not None:
+                    # A superseded row carries a closed lifetime interval; equal
+                    # content cannot revive it. Checked before metadata/promotion.
+                    raise RecordReviveError(
+                        f"content_id {key!r} deduplicates onto a superseded row in {schema.table_name!r}; "
+                        "a superseded record cannot be revived"
+                    )
                 if self._write_profile == "degraded":
                     self._after_degraded_write(f"content-dedup-select:{table.name}")
                 sid = int(found[0])
@@ -1541,11 +1753,21 @@ class SqlStore:
             conditions = [
                 table.c[name].is_(None) if value is None else table.c[name] == value for name, value in values.items()
             ]
-            statement = sqlalchemy.select(table.c[SID_COLUMN], table.c[ROLE_COLUMN])
+            by_value_columns = [table.c[SID_COLUMN], table.c[ROLE_COLUMN]]
+            if versioned_family:
+                by_value_columns.append(table.c[TS_END_COLUMN])
+            statement = sqlalchemy.select(*by_value_columns)
             if conditions:
                 statement = statement.where(*conditions)
             found = connection.execute(statement.limit(1)).first()
             if found is not None:
+                if versioned_family and found[2] is not None:
+                    # A by_value family backing is uncommon, but a match against a
+                    # superseded row is a revive just as under content_id.
+                    raise RecordReviveError(
+                        f"a by_value save deduplicates onto a superseded row in {schema.table_name!r}; "
+                        "a superseded record cannot be revived"
+                    )
                 sid = int(found[0])
                 if top_level and int(found[1]) == 0:
                     connection.execute(
@@ -1594,6 +1816,17 @@ class SqlStore:
                 values[TS_START_COLUMN] = projection.store_timestamp
             sid, inserted = self._insert_content_row(connection, table, values, key)
             if not inserted:
+                if versioned_family:
+                    # A row appeared between the dedup select and this insert; if
+                    # it is already superseded, equal content is a revive.
+                    end = connection.execute(
+                        sqlalchemy.select(table.c[TS_END_COLUMN]).where(table.c[SID_COLUMN] == sid)
+                    ).scalar_one()
+                    if end is not None:
+                        raise RecordReviveError(
+                            f"content_id {key!r} deduplicates onto a superseded row in {schema.table_name!r}; "
+                            "a superseded record cannot be revived"
+                        )
                 self._discard_inserted(connection, projection, checkpoint)
                 self._check_metadata(connection, record_type, sid, source, projection)
                 if top_level:
@@ -1625,6 +1858,10 @@ class SqlStore:
                 )
         self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
         return sid
+
+    def _is_versioned_family_table(self, table_name: str) -> bool:
+        """Whether ``table_name`` is a family backing table carrying lifecycle columns."""
+        return self._store_timestamps == "versioned" and table_name in self._versioned_tables
 
     def _enforce_versioned_unique(
         self,

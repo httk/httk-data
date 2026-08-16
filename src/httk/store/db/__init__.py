@@ -61,6 +61,9 @@ __all__ = [
     "FsckSummary",  # pyright: ignore[reportUnsupportedDunderAll]
     "MultipleResultsError",
     "NoResultError",
+    "RecordReviveError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "RecordSupersededError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "ReplaceConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
     "ResultRow",  # pyright: ignore[reportUnsupportedDunderAll]
     "SchemaError",
@@ -91,6 +94,9 @@ _SQL_EXPORTS = {
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
+    "RecordReviveError": ".store",
+    "RecordSupersededError": ".store",
+    "ReplaceConflictError": ".store",
     "StoreClockRegressionError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",
