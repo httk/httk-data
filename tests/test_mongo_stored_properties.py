@@ -116,7 +116,7 @@ def test_evaluator_preserves_unknown_and_canonical_exact_constants():
 def test_evaluator_resolves_store_timestamp_from_the_candidate_sid():
     store = type("Store", (), {"store_timestamps": True, "store_timestamp_resolution": 1000})()
     context = _MongoQueryContext(GenericCalculationFirst, store)
-    predicate = context.compare(context.field("store_timestamp"), "<=", context.constant(1_000_499))
+    predicate = context.compare(context.field("ts_start"), "<=", context.constant(1_000_499))
     assert evaluate(predicate, FIRST, store_timestamp_resolver=lambda: 1000) is True
     assert evaluate(predicate, FIRST, store_timestamp_resolver=lambda: 1001) is False
 

@@ -9,7 +9,7 @@ from httk.core.storage import StorageInfo
 
 from httk.store.db import Database, SqlStore
 from httk.store.db.bulk_deferred import DeferredFinalizer
-from httk.store.db.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import SID_COLUMN, TS_START_COLUMN
 
 TABLE_NAME = "extended_timestamp_record"
 
@@ -36,7 +36,7 @@ def test_parallel_workers_use_one_batch_timestamp_and_first_by_value_row() -> No
         )
         with database.engine.connect() as connection:
             assert connection.execute(
-                sqlalchemy.text(f'SELECT value, "{STORE_TIMESTAMP_COLUMN}" FROM {TABLE_NAME} ORDER BY value')
+                sqlalchemy.text(f'SELECT value, "{TS_START_COLUMN}" FROM {TABLE_NAME} ORDER BY value')
             ).all() == [(1, 7_654), (2, 7_654)]
 
 
@@ -51,11 +51,11 @@ def test_deferred_by_value_collapse_ignores_timestamp_and_sqlite_validation_incl
         table = finalizer.store._table(table_name)
         columns = []
         for column in table.columns:
-            if column.name == STORE_TIMESTAMP_COLUMN:
+            if column.name == TS_START_COLUMN:
                 expression = (
                     f'CASE WHEN "value" = 1 AND "{SID_COLUMN}" != '
                     f'(SELECT MIN("{SID_COLUMN}") FROM "{original_view}" WHERE "value" = 1) '
-                    f'THEN "{STORE_TIMESTAMP_COLUMN}" + 1 ELSE "{STORE_TIMESTAMP_COLUMN}" END'
+                    f'THEN "{TS_START_COLUMN}" + 1 ELSE "{TS_START_COLUMN}" END'
                 )
             else:
                 expression = f'"{column.name}"'
@@ -75,6 +75,6 @@ def test_deferred_by_value_collapse_ignores_timestamp_and_sqlite_validation_incl
 
         with database.engine.connect() as connection:
             rows = connection.execute(
-                sqlalchemy.text(f'SELECT value, "{STORE_TIMESTAMP_COLUMN}" FROM {TABLE_NAME} ORDER BY value')
+                sqlalchemy.text(f'SELECT value, "{TS_START_COLUMN}" FROM {TABLE_NAME} ORDER BY value')
             ).all()
         assert rows == [(1, 8_765), (2, 8_765)]

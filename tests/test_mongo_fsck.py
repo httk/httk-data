@@ -87,7 +87,7 @@ def _insert_orphan_leaf(database, leaf: FsckLeaf) -> int:
             "_id": sid,
             "content_id": content_id(leaf),
             "_httk_role": "dep",
-            "store_timestamp": 0,
+            "ts_start": 0,
             "f": {"value": leaf.value},
         }
     )

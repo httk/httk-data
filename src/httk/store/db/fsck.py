@@ -16,7 +16,7 @@ from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
-    STORE_TIMESTAMP_COLUMN,
+    TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
@@ -175,11 +175,11 @@ def _check_future_timestamps(
         if name not in present or name not in store._metadata.tables:
             continue
         table = store._table(name)
-        if ROLE_COLUMN not in table.c or STORE_TIMESTAMP_COLUMN not in table.c:
+        if ROLE_COLUMN not in table.c or TS_START_COLUMN not in table.c:
             continue
         rows = connection.execute(
-            sqlalchemy.select(table.c[SID_COLUMN], table.c[STORE_TIMESTAMP_COLUMN]).where(
-                table.c[STORE_TIMESTAMP_COLUMN] > limit_units
+            sqlalchemy.select(table.c[SID_COLUMN], table.c[TS_START_COLUMN]).where(
+                table.c[TS_START_COLUMN] > limit_units
             )
         ).all()
         for sid, value in rows:
@@ -188,19 +188,16 @@ def _check_future_timestamps(
             limit_ns = limit_units * resolution
             if clamp:
                 connection.execute(
-                    sqlalchemy.update(table)
-                    .where(table.c[SID_COLUMN] == sid)
-                    .values({STORE_TIMESTAMP_COLUMN: now_units})
+                    sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({TS_START_COLUMN: now_units})
                 )
                 repaired_any = True
                 counters[name].repaired += 1
                 violations.append(
-                    f"table {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns; "
-                    f"clamped to {now_ns} ns"
+                    f"table {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns; clamped to {now_ns} ns"
                 )
             else:
                 counters[name].conflicts += 1
-                violations.append(f"table {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns")
+                violations.append(f"table {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns")
     return repaired_any
 
 

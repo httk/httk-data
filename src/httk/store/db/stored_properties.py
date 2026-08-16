@@ -42,7 +42,7 @@ from sqlalchemy.sql.selectable import Exists, ScalarSelect
 from sqlalchemy.sql.visitors import replacement_traverse
 
 from httk.store.db.codecs import ValueCodec, codec_named
-from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, TS_START_COLUMN
 from httk.store.db.rows import RowHydrator
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
@@ -150,17 +150,17 @@ class _SqlScope:
     condition_depth: int = 0
 
     def field(self, name: str) -> _SqlValue:
-        if name == STORE_TIMESTAMP_COLUMN:
+        if name == TS_START_COLUMN:
             if not self.context._searcher._store.store_timestamps:
                 raise StoredPropertySqlConfigurationError(
-                    "store_timestamp queries require SqlStore(store_timestamps=True)"
+                    'ts_start queries require SqlStore(store_timestamps="creation")'
                 )
             if self.scalar_child is not None:
-                raise StoredPropertySqlConfigurationError("store_timestamp is only available on parent scopes")
+                raise StoredPropertySqlConfigurationError("ts_start is only available on parent scopes")
             return self.context._scoped_scalar(
                 self,
                 _SqlValue(
-                    self.alias.c[STORE_TIMESTAMP_COLUMN],
+                    self.alias.c[TS_START_COLUMN],
                     scope=self,
                     operand_converter=lambda value: ns_operand_to_store_units(
                         value, cast(int, self.context._searcher._store.store_timestamp_resolution)
@@ -669,7 +669,7 @@ class StoredPropertySqlPlan:
                 )
             timestamp_output = self.store.store_timestamps
             if timestamp_output:
-                searcher.output(cast(SqlColumn, variable.store_timestamp), "store_timestamp")
+                searcher.output(cast(SqlColumn, variable.ts_start), "ts_start")
             streams.append(
                 StoredPropertySqlCandidateStream(
                     backing.backing,
@@ -707,7 +707,7 @@ class StoredPropertySqlPlan:
         for name in self.definition.properties:
             if name in _CORE_PROPERTIES:
                 continue
-            if name == "_httk_store_timestamp":
+            if name == "_httk_ts_start":
                 if not self.store.store_timestamps:
                     row[name] = None
                 else:
@@ -720,7 +720,7 @@ class StoredPropertySqlPlan:
                         table = self.store._table(resolve_schema(backing).table_name)
                         with self.store._read_connection() as connection:
                             value = connection.execute(
-                                sqlalchemy.select(table.c[STORE_TIMESTAMP_COLUMN]).where(table.c[SID_COLUMN] == sid)
+                                sqlalchemy.select(table.c[TS_START_COLUMN]).where(table.c[SID_COLUMN] == sid)
                             ).scalar_one_or_none()
                         row[name] = (
                             None if value is None else int(value) * cast(int, self.store.store_timestamp_resolution)

@@ -18,7 +18,7 @@ from test_db_stored_properties import (
 from httk.store import PageOrder, UnsupportedQueryError
 from httk.store.db import SqlStore, stored_property_sql_plan
 from httk.store.db.clickhouse import ClickHouseUnsupportedQueryError
-from httk.store.db.mapping import STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import TS_START_COLUMN
 from httk.store.db.optimade import optimade_filter_searcher
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
@@ -98,10 +98,10 @@ def test_clickhouse_results_paging_and_reopen_are_stable(clickhouse_read_store: 
 
 def test_clickhouse_store_timestamp_column_is_populated_and_integral(clickhouse_read_store: SqlStore) -> None:
     table = clickhouse_read_store._table("read_record")
-    assert STORE_TIMESTAMP_COLUMN in table.c
+    assert TS_START_COLUMN in table.c
     with clickhouse_read_store._database.engine.connect() as connection:
         total, stamped = connection.execute(
-            sqlalchemy.text(f'SELECT count(), countIf("{STORE_TIMESTAMP_COLUMN}" IS NOT NULL) FROM "{table.name}"')
+            sqlalchemy.text(f'SELECT count(), countIf("{TS_START_COLUMN}" IS NOT NULL) FROM "{table.name}"')
         ).one()
     assert stamped == total == len(READ_ROWS)
 

@@ -244,9 +244,7 @@ def test_eager_cycles_raise_instead_of_returning_lazy_rows(database):
     schema = resolve_schema(CycleRecord)
     table = store._table(schema.table_name)
     with database.engine.begin() as connection:
-        connection.execute(
-            table.insert().values(sid=1, content_id="cycle", _httk_role=1, store_timestamp=0, next_sid=None)
-        )
+        connection.execute(table.insert().values(sid=1, content_id="cycle", _httk_role=1, ts_start=0, next_sid=None))
         connection.execute(table.update().where(table.c.sid == 1).values(next_sid=1))
     with pytest.raises(SchemaError, match=r"cyclic eager hydration.*CycleRecord.*sid 1"):
         store.fetch(CycleRecord, 1, eager=True)
@@ -260,9 +258,7 @@ def test_default_fetch_of_cyclic_graph_succeeds_with_proxies(database):
     schema = resolve_schema(CycleRecord)
     table = store._table(schema.table_name)
     with database.engine.begin() as connection:
-        connection.execute(
-            table.insert().values(sid=1, content_id="cycle", _httk_role=1, store_timestamp=0, next_sid=None)
-        )
+        connection.execute(table.insert().values(sid=1, content_id="cycle", _httk_role=1, ts_start=0, next_sid=None))
         connection.execute(table.update().where(table.c.sid == 1).values(next_sid=1))
     # The lazy default never eagerly walks the cycle; each hop is a fresh proxy.
     row = store.fetch(CycleRecord, 1)

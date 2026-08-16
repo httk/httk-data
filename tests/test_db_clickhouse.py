@@ -111,7 +111,7 @@ def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -
             "protocol": STORAGE_PROTOCOL_VERSION,
             "entry_declaration": '{"families":[],"format":2}',
             "write_profile": "bulk-fenced",
-            "store_timestamps": "v1:1000",
+            "store_timestamps": "v2:creation:1000",
         }
         database_uuid = keeper_database_uuid(connection)
         engine, engine_full = connection.execute(
@@ -395,7 +395,7 @@ def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
                     "protocol": STORAGE_PROTOCOL_VERSION,
                     "entry_declaration": '{"families":[],"format":2}',
                     "write_profile": "bulk-fenced",
-                    "store_timestamps": "v1:1000",
+                    "store_timestamps": "v2:creation:1000",
                 }
                 assert len(stamps) == 4
             finally:

@@ -7,7 +7,7 @@ import threading
 import time
 import typing
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 from httk.core import FracVector
 from httk.core.storage import StorageProjectionCycleError, resolve_storage_record
@@ -67,7 +67,9 @@ from .mapping import (
 
 __all__ = ["MongoStore", "StoreClockRegressionError"]
 
-_DOCUMENT_LAYOUT = "mongo-v2"
+# Bumped for the ``store_timestamp`` -> ``ts_start`` document-field rename and
+# the timestamp-mode marker, so mongo-v2 documents no longer validate.
+_DOCUMENT_LAYOUT = "mongo-v3"
 _RESERVED_PREFIX = "_httk_"
 _METADATA_KEYS = frozenset(
     {"_id", "protocol", "entry_declaration", "document_layout", "generation", "store_timestamps"}
@@ -106,7 +108,8 @@ class MongoStore:
     :param database: The MongoDB database wrapper.
     :param entry_records: The required entry-family declaration on first open.
     :param entry_families: Application-owned declarations which bypass global registration.
-    :param store_timestamps: Whether saved parent documents receive timestamps.
+    :param store_timestamps: The store-managed timestamp mode, one of ``"off"``,
+        ``"creation"``, or ``"versioned"`` (``"versioned"`` is not yet implemented).
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
@@ -124,17 +127,21 @@ class MongoStore:
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
         entry_families: Sequence[EntryFamilyDeclaration] | None = None,
-        store_timestamps: bool = True,
+        store_timestamps: Literal["versioned", "creation", "off"] = "creation",
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
         clock_regression_grace: bool = True,
     ) -> None:
+        if store_timestamps not in ("versioned", "creation", "off"):
+            raise ValueError('store_timestamps must be one of "versioned", "creation", or "off"')
         if (
             not isinstance(store_timestamp_resolution, int)
             or isinstance(store_timestamp_resolution, bool)
             or store_timestamp_resolution <= 0
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
+        if store_timestamps == "versioned":
+            raise NotImplementedError("versioned stores are not implemented yet")
         self._database = database
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
@@ -197,14 +204,22 @@ class MongoStore:
         return self.layout.entry_records
 
     @property
-    def store_timestamps(self) -> bool:
-        """Whether parent documents carry store-managed timestamps."""
+    def store_timestamp_mode(self) -> str:
+        """Return the store-managed timestamp mode, one of ``"off"``, ``"creation"``, or ``"versioned"``."""
         return self._store_timestamps
+
+    @property
+    def store_timestamps(self) -> bool:
+        """Whether parent documents carry store-managed timestamps.
+
+        Convenience for ``store_timestamp_mode != "off"``.
+        """
+        return self._store_timestamps != "off"
 
     @property
     def store_timestamp_resolution(self) -> int | None:
         """Return nanoseconds per stored timestamp unit, or ``None`` when disabled."""
-        return self._store_timestamp_resolution if self._store_timestamps else None
+        return self._store_timestamp_resolution if self.store_timestamps else None
 
     @property
     def _store_timestamp_state(self) -> str:
@@ -266,7 +281,7 @@ class MongoStore:
         if (
             parsed_timestamps is None
             or parsed_timestamps[0] != self._store_timestamps
-            or (parsed_timestamps[0] and parsed_timestamps[1] != self._store_timestamp_resolution)
+            or (parsed_timestamps[0] != "off" and parsed_timestamps[1] != self._store_timestamp_resolution)
         ):
             diff["declaration"] = {
                 "store_timestamps": {"expected": self._store_timestamp_state, "actual": persisted_timestamps}
@@ -398,8 +413,8 @@ class MongoStore:
                 requested.append(
                     (
                         name,
-                        validator_for(schema, store_timestamps=self._store_timestamps),
-                        index_specs_for(schema, store_timestamps=self._store_timestamps),
+                        validator_for(schema, store_timestamps=self.store_timestamps),
+                        index_specs_for(schema, store_timestamps=self.store_timestamps),
                     )
                 )
                 seen.add(name)
@@ -447,7 +462,7 @@ class MongoStore:
 
     def _initialize_store_timestamp_mark(self) -> None:
         """Derive the writable process-local timestamp mark from present collections."""
-        if not self._store_timestamps or self._allow_clock_regression:
+        if not self.store_timestamps or self._allow_clock_regression:
             self._store_timestamp_mark = None
             return
         maximum: int | None = None
@@ -460,17 +475,17 @@ class MongoStore:
             collection = self._database.database[name]
             document = collection.find_one(
                 {"_httk_role": {"$in": ["main", "dep"]}},
-                {"store_timestamp": 1},
-                sort=[("store_timestamp", -1)],
+                {"ts_start": 1},
+                sort=[("ts_start", -1)],
             )
-            if document is not None and document.get("store_timestamp") is not None:
-                value = int(document["store_timestamp"])
+            if document is not None and document.get("ts_start") is not None:
+                value = int(document["ts_start"])
                 maximum = value if maximum is None else max(maximum, value)
         self._store_timestamp_mark = maximum
 
     def _capture_store_timestamp(self) -> int | None:
         """Capture one guarded store-unit timestamp for a save."""
-        if not self._store_timestamps:
+        if not self.store_timestamps:
             return None
         return capture_store_timestamp(
             self._clock,
@@ -858,7 +873,7 @@ class MongoStore:
         sid = counter_next(self._database.database, schema.table_name, session=self._write_session())
         document: dict[str, Any] = {"_id": sid, "_httk_role": "main" if top_level else "dep", "f": f_document}
         if projection.store_timestamp is not None:
-            document["store_timestamp"] = projection.store_timestamp
+            document["ts_start"] = projection.store_timestamp
         if content_key is not None:
             document["content_id"] = content_key
         preflight_document(document, self._max_bson_size, record_type)
@@ -1172,8 +1187,8 @@ class MongoStore:
         :return: A new MongoDB searcher bound to this store.
         """
         if as_of is not None:
-            if not self._store_timestamps:
-                raise ValueError("as_of queries require MongoStore(store_timestamps=True)")
+            if not self.store_timestamps:
+                raise ValueError('as_of queries require MongoStore(store_timestamps="creation")')
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
         from .searcher import MongoSearcher
 

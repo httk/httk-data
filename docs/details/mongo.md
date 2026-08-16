@@ -129,7 +129,7 @@ running fsck repairs the main-role case.
 store = MongoStore(
     database,
     entry_records={},
-    store_timestamps=True,
+    store_timestamps="creation",
     store_timestamp_resolution=1_000,  # nanoseconds per stored unit; default: 1,000 (microseconds)
 )
 ```
@@ -143,7 +143,7 @@ historic query returns rows present at `T`:
 searcher = store.searcher()
 record = searcher.variable(StructureRecord)
 searcher.output(record, "record")
-searcher.add(record.store_timestamp <= "2026-01-01T00:00:00Z")
+searcher.add(record.ts_start <= "2026-01-01T00:00:00Z")
 rows = searcher.results(record=record)
 ```
 
@@ -153,11 +153,11 @@ The equivalent OPTIMADE filter is:
 from httk.store.mongo import optimade_filter_searcher
 
 rows = optimade_filter_searcher(
-    store, StructureRecord, '_httk_store_timestamp <= "2026-01-01T00:00:00Z"'
+    store, StructureRecord, '_httk_ts_start <= "2026-01-01T00:00:00Z"'
 )
 ```
 
-`present at time T` means exactly `store_timestamp <= T`. FIRST-STORED-WINS
+`present at time T` means exactly `ts_start <= T`. FIRST-STORED-WINS
 applies: a deduplication re-save does not replace the original timestamp, and
 promoting a dependency to a main row does not replace it. One timestamp is
 captured per save transaction and one per bulk batch, so all rows written by
@@ -184,7 +184,7 @@ report and confirm the skew before using it.
 The query stack also exposes `as_of=T` on stored-property federation
 `query()`/`fetch()` and on the general `FederatedStore.searcher()`. The serving
 layer accepts `_httk_as_of` and includes it in stable pagination plans. Stored
-federation is availability-first: a source with `store_timestamps=False`
+federation is availability-first: a source with `store_timestamps="off"`
 deliberately ignores the cutoff and serves that source's current state; sources
 with timestamps enabled apply their own-resolution cutoff. Existing layouts do
 not require an enable/disable migration for reading this capability.

@@ -644,13 +644,13 @@ class MongoVariable:
             raise AttributeError(name)
         if name == "sid":
             return self.sid
-        if name == "store_timestamp":
+        if name == "ts_start":
             if not self._searcher._store.store_timestamps:
-                raise AttributeError("store_timestamp queries require MongoStore(store_timestamps=True)")
+                raise AttributeError('ts_start queries require MongoStore(store_timestamps="creation")')
             return MongoField(
                 self,
-                "store_timestamp",
-                FieldSpec("store_timestamp", int, "scalar", ()),
+                "ts_start",
+                FieldSpec("ts_start", int, "scalar", ()),
                 operand_converter=lambda value: ns_operand_to_store_units(
                     value, cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
@@ -752,7 +752,7 @@ class MongoSearcher:
         if self._root is None:
             self._root = variable
         if self._as_of is not None:
-            self.add(cast(MongoField, variable.store_timestamp) <= self._as_of)
+            self.add(cast(MongoField, variable.ts_start) <= self._as_of)
         return variable
 
     def _root_sid_field(self) -> MongoField:
@@ -779,7 +779,7 @@ class MongoSearcher:
         variable._source = reference
         self._hidden_variables.append(variable)
         if self._as_of is not None:
-            self.add(cast(MongoField, variable.store_timestamp) <= self._as_of)
+            self.add(cast(MongoField, variable.ts_start) <= self._as_of)
         return variable
 
     def output(self, variable: MongoVariable | MongoField, name: str) -> None:
@@ -1054,8 +1054,8 @@ def _scalar_value(document: dict[str, Any], field: MongoField) -> Any:
     if field._key_path == "content_id":
         value = source.get("content_id")
         return None if value is None else field._presentation_prefix + value
-    if field._key_path == "store_timestamp":
-        value = source.get("store_timestamp")
+    if field._key_path == "ts_start":
+        value = source.get("ts_start")
         return (
             None
             if value is None

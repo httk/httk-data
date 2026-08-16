@@ -31,6 +31,6 @@ def test_federated_store_timestamp_predicate_replays_to_each_source() -> None:
         for cutoff in (2_500_000, "1970-01-01T00:00:00.002500Z"):
             searcher = federation.searcher()
             variable = searcher.variable(FederatedTimestampRecord)
-            searcher.add(variable.store_timestamp <= cutoff)
+            searcher.add(variable.ts_start <= cutoff)
             result = searcher.results(record=variable, origin=searcher.origin)
             assert [(row.origin, row.record.value) for row in result] == [("first", 1), ("second", 3)]

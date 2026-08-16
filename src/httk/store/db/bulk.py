@@ -113,7 +113,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
-    STORE_TIMESTAMP_COLUMN,
+    TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
@@ -1233,7 +1233,7 @@ class BulkIngest:
         self._next_sid[table_name] = sid + 1
         row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
         if projection.store_timestamp is not None:
-            row[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
+            row[TS_START_COLUMN] = projection.store_timestamp
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             self._content_index[table_name][key] = sid
@@ -2274,9 +2274,7 @@ class BulkIngest:
         stage = self._create_stage(table, rows)
         try:
             value_columns = [
-                column.name
-                for column in table.columns
-                if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+                column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN)
             ]
             condition = sqlalchemy.and_(*(stage.c[name].is_not_distinct_from(table.c[name]) for name in value_columns))
             statement = (
@@ -2618,9 +2616,5 @@ class BulkIngest:
 def _value_tuple(row: Mapping[str, Any]) -> tuple[Any, ...]:
     """The whole-parent-column dedup key of a by_value row (its sid excluded)."""
     return tuple(
-        sorted(
-            (name, value)
-            for name, value in row.items()
-            if name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
-        )
+        sorted((name, value) for name, value in row.items() if name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN))
     )

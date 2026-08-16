@@ -39,8 +39,8 @@ class FederatedCalculation:
                 "_httk_label": PropertyDefinition.from_simple(
                     "_httk_label", description="A label stored for federation tests."
                 ),
-                "_httk_store_timestamp": PropertyDefinition.from_simple(
-                    "_httk_store_timestamp", description="A store timestamp test filter.", fulltype="timestamp"
+                "_httk_ts_start": PropertyDefinition.from_simple(
+                    "_httk_ts_start", description="A store timestamp test filter.", fulltype="timestamp"
                 ),
             }
         )
@@ -78,7 +78,7 @@ def _modified_query(context, operator: str, literal: object):
 
 
 def _store_timestamp_query(context, operator: str, literal: object):
-    return context.compare(context.field("store_timestamp"), operator, context.constant(literal))
+    return context.compare(context.field("ts_start"), operator, context.constant(literal))
 
 
 @dataclass(frozen=True)
@@ -99,10 +99,10 @@ class FederationFirst:
             query=_modified_query,
             sort=lambda context: context.field("modified"),
         ),
-        "_httk_store_timestamp": StoredPropertyProjection(
+        "_httk_ts_start": StoredPropertyProjection(
             response=lambda _record: None,
             query=_store_timestamp_query,
-            sort=lambda context: context.field("store_timestamp"),
+            sort=lambda context: context.field("ts_start"),
         ),
         "_httk_label": StoredPropertyProjection(
             response=_label_value,
@@ -199,7 +199,7 @@ def test_snapshot_cutoff_ns_uses_the_coarsest_capable_source_and_skips_disabled_
         store = SqlStore(
             database,
             entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
-            store_timestamps=False,
+            store_timestamps="off",
         )
         federation = StoredEntryFederation((StoredEntrySource(store, FederatedCalculation, "disabled", "disabled:"),))
         assert federation.snapshot_cutoff_ns(3_456_789_123) is None
@@ -266,7 +266,7 @@ def test_stored_entry_federation_filters_store_timestamp(databases):
         second_clock=3_000_000,
     )
 
-    page = federation.query('_httk_store_timestamp <= "1970-01-01T00:00:00.002500Z"', limit=10)
+    page = federation.query('_httk_ts_start <= "1970-01-01T00:00:00.002500Z"', limit=10)
 
     assert [row["immutable_id"] for row in page.rows] == ["first"]
 
@@ -282,9 +282,9 @@ def test_stored_entry_federation_sorts_store_timestamp_in_nanoseconds(databases)
         second_resolution=1000,
     )
 
-    page = federation.query(sort=(("_httk_store_timestamp", False),), limit=10)
+    page = federation.query(sort=(("_httk_ts_start", False),), limit=10)
 
-    assert [(row["immutable_id"], row["_httk_store_timestamp"]) for row in page.rows] == [
+    assert [(row["immutable_id"], row["_httk_ts_start"]) for row in page.rows] == [
         ("second", 1_000_000),
         ("first", 2_000_000),
     ]

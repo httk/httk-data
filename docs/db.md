@@ -22,7 +22,7 @@ Records are content-addressed (`content_id`) as well as locally numbered
 (`sid`), and identical content saves to one row however many times it arrives.
 
 Store timestamps are enabled by default. They support historic predicates such
-as `store_timestamp <= T`; configure their unit size with
+as `ts_start <= T`; configure their unit size with
 `store_timestamp_resolution` (default: microseconds, `time_ns() // 1000`).
 The [detailed guide](details/db.md#store-timestamps) covers the query syntax,
 deduplication semantics, clock guard, and fsck repair behavior.

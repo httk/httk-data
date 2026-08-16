@@ -119,9 +119,9 @@ def test_timestamp_mapping_is_flagged_and_accepts_small_python_ints() -> None:
     schema = resolve_schema(MongoMappingRecord)
     enabled = validator_for(schema, store_timestamps=True)["$jsonSchema"]
     disabled = validator_for(schema, store_timestamps=False)["$jsonSchema"]
-    assert enabled["properties"]["store_timestamp"]["bsonType"] == ["long", "int"]
-    assert "store_timestamp" in enabled["required"]
-    assert "store_timestamp" not in disabled["properties"]
-    assert "store_timestamp" not in disabled["required"]
-    assert any(spec.keys == (("store_timestamp", 1),) for spec in index_specs_for(schema))
-    assert not any(spec.keys == (("store_timestamp", 1),) for spec in index_specs_for(schema, store_timestamps=False))
+    assert enabled["properties"]["ts_start"]["bsonType"] == ["long", "int"]
+    assert "ts_start" in enabled["required"]
+    assert "ts_start" not in disabled["properties"]
+    assert "ts_start" not in disabled["required"]
+    assert any(spec.keys == (("ts_start", 1),) for spec in index_specs_for(schema))
+    assert not any(spec.keys == (("ts_start", 1),) for spec in index_specs_for(schema, store_timestamps=False))

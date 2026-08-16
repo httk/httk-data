@@ -120,22 +120,22 @@ def _check_future_timestamps(
     repaired_any = False
     for name in schemas:
         collection = store._database.database[name]
-        for document in collection.find({"store_timestamp": {"$gt": limit_units}}, {"_id": 1, "store_timestamp": 1}):
+        for document in collection.find({"ts_start": {"$gt": limit_units}}, {"_id": 1, "ts_start": 1}):
             counters[name].examined += 1
             sid = document["_id"]
-            future_ns = int(document["store_timestamp"]) * resolution
+            future_ns = int(document["ts_start"]) * resolution
             limit_ns = limit_units * resolution
             if clamp:
-                collection.update_one({"_id": sid}, {"$set": {"store_timestamp": now_units}})
+                collection.update_one({"_id": sid}, {"$set": {"ts_start": now_units}})
                 repaired_any = True
                 counters[name].repaired += 1
                 violations.append(
-                    f"collection {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns; "
+                    f"collection {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns; "
                     f"clamped to {now_ns} ns"
                 )
             else:
                 counters[name].conflicts += 1
-                violations.append(f"collection {name!r} sid {sid} store_timestamp {future_ns} ns exceeds {limit_ns} ns")
+                violations.append(f"collection {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns")
     if clamp and repaired_any:
         store._initialize_store_timestamp_mark()
 

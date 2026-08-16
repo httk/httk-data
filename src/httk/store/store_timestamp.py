@@ -61,24 +61,37 @@ def advance_store_timestamp_mark(mark: int | None, captured: int | None, *, allo
     return captured if mark is None else max(mark, captured)
 
 
-def encode_store_timestamp_state(enabled: bool, resolution: int) -> str:
-    """Encode the persisted timestamp configuration marker."""
-    return f"v1:{resolution}" if enabled else "off"
+def encode_store_timestamp_state(mode: str, resolution: int | None) -> str:
+    """Encode the persisted timestamp configuration marker.
+
+    :param mode: the timestamp mode, one of ``"off"``, ``"creation"``, or
+        ``"versioned"``.
+    :param resolution: the store-unit resolution in nanoseconds, ignored when
+        ``mode`` is ``"off"``.
+    :return: the persisted marker string.
+    """
+    return "off" if mode == "off" else f"v2:{mode}:{resolution}"
 
 
-def parse_store_timestamp_state(value: object) -> tuple[bool, int | None] | None:
-    """Parse a persisted timestamp marker, returning ``None`` for unknown values."""
+def parse_store_timestamp_state(value: object) -> tuple[str, int | None] | None:
+    """Parse a persisted timestamp marker, returning ``None`` for unknown values.
+
+    :param value: the persisted marker value.
+    :return: ``("off", None)`` for ``"off"``; ``(mode, resolution)`` for a
+        recognized ``"v2:<mode>:<resolution>"`` marker; ``None`` for anything
+        else (including obsolete ``"v1:*"`` markers).
+    """
     if value == "off":
-        return False, None
-    if isinstance(value, str) and value.startswith("v1:"):
-        encoded_resolution = value[3:]
+        return "off", None
+    if isinstance(value, str) and value.startswith(("v2:creation:", "v2:versioned:")):
+        _, mode, encoded_resolution = value.split(":", 2)
         try:
             resolution = int(encoded_resolution)
         except ValueError:
             return None
         if resolution <= 0 or str(resolution) != encoded_resolution:
             return None
-        return True, resolution
+        return mode, resolution
     return None
 
 

@@ -66,7 +66,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
-    STORE_TIMESTAMP_COLUMN,
+    TS_START_COLUMN,
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
@@ -695,7 +695,7 @@ class _WorkerEncoder:
         self._next_sid[table_name] = sid + 1
         row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
         if self._config.store_timestamp is not None:
-            row[STORE_TIMESTAMP_COLUMN] = self._config.store_timestamp
+            row[TS_START_COLUMN] = self._config.store_timestamp
         if key is not None:
             row[CONTENT_ID_COLUMN] = key
             for field_name, column_name in _plain_float_skip_fields(record_type):
@@ -1313,9 +1313,7 @@ class _Merger:
 
     def _collapse_by_value(self, table: sqlalchemy.Table, schema: TableSchema) -> bool:
         value_columns = [
-            column.name
-            for column in table.columns
-            if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+            column.name for column in table.columns if column.name not in (SID_COLUMN, ROLE_COLUMN, TS_START_COLUMN)
         ]
         while True:
             keep = (

@@ -34,24 +34,24 @@ def test_mongo_timestamp_save_dedup_query_and_sort(mongo_test_database):
     store._clock = lambda: 1_000_000
     sid = store.save(MongoTimestampRecord(1))
     collection = mongo_test_database.database[collection_name_for(resolve_schema(MongoTimestampRecord))]
-    before = collection.find_one({"_id": sid}, {"store_timestamp": 1})
-    assert before["store_timestamp"] == 1000
+    before = collection.find_one({"_id": sid}, {"ts_start": 1})
+    assert before["ts_start"] == 1000
 
     store._clock = lambda: 2_000_000
     assert store.save(MongoTimestampRecord(1)) == sid
-    assert collection.find_one({"_id": sid}, {"store_timestamp": 1}) == before
+    assert collection.find_one({"_id": sid}, {"ts_start": 1}) == before
     store.save(MongoTimestampRecord(2))
 
     query = store.searcher()
     variable = query.variable(MongoTimestampRecord)
     query.output(variable, "record")
-    query.add(variable.store_timestamp <= 1_000_499)
-    query.add_sort(variable.store_timestamp)
+    query.add(variable.ts_start <= 1_000_499)
+    query.add_sort(variable.ts_start)
     assert [row[0][0].value for row in query] == [1]
 
     scalar = store.searcher()
     scalar_variable = scalar.variable(MongoTimestampRecord)
-    scalar.output(scalar_variable.store_timestamp, "stamp")
+    scalar.output(scalar_variable.ts_start, "stamp")
     assert [row[0][0] for row in scalar] == [1_000_000, 2_000_000]
 
     for operand in (
@@ -62,10 +62,10 @@ def test_mongo_timestamp_save_dedup_query_and_sort(mongo_test_database):
         candidate = store.searcher()
         item = candidate.variable(MongoTimestampRecord)
         candidate.output(item, "record")
-        candidate.add(item.store_timestamp <= operand)
+        candidate.add(item.ts_start <= operand)
         assert list(candidate)
     with pytest.raises(ValueError, match="timezone-aware"):
-        _ = variable.store_timestamp <= datetime.datetime(1970, 1, 1)  # noqa: DTZ001
+        _ = variable.ts_start <= datetime.datetime(1970, 1, 1)  # noqa: DTZ001
 
 
 def test_mongo_as_of_reference_lookup_and_pagination(mongo_test_database):
@@ -95,17 +95,17 @@ def test_mongo_timestamp_layout_guard_and_clock_regression(mongo_test_database):
     store = MongoStore(mongo_test_database, entry_records={})
     assert (
         mongo_test_database.database["_httk_store_metadata"].find_one({"_id": "layout"})["store_timestamps"]
-        == "v1:1000"
+        == "v2:creation:1000"
     )
     with pytest.raises(StorageLayoutUpgradeRequiredError, match="store_timestamps"):
-        MongoStore(mongo_test_database, store_timestamps=False)
+        MongoStore(mongo_test_database, store_timestamps="off")
     mongo_test_database.database["_httk_store_metadata"].update_one(
-        {"_id": "layout"}, {"$set": {"store_timestamps": "v1:01000"}}
+        {"_id": "layout"}, {"$set": {"store_timestamps": "v2:creation:01000"}}
     )
     with pytest.raises(StorageLayoutUpgradeRequiredError, match="store_timestamps"):
         MongoStore(mongo_test_database, entry_records={})
     mongo_test_database.database["_httk_store_metadata"].update_one(
-        {"_id": "layout"}, {"$set": {"store_timestamps": "v1:1000"}}
+        {"_id": "layout"}, {"$set": {"store_timestamps": "v2:creation:1000"}}
     )
 
     store._clock = lambda: 10_000
@@ -121,11 +121,11 @@ def test_mongo_timestamp_fsck_future_and_clamp(mongo_test_database):
     store._clock = lambda: 1_000_000_000
     sid = store.save(MongoTimestampRecord(1))
     collection = mongo_test_database.database[collection_name_for(resolve_schema(MongoTimestampRecord))]
-    collection.update_one({"_id": sid}, {"$set": {"store_timestamp": 10_000_000}})
+    collection.update_one({"_id": sid}, {"$set": {"ts_start": 10_000_000}})
     store = MongoStore(mongo_test_database, entry_records={})
     store._clock = lambda: 1_000_000_000
     report = store.fsck(repair=False, collect_garbage=False, known_types=(MongoTimestampRecord,))
-    assert report.violations and "store_timestamp" in report.violations[0]
+    assert report.violations and "ts_start" in report.violations[0]
     repaired = store.fsck(
         repair=True,
         collect_garbage=False,
@@ -149,7 +149,7 @@ def test_mongo_timestamp_transaction_pins_and_rollback_keeps_mark(mongo_test_dat
         with store.transaction():
             store.save(MongoTimestampRecord(2))
     collection = mongo_test_database.database[collection_name_for(resolve_schema(MongoTimestampRecord))]
-    assert [item["store_timestamp"] for item in collection.find({}, {"store_timestamp": 1}).sort("_id", 1)] == [
+    assert [item["ts_start"] for item in collection.find({}, {"ts_start": 1}).sort("_id", 1)] == [
         1000,
         1000,
     ]
@@ -164,7 +164,7 @@ def test_mongo_timestamp_transaction_pins_and_rollback_keeps_mark(mongo_test_dat
 
 def test_mongo_timestamp_hwm_ignores_unrelated_collection(mongo_test_database):
     MongoStore(mongo_test_database, entry_records={})
-    mongo_test_database.database["unrelated"].insert_one({"store_timestamp": 10_000_000})
+    mongo_test_database.database["unrelated"].insert_one({"ts_start": 10_000_000})
     reopened = MongoStore(mongo_test_database, entry_records={})
     reopened._clock = lambda: 1_000_000
     reopened.save(MongoTimestampRecord(1))
@@ -175,11 +175,11 @@ def test_mongo_timestamp_nondivisor_future_limit(mongo_test_database):
     store._clock = lambda: 1
     sid = store.save(MongoTimestampRecord(1))
     collection = mongo_test_database.database[collection_name_for(resolve_schema(MongoTimestampRecord))]
-    collection.update_one({"_id": sid}, {"$set": {"store_timestamp": 666_666_667}})
+    collection.update_one({"_id": sid}, {"$set": {"ts_start": 666_666_667}})
     assert store.fsck(repair=False, collect_garbage=False, known_types=(MongoTimestampRecord,)).violations == ()
-    collection.update_one({"_id": sid}, {"$set": {"store_timestamp": 666_666_668}})
+    collection.update_one({"_id": sid}, {"$set": {"ts_start": 666_666_668}})
     report = store.fsck(repair=False, collect_garbage=False, known_types=(MongoTimestampRecord,))
-    assert report.violations and "store_timestamp" in report.violations[0]
+    assert report.violations and "ts_start" in report.violations[0]
 
 
 def test_mongo_carried_federation_timestamp_skips_lookup(mongo_test_database, monkeypatch):
@@ -201,6 +201,6 @@ def test_mongo_carried_federation_timestamp_skips_lookup(mongo_test_database, mo
     fetch_calls = calls
     calls = 0
     federation = StoredEntryFederation((StoredEntrySource(store, FederatedCalculation, "source", "source:"),))
-    page = federation.query(sort=(("_httk_store_timestamp", False),), limit=1)
+    page = federation.query(sort=(("_httk_ts_start", False),), limit=1)
     assert calls == fetch_calls
-    assert page.rows[0]["_httk_store_timestamp"] == 1_000_000
+    assert page.rows[0]["_httk_ts_start"] == 1_000_000

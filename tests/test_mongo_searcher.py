@@ -10,8 +10,19 @@ import pytest
 
 from httk.store.db import Database, SqlStore
 from httk.store.mongo import MongoSearcher
-from httk.store.query import MultipleResultsError, NoResultError, PageOrder, PaginationCursorError, UnsupportedQueryError
-from httk.store.query.paging_tokens import _decode_continuation, _encode_continuation, _encode_payload, _plan_fingerprint
+from httk.store.query import (
+    MultipleResultsError,
+    NoResultError,
+    PageOrder,
+    PaginationCursorError,
+    UnsupportedQueryError,
+)
+from httk.store.query.paging_tokens import (
+    _decode_continuation,
+    _encode_continuation,
+    _encode_payload,
+    _plan_fingerprint,
+)
 
 
 @dataclass(frozen=True)

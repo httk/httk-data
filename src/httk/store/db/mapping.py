@@ -44,7 +44,7 @@ __all__ = [
     "DISPATCH_CONTENT_ID_COLUMN",
     "ROLE_COLUMN",
     "SID_COLUMN",
-    "STORE_TIMESTAMP_COLUMN",
+    "TS_START_COLUMN",
     "backing_dispatch_column_name",
     "dispatch_table_for",
     "entry_dispatch_table_name",
@@ -61,8 +61,8 @@ CONTENT_ID_COLUMN: Final = "content_id"
 ROLE_COLUMN: Final = "_httk_role"
 """The permanentization role of a parent record — ``0`` dependency, ``1`` main."""
 
-STORE_TIMESTAMP_COLUMN: Final = "store_timestamp"
-"""The store-managed integer timestamp on every parent record table."""
+TS_START_COLUMN: Final = "ts_start"
+"""The store-managed integer creation timestamp on every parent record table."""
 
 DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
 """The content identity primary key of an entry-family dispatch table."""
@@ -214,8 +214,8 @@ def _build_parent_table(
         sqlalchemy.CheckConstraint(f"{ROLE_COLUMN} IN (0, 1)", name=_index_name("ck", name, (ROLE_COLUMN, "valid")))
     )
     if store_timestamps:
-        items.append(sqlalchemy.Column(STORE_TIMESTAMP_COLUMN, sqlalchemy.BigInteger, nullable=False))
-        items.append(sqlalchemy.Index(_index_name("ix", name, (STORE_TIMESTAMP_COLUMN,)), STORE_TIMESTAMP_COLUMN))
+        items.append(sqlalchemy.Column(TS_START_COLUMN, sqlalchemy.BigInteger, nullable=False))
+        items.append(sqlalchemy.Index(_index_name("ix", name, (TS_START_COLUMN,)), TS_START_COLUMN))
     if schema.dedup == "content_id":
         items.append(sqlalchemy.Column(CONTENT_ID_COLUMN, sqlalchemy.Text, nullable=False))
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))

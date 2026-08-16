@@ -45,9 +45,10 @@ __all__ = [
     "read_store_metadata",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.5.0"
-# This bump makes entry declarations self-describing and permits explicit
-# application-owned family bindings without global registry discovery.
+STORAGE_PROTOCOL_VERSION: Final = "v3.0.0"
+# This bump renames the store-managed ``store_timestamp`` column to ``ts_start``
+# and records the timestamp mode (off/creation/versioned) in the persisted
+# marker, so v2 layouts and markers no longer parse.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"

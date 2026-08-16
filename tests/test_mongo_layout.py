@@ -77,7 +77,7 @@ def test_first_open_stamps_six_keys_and_reopen_trusts(mongo_test_database) -> No
         "store_timestamps",
     }
     assert document["protocol"] == "v2.2.0"
-    assert document["document_layout"] == "mongo-v2"
+    assert document["document_layout"] == "mongo-v3"
     assert MongoStore(mongo_test_database).layout == store.layout
 
 

@@ -152,7 +152,7 @@ class _Candidate:
     sid: int
     content_id: str
     sort_values: tuple[Any, ...]
-    store_timestamp: int | None = None
+    ts_start: int | None = None
 
     @property
     def public_id(self) -> str:
@@ -547,7 +547,7 @@ class StoredEntryFederation:
             candidate.stream.backing,
             record,
             public_id=candidate.public_id,
-            store_timestamp=candidate.store_timestamp,
+            store_timestamp=candidate.ts_start,
         )
         return MappingProxyType(dict(row))
 

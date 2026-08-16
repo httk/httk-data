@@ -161,8 +161,8 @@ def optimade_filter_searcher(
     property_fulltypes.update({name: fulltype for name, _spec, fulltype in served})
     property_keys = {name: spec.field for name, spec, _fulltype in served}
     if store.store_timestamps:
-        property_fulltypes[f"{prefix}store_timestamp"] = "integer"
-        property_keys[f"{prefix}store_timestamp"] = "store_timestamp"
+        property_fulltypes[f"{prefix}ts_start"] = "integer"
+        property_keys[f"{prefix}ts_start"] = "ts_start"
     if definition is not None:
         for name, prop in definition.properties.items():
             if name in ("id", "type"):

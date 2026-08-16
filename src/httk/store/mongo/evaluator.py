@@ -49,7 +49,7 @@ class MongoScope:
 class MongoValue:
     """A field, aggregate, null, or literal value in the neutral AST."""
 
-    kind: Literal["field", "store_timestamp", "present", "constant", "null", "count", "distinct_count"]
+    kind: Literal["field", "ts_start", "present", "constant", "null", "count", "distinct_count"]
     scope: MongoScope | None = None
     field: str | None = None
     spec: FieldSpec | None = None
@@ -209,7 +209,7 @@ def _eval_value(
         return value.literal
     if value.kind == "null":
         return None
-    if value.kind == "store_timestamp":
+    if value.kind == "ts_start":
         if store_timestamp_resolver is None:
             return None
         return store_timestamp_resolver()

@@ -152,14 +152,14 @@ class _MongoQueryContext:
     def _field(self, scope: MongoScope, name: str) -> MongoValue:
         if name.startswith("__content_id__"):
             return MongoValue("field", scope=scope, field=name)
-        if name == "store_timestamp":
+        if name == "ts_start":
             if self._store is None or not self._store.store_timestamps:
                 raise MongoStoredPropertyConfigurationError(
-                    "store_timestamp queries require MongoStore(store_timestamps=True)"
+                    'ts_start queries require MongoStore(store_timestamps="creation")'
                 )
             if scope.parent is not None:
-                raise MongoStoredPropertyConfigurationError("store_timestamp is only available on parent scopes")
-            return MongoValue("store_timestamp", scope=scope, field=name)
+                raise MongoStoredPropertyConfigurationError("ts_start is only available on parent scopes")
+            return MongoValue("ts_start", scope=scope, field=name)
         if scope.scalar_child:
             if scope.relationship is None or name not in {"value", scope.relationship.field}:
                 raise MongoStoredPropertyConfigurationError("scalar child scopes use field('value')")
@@ -202,12 +202,12 @@ class _MongoQueryContext:
 
     @staticmethod
     def _coerce_literals(left: MongoValue, right: MongoValue) -> tuple[MongoValue, MongoValue]:
-        if left.kind == "store_timestamp" and right.kind == "constant" and right.literal is not None:
+        if left.kind == "ts_start" and right.kind == "constant" and right.literal is not None:
             assert left.scope is not None
             store = left.scope.context._store
             assert store is not None
             right = replace(right, literal=ns_operand_to_store_units(right.literal, store.store_timestamp_resolution))
-        elif right.kind == "store_timestamp" and left.kind == "constant" and left.literal is not None:
+        elif right.kind == "ts_start" and left.kind == "constant" and left.literal is not None:
             assert right.scope is not None
             store = right.scope.context._store
             assert store is not None
@@ -264,7 +264,7 @@ class _ConstantSortSearcher:
                 "sid",
                 "content_id",
                 *(f"sort_{index}" for index in range(len(self._sort))),
-                *(("store_timestamp",) if tail else ()),
+                *(("ts_start",) if tail else ()),
             )
             yield SearchResult((result.values[0], result.values[1], *sort_values, *tail), names)
 
@@ -341,7 +341,7 @@ class MongoStoredPropertyPlan:
                 searcher.output(value, f"sort_{index}")
             timestamp_output = self.store.store_timestamps
             if timestamp_output:
-                searcher.output(cast(MongoField, variable.store_timestamp), "store_timestamp")
+                searcher.output(cast(MongoField, variable.ts_start), "ts_start")
             candidate_searcher: Any = (
                 _ConstantSortSearcher(searcher, sort, self.entry_type)
                 if any(sort_name == "type" for sort_name, _descending in sort)
@@ -384,7 +384,7 @@ class MongoStoredPropertyPlan:
         result: dict[str, Any] = {"id": content_id(record) if public_id is None else public_id, "type": self.entry_type}
         for name in self.definition.properties:
             if name not in _CORE_PROPERTIES:
-                if name == "_httk_store_timestamp":
+                if name == "_httk_ts_start":
                     if store_timestamp is not None:
                         result[name] = store_timestamp
                     elif not self.store.store_timestamps:
@@ -395,10 +395,10 @@ class MongoStoredPropertyPlan:
                             None
                             if sid is None
                             else self.store._database.database[collection_name_for(resolve_schema(backing))].find_one(
-                                {"_id": sid}, {"store_timestamp": 1}, **self.store._session_kwargs()
+                                {"_id": sid}, {"ts_start": 1}, **self.store._session_kwargs()
                             )
                         )
-                        value = None if found is None else found.get("store_timestamp")
+                        value = None if found is None else found.get("ts_start")
                         result[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
                     continue
                 projection = configured.projections.get(name)
@@ -444,9 +444,9 @@ class MongoStoredPropertyPlan:
                 def resolve_timestamp() -> object:
                     if "value" not in timestamp:
                         found = self.store._database.database[collection_name_for(resolve_schema(cls))].find_one(
-                            {"_id": sid}, {"store_timestamp": 1}, **self.store._session_kwargs()
+                            {"_id": sid}, {"ts_start": 1}, **self.store._session_kwargs()
                         )
-                        timestamp["value"] = None if found is None else found.get("store_timestamp")
+                        timestamp["value"] = None if found is None else found.get("ts_start")
                     return timestamp["value"]
 
                 return (

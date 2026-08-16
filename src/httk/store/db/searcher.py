@@ -75,7 +75,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 import sqlalchemy
 
 from httk.store.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
-from httk.store.db.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import SID_COLUMN, TS_START_COLUMN
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.store_timestamp import ns_operand_to_store_units
@@ -627,12 +627,12 @@ class SqlVariable:
             # The store-managed integer primary key ('sid' is a reserved field
             # name, so this never shadows a stored field).
             return SqlColumn(self._searcher, self._alias.c[SID_COLUMN])
-        if name == STORE_TIMESTAMP_COLUMN:
+        if name == TS_START_COLUMN:
             if not self._searcher._store.store_timestamps:
-                raise AttributeError("store_timestamp queries require SqlStore(store_timestamps=True)")
+                raise AttributeError('ts_start queries require SqlStore(store_timestamps="creation")')
             return SqlColumn(
                 self._searcher,
-                self._alias.c[STORE_TIMESTAMP_COLUMN],
+                self._alias.c[TS_START_COLUMN],
                 variable=self,
                 operand_converter=lambda value: ns_operand_to_store_units(
                     value, cast(int, self._searcher._store.store_timestamp_resolution)
@@ -711,7 +711,7 @@ class SqlVariable:
             self._reference_variables[spec.field] = sub
             self._joins.append((alias, onclause, sub))
             if self._searcher._as_of is not None:
-                self._searcher.add(cast(SqlColumn, sub.store_timestamp) <= self._searcher._as_of)
+                self._searcher.add(cast(SqlColumn, sub.ts_start) <= self._searcher._as_of)
         return sub
 
     def _flat_joins(self) -> Iterator[tuple[sqlalchemy.FromClause, sqlalchemy.ColumnElement[bool]]]:
@@ -786,7 +786,7 @@ class SqlSearcher:
         variable = SqlVariable(self, target, schema, alias)
         self._variables.append(variable)
         if self._as_of is not None:
-            self.add(cast(SqlColumn, variable.store_timestamp) <= self._as_of)
+            self.add(cast(SqlColumn, variable.ts_start) <= self._as_of)
         return variable
 
     def output(self, variable: "SqlVariable | SqlColumn", name: str) -> None:

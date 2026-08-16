@@ -83,7 +83,7 @@ from httk.store.db.mapping import (
     DISPATCH_CONTENT_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
-    STORE_TIMESTAMP_COLUMN,
+    TS_START_COLUMN,
     backing_dispatch_column_name,
     dispatch_table_for,
     entry_dispatch_table_name,
@@ -176,7 +176,8 @@ class SqlStore:
     :param database: The database used for storage.
     :param entry_records: The required entry-family declaration when first opening a database.
     :param entry_families: Application-owned declarations which bypass global registration.
-    :param store_timestamps: Whether parent rows carry store-managed timestamps.
+    :param store_timestamps: The store-managed timestamp mode, one of ``"off"``,
+        ``"creation"``, or ``"versioned"`` (``"versioned"`` is not yet implemented).
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
@@ -196,17 +197,21 @@ class SqlStore:
         *,
         entry_records: Mapping[type, type | tuple[type, ...]] | None = None,
         entry_families: Sequence[EntryFamilyDeclaration] | None = None,
-        store_timestamps: bool = True,
+        store_timestamps: Literal["versioned", "creation", "off"] = "creation",
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
         clock_regression_grace: bool = True,
     ) -> None:
+        if store_timestamps not in ("versioned", "creation", "off"):
+            raise ValueError('store_timestamps must be one of "versioned", "creation", or "off"')
         if (
             not isinstance(store_timestamp_resolution, int)
             or isinstance(store_timestamp_resolution, bool)
             or store_timestamp_resolution <= 0
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
+        if store_timestamps == "versioned":
+            raise NotImplementedError("versioned stores are not implemented yet")
         self._database = database
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
@@ -266,14 +271,22 @@ class SqlStore:
         return self._write_profile
 
     @property
-    def store_timestamps(self) -> bool:
-        """Whether parent rows carry store-managed timestamps."""
+    def store_timestamp_mode(self) -> str:
+        """Return the store-managed timestamp mode, one of ``"off"``, ``"creation"``, or ``"versioned"``."""
         return self._store_timestamps
+
+    @property
+    def store_timestamps(self) -> bool:
+        """Whether parent rows carry store-managed timestamps.
+
+        Convenience for ``store_timestamp_mode != "off"``.
+        """
+        return self._store_timestamps != "off"
 
     @property
     def store_timestamp_resolution(self) -> int | None:
         """Return nanoseconds per stored timestamp unit, or ``None`` when disabled."""
-        return self._store_timestamp_resolution if self._store_timestamps else None
+        return self._store_timestamp_resolution if self.store_timestamps else None
 
     @property
     def _store_timestamp_state(self) -> str:
@@ -348,7 +361,7 @@ class SqlStore:
         if not objects_before:
             if supplied is None:
                 raise TypeError("entry_records or entry_families is required when opening an uninitialized database")
-            expected = expected_metadata(supplied, store_timestamps=self._store_timestamps)
+            expected = expected_metadata(supplied, store_timestamps=self.store_timestamps)
             metadata_table = expected.tables[METADATA_TABLE_NAME]
             if self.backend_facts.metadata_backend == "keepermap":
                 from httk.store.db.clickhouse import bootstrap_fence, keeper_database_uuid
@@ -540,7 +553,7 @@ class SqlStore:
         elif persisted_timestamps is None:
             diff["declaration"] = {"store_timestamps": {"expected": self._store_timestamp_state, "actual": None}}
         elif effective_timestamps != self._store_timestamps or (
-            effective_timestamps and effective_resolution != self._store_timestamp_resolution
+            effective_timestamps != "off" and effective_resolution != self._store_timestamp_resolution
         ):
             diff["declaration"] = {
                 "store_timestamps": {
@@ -612,7 +625,7 @@ class SqlStore:
             raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
         self._install_layout(
             persisted,
-            expected_metadata(persisted, store_timestamps=self._store_timestamps),
+            expected_metadata(persisted, store_timestamps=self.store_timestamps),
             names_before,
         )
         self._initialize_store_timestamp_mark(connection)
@@ -654,7 +667,7 @@ class SqlStore:
 
     def _initialize_store_timestamp_mark(self, connection: sqlalchemy.Connection) -> None:
         """Derive the writable process-local timestamp mark from present parent tables."""
-        if not self._store_timestamps or self._allow_clock_regression:
+        if not self.store_timestamps or self._allow_clock_regression:
             self._store_timestamp_mark = None
             return
         maximum: int | None = None
@@ -669,18 +682,16 @@ class SqlStore:
             except SQLAlchemyError:
                 continue
         for name, table in tables.items():
-            if name not in durable_tables or STORE_TIMESTAMP_COLUMN not in table.c or ROLE_COLUMN not in table.c:
+            if name not in durable_tables or TS_START_COLUMN not in table.c or ROLE_COLUMN not in table.c:
                 continue
-            value = connection.execute(
-                sqlalchemy.select(sqlalchemy.func.max(table.c[STORE_TIMESTAMP_COLUMN]))
-            ).scalar_one()
+            value = connection.execute(sqlalchemy.select(sqlalchemy.func.max(table.c[TS_START_COLUMN]))).scalar_one()
             if value is not None:
                 maximum = int(value) if maximum is None else max(maximum, int(value))
         self._store_timestamp_mark = maximum
 
     def _capture_store_timestamp(self, connection: sqlalchemy.Connection) -> int | None:
         """Capture one guarded store-unit timestamp for a save or ingest batch."""
-        if not self._store_timestamps:
+        if not self.store_timestamps:
             return None
         return capture_store_timestamp(
             self._clock,
@@ -1231,13 +1242,13 @@ class SqlStore:
         candidate = sqlalchemy.MetaData()
         requested = tuple(classes)
         for cls in requested:
-            table_for(resolve_schema(cls), candidate, store_timestamps=self._store_timestamps)
+            table_for(resolve_schema(cls), candidate, store_timestamps=self.store_timestamps)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, candidate, store_timestamps=self._store_timestamps)
+                table_for(schema, candidate, store_timestamps=self.store_timestamps)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), candidate)
         return candidate
@@ -1247,13 +1258,13 @@ class SqlStore:
         self._known_record_types.update(requested)
         candidate = self._candidate_metadata(requested)
         for cls in requested:
-            table_for(resolve_schema(cls), self._metadata, store_timestamps=self._store_timestamps)
+            table_for(resolve_schema(cls), self._metadata, store_timestamps=self.store_timestamps)
         for family in self.layout.families:
             if not any(record in family.records for record in requested):
                 continue
             schemas = tuple(resolve_schema(record) for record in family.records)
             for schema in schemas:
-                table_for(schema, self._metadata, store_timestamps=self._store_timestamps)
+                table_for(schema, self._metadata, store_timestamps=self.store_timestamps)
             if len(schemas) > 1:
                 dispatch_table_for(family.name, tuple(zip(family.record_names, schemas, strict=True)), self._metadata)
         return candidate
@@ -1520,7 +1531,7 @@ class SqlStore:
             values[SID_COLUMN] = sid
             values[ROLE_COLUMN] = int(top_level)
             if projection.store_timestamp is not None:
-                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
+                values[TS_START_COLUMN] = projection.store_timestamp
             if key is not None:
                 values[CONTENT_ID_COLUMN] = key
             for spec in schema.fields:
@@ -1544,7 +1555,7 @@ class SqlStore:
             values[CONTENT_ID_COLUMN] = key
             values[ROLE_COLUMN] = int(top_level)
             if projection.store_timestamp is not None:
-                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
+                values[TS_START_COLUMN] = projection.store_timestamp
             sid, inserted = self._insert_content_row(connection, table, values, key)
             if not inserted:
                 self._discard_inserted(connection, projection, checkpoint)
@@ -1560,7 +1571,7 @@ class SqlStore:
         else:
             values[ROLE_COLUMN] = int(top_level)
             if projection.store_timestamp is not None:
-                values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
+                values[TS_START_COLUMN] = projection.store_timestamp
             insert = sqlalchemy.insert(table).values(values) if values else sqlalchemy.insert(table)
             result = connection.execute(insert)
             sid = int(cast(Any, result.inserted_primary_key)[0])
@@ -1939,8 +1950,8 @@ class SqlStore:
         :return: A new SQL searcher bound to this store.
         """
         if as_of is not None:
-            if not self._store_timestamps:
-                raise ValueError("as_of queries require SqlStore(store_timestamps=True)")
+            if not self.store_timestamps:
+                raise ValueError('as_of queries require SqlStore(store_timestamps="creation")')
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
         return SqlSearcher(self, as_of=as_of)
 

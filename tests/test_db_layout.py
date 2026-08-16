@@ -226,7 +226,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":2}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.5.0"
+    assert STORAGE_PROTOCOL_VERSION == "v3.0.0"
     assert SqlStore(database).entry_layout == ()
 
 

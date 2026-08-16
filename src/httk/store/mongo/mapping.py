@@ -225,8 +225,8 @@ def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> li
     if store_timestamps:
         result.append(
             IndexSpec(
-                (("store_timestamp", 1),),
-                _index_name("ix", collection, ("store_timestamp",)),
+                (("ts_start", 1),),
+                _index_name("ix", collection, ("ts_start",)),
             )
         )
     for field in schema.fields:
@@ -307,8 +307,8 @@ def validator_for(schema: TableSchema, *, store_timestamps: bool = True) -> dict
     }
     required = ["_id", "_httk_role", "f"]
     if store_timestamps:
-        properties["store_timestamp"] = {"bsonType": ["long", "int"]}
-        required.append("store_timestamp")
+        properties["ts_start"] = {"bsonType": ["long", "int"]}
+        required.append("ts_start")
     if schema.dedup == "content_id":
         properties["content_id"] = {"bsonType": "string", "pattern": "^[0-9a-fA-F]{64}$"}
         required.append("content_id")

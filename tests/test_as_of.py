@@ -68,7 +68,7 @@ def test_searcher_as_of_constrains_each_variable_and_disabled_capability() -> No
         assert store.store_timestamp_resolution == 1000
 
     with Database.sqlite() as database:
-        disabled = SqlStore(database, entry_records={}, store_timestamps=False)
+        disabled = SqlStore(database, entry_records={}, store_timestamps="off")
         assert disabled.store_timestamps is False
         assert disabled.store_timestamp_resolution is None
         with pytest.raises(ValueError, match="as_of|store_timestamps"):
@@ -93,7 +93,7 @@ def test_federated_store_forwards_as_of_and_rejects_disabled_child() -> None:
 
     with Database.sqlite() as first_database, Database.sqlite() as second_database:
         enabled = SqlStore(first_database, entry_records={})
-        disabled = SqlStore(second_database, entry_records={}, store_timestamps=False)
+        disabled = SqlStore(second_database, entry_records={}, store_timestamps="off")
         federation = FederatedStore({"enabled": enabled, "disabled": disabled})
         with pytest.raises(FederatedSourceError, match="disabled"):
             federation.searcher(as_of=1).variable(AsOfRecord)
@@ -110,7 +110,7 @@ def test_stored_entry_federation_degrades_per_source_for_as_of() -> None:
         disabled = SqlStore(
             disabled_database,
             entry_records={FederatedCalculation: FederationFirst},
-            store_timestamps=False,
+            store_timestamps="off",
         )
         disabled.save(FederationFirst("disabled-current", None))
 
