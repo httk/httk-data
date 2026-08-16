@@ -1176,7 +1176,7 @@ class MongoStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self, *, as_of: object = None) -> Any:
+    def searcher(self, *, as_of: object = None, scoped: bool = True) -> Any:
         """Return a Mongo searcher bound to this store's read path.
 
         Queries use the active transaction session when one is open, so they
@@ -1184,8 +1184,11 @@ class MongoStore:
         through :meth:`fetch`, preserving the identity-cache contract.
 
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param scoped: Accepted for :class:`~httk.store.query.protocols.Store`
+            conformance; the Mongo backend has no versioned lifecycle, so it is inert.
         :return: A new MongoDB searcher bound to this store.
         """
+        _ = scoped
         if as_of is not None:
             if not self.store_timestamps:
                 raise ValueError('as_of queries require MongoStore(store_timestamps="creation")')

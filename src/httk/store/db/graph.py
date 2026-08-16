@@ -8,13 +8,20 @@ backend happens to expose physical foreign-key constraints.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Literal
 
 from httk.store.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
 from httk.store.db.schema import TableSchema, resolve_schema
 
-__all__ = ["EdgeKind", "LogicalEdge", "LogicalEdgeGraph"]
+__all__ = [
+    "EdgeKind",
+    "LifecycleHop",
+    "LifecyclePath",
+    "LogicalEdge",
+    "LogicalEdgeGraph",
+    "lifecycle_paths",
+]
 
 EdgeKind = Literal["reference", "ownership", "child_element", "dispatch"]
 
@@ -225,6 +232,110 @@ class LogicalEdgeGraph:
                     ready.add(component_target)
         assert len(ordered) == len(components)
         return tuple(ordered)
+
+
+@dataclasses.dataclass(frozen=True)
+class LifecycleHop:
+    """One climb up an ownership chain toward the row that keeps a dependency alive.
+
+    A hop goes from the previous level's ``sid`` up to ``referrer_table``. A plain
+    reference hop has ``child_table`` ``None`` and ``referrer_column`` holding the
+    previous level's sid on ``referrer_table``. A child-element hop reaches
+    ``referrer_table`` (the owning parent) through an intermediate ``child_table``
+    whose ``child_element_column`` holds the previous level's sid and whose
+    ``child_parent_column`` holds ``referrer_table``'s sid.
+    """
+
+    referrer_table: str
+    referrer_column: str | None = None
+    child_table: str | None = None
+    child_element_column: str | None = None
+    child_parent_column: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class LifecyclePath:
+    """An acyclic ownership chain from a non-family table up to a versioned family table.
+
+    The last hop's ``referrer_table`` is a versioned family table whose lifetime
+    governs whether the queried non-family row is part of the current (or as-of)
+    time slice.
+    """
+
+    hops: tuple[LifecycleHop, ...]
+
+
+class _Cyclic(Exception):
+    """Internal marker: an ownership climb revisits a non-family table."""
+
+
+def lifecycle_paths(
+    graph: LogicalEdgeGraph, versioned_tables: frozenset[str]
+) -> Mapping[str, tuple[LifecyclePath, ...] | None]:
+    """Static ownership paths from every non-family table to versioned family tables.
+
+    For each table in ``graph`` that is not a versioned family table, all acyclic
+    ownership chains up to the first versioned family table reached are computed
+    (dispatch edges are ignored). A chain terminates at the first family table it
+    reaches — a family row referenced by another family row is itself
+    lifecycle-bearing. A non-family table whose ownership climb passes through a
+    reference cycle among non-family tables maps to ``None``; the error surfaces
+    only when such a table is queried scoped.
+
+    :param graph: The logical edge graph to analyze.
+    :param versioned_tables: The lifecycle-bearing family backing table names.
+    :return: A mapping of each non-family table name to its paths, or ``None`` when cyclic.
+    """
+    steps: dict[str, list[LifecycleHop]] = {}
+    for edge in graph.edges:
+        if edge.kind == "reference":
+            assert edge.source_column is not None
+            steps.setdefault(edge.target_table, []).append(
+                LifecycleHop(referrer_table=edge.source_table, referrer_column=edge.source_column)
+            )
+        elif edge.kind == "child_element":
+            assert edge.source_column is not None
+            child = edge.source_table
+            owner = next(
+                (own for own in graph.edges if own.kind == "ownership" and own.target_table == child),
+                None,
+            )
+            if owner is None:  # pragma: no cover - child tables always carry an ownership edge
+                continue
+            assert owner.target_column is not None
+            steps.setdefault(edge.target_table, []).append(
+                LifecycleHop(
+                    referrer_table=owner.source_table,
+                    child_table=child,
+                    child_element_column=edge.source_column,
+                    child_parent_column=owner.target_column,
+                )
+            )
+
+    def climb(current: str, on_path: frozenset[str], hops: tuple[LifecycleHop, ...]) -> list[LifecyclePath]:
+        found: list[LifecyclePath] = []
+        for hop in steps.get(current, ()):
+            referrer = hop.referrer_table
+            if referrer in versioned_tables:
+                found.append(LifecyclePath((*hops, hop)))
+            elif referrer in on_path:
+                raise _Cyclic
+            else:
+                found.extend(climb(referrer, on_path | {referrer}, (*hops, hop)))
+        return found
+
+    result: dict[str, tuple[LifecyclePath, ...] | None] = {}
+    for table in graph.tables:
+        if table in versioned_tables:
+            continue
+        try:
+            result[table] = tuple(climb(table, frozenset({table}), ()))
+        except _Cyclic:
+            # ponytail: safe superset — any table that can *reach* a non-family
+            # cycle while climbing is marked cyclic, not only cycle members.
+            # scoped=False is the escape; narrow to SCC membership if it bites.
+            result[table] = None
+    return result
 
 
 def _edge_key(edge: LogicalEdge) -> tuple[str, str, str, str, str]:

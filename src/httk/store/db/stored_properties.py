@@ -42,7 +42,7 @@ from sqlalchemy.sql.selectable import Exists, ScalarSelect
 from sqlalchemy.sql.visitors import replacement_traverse
 
 from httk.store.db.codecs import ValueCodec, codec_named
-from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, TS_START_COLUMN
+from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, TS_END_COLUMN, TS_START_COLUMN
 from httk.store.db.rows import RowHydrator
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
@@ -169,6 +169,23 @@ class _SqlScope:
                         None
                         if value is None
                         else cast(int, value) * cast(int, self.context._searcher._store.store_timestamp_resolution)
+                    ),
+                ),
+            )
+        if name == TS_END_COLUMN:
+            store = self.context._searcher._store
+            if self.scalar_child is not None or not store._is_versioned_family_table(self.schema.table_name):
+                raise StoredPropertySqlConfigurationError("ts_end is only available on versioned family scopes")
+            return self.context._scoped_scalar(
+                self,
+                _SqlValue(
+                    self.alias.c[TS_END_COLUMN],
+                    scope=self,
+                    operand_converter=lambda value: ns_operand_to_store_units(
+                        value, cast(int, store.store_timestamp_resolution)
+                    ),
+                    presentation_converter=lambda value: (
+                        None if value is None else cast(int, value) * cast(int, store.store_timestamp_resolution)
                     ),
                 ),
             )

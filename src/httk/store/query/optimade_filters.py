@@ -919,6 +919,7 @@ def filter_searcher(
     recognized_prefixes: tuple[str, ...] = (),
     relationship_targets: tuple[str, ...] = (),
     related_property_resolver: RelatedPropertyResolver | None = None,
+    scoped: bool = True,
 ) -> Searcher:
     """Build a :class:`~httk.store.query.Searcher` over ``store`` applying an OPTIMADE filter.
 
@@ -944,6 +945,7 @@ def filter_searcher(
     :param recognized_prefixes: Prefixes whose unknown properties are errors.
     :param relationship_targets: Related entry types that support dotted filters.
     :param related_property_resolver: Optional resolver for related-property filters.
+    :param scoped: Whether versioned-mode lifecycle filtering is injected at the root variable.
     :return: A searcher with the translated filter already applied.
     :raises FilterTranslationError: If the filter cannot be translated.
     :raises httk.core.optimade.ParserSyntaxError: If a filter string does not parse.
@@ -953,7 +955,9 @@ def filter_searcher(
         if property_keys is None:
             property_keys = {name: name for name in property_fulltypes}
         handlers = simple_property_handlers(entry_type, property_keys, property_fulltypes)
-    searcher = store.searcher()
+    # Pass scoped only when disabling it, so stores predating the keyword stay
+    # usable for current-view queries (mirrors the as_of keyword convention).
+    searcher = store.searcher() if scoped else store.searcher(scoped=False)
     search_variable = searcher.variable(target)
     searcher.output(search_variable, entry_type)
     searcher.add(

@@ -60,7 +60,7 @@ from httk.store.db.codecs import (
     encode_fracvector_floats,
 )
 from httk.store.db.engine import Database, connection_uses_autocommit
-from httk.store.db.graph import LogicalEdgeGraph
+from httk.store.db.graph import LifecyclePath, LogicalEdgeGraph, lifecycle_paths
 from httk.store.db.layout import (
     METADATA_TABLE_NAME,
     STORAGE_PROTOCOL_VERSION,
@@ -78,6 +78,7 @@ from httk.store.db.layout import (
     normalize_entry_declaration,
     read_store_metadata,
 )
+from httk.store.db.lifecycle import lifecycle_clause
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
@@ -227,6 +228,7 @@ class SqlStore:
         self._metadata = sqlalchemy.MetaData()
         self._layout: StorageLayout | None = None
         self._versioned_tables: frozenset[str] = frozenset()
+        self._lifecycle_path_cache: Mapping[str, tuple[LifecyclePath, ...] | None] | None = None
         self._managed_table_names: frozenset[str] = frozenset()
         self._known_record_types: set[type] = set()
         self._tables_present: set[str] = set()
@@ -750,6 +752,7 @@ class SqlStore:
     ) -> None:
         self._layout = layout
         self._versioned_tables = self._versioned_table_names(layout)
+        self._lifecycle_path_cache = None
         self._metadata = metadata
         self._managed_table_names = frozenset(metadata.tables)
         self._tables_present = set(table_names)
@@ -1292,6 +1295,9 @@ class SqlStore:
 
     def _register_tables(self, classes: Iterable[type]) -> sqlalchemy.MetaData:
         requested = tuple(classes)
+        if not self._known_record_types.issuperset(requested):
+            # A new referrer can change any dependency's ownership paths.
+            self._lifecycle_path_cache = None
         self._known_record_types.update(requested)
         candidate = self._candidate_metadata(requested)
         build_kwargs = self._table_build_kwargs()
@@ -1523,6 +1529,11 @@ class SqlStore:
         followed by a ``replace`` of that same just-saved row would ask for a
         zero-length ``[T, T)`` interval; that is refused with a :class:`ValueError`
         (remedy: replace in a later transaction).
+
+        After a replace, the default (``scoped=True``) :meth:`searcher` and
+        :meth:`referring` see only the successor; the superseded ``old`` row is
+        visible again through ``as_of`` before ``T``, through ``scoped=False``,
+        or by :meth:`fetch` on its sid.
 
         :param old: The current family entry to supersede — instance, content id, or sid.
         :param new_obj: The replacement object, saved as a new top-level entry.
@@ -1862,6 +1873,23 @@ class SqlStore:
     def _is_versioned_family_table(self, table_name: str) -> bool:
         """Whether ``table_name`` is a family backing table carrying lifecycle columns."""
         return self._store_timestamps == "versioned" and table_name in self._versioned_tables
+
+    def _lifecycle_path_map(self) -> Mapping[str, tuple[LifecyclePath, ...] | None]:
+        """The cached non-family ownership paths to versioned family tables.
+
+        Computed lazily from the full family and known-record closure and
+        invalidated whenever the installed layout or the registered record types
+        change (a new referrer can alter a dependency's ownership paths).
+        """
+        if self._lifecycle_path_cache is None:
+            records = {
+                *self._known_record_types,
+                *(record for family in self.layout.families for record in family.records),
+            }
+            schemas = tuple(resolve_schema(record) for record in records)
+            graph = LogicalEdgeGraph.from_store(self, schemas)
+            self._lifecycle_path_cache = lifecycle_paths(graph, self._versioned_tables)
+        return self._lifecycle_path_cache
 
     def _enforce_versioned_unique(
         self,
@@ -2249,7 +2277,7 @@ class SqlStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self, *, as_of: object = None) -> SqlSearcher:
+    def searcher(self, *, as_of: object = None, scoped: bool = True) -> SqlSearcher:
         """Return a new :class:`~httk.store.db.searcher.SqlSearcher` querying this store.
 
         The searcher runs on this store's read path — inside an open
@@ -2257,14 +2285,29 @@ class SqlStore:
         reconstructs matched objects as lazy rows, decoding each field on first
         access exactly as the lazy default of :meth:`fetch` does.
 
+        In ``store_timestamps="versioned"`` mode every root query variable sees
+        one consistent time slice by default (``scoped=True``): the current view,
+        or the half-open ``[ts_start, ts_end)`` slice named by ``as_of``. Forward
+        reference traversals and child-table joins inside an aggregate carry no
+        lifecycle predicate — a pinned reference to a row later superseded in its
+        own entry role is still the correct member of this aggregate. Pass
+        ``scoped=False`` to disable all lifecycle injection (an ``as_of`` cutoff
+        on the root still applies, matching creation-mode semantics). Outside
+        versioned mode ``scoped`` is accepted and inert.
+
+        Documented approximation: ``_httk_role`` promotion (a dependency later
+        saved top-level) is not timestamped, so a non-family row's role term
+        under ``as_of`` reflects its current role and errs toward visibility.
+
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param scoped: Whether versioned-mode lifecycle filtering is injected.
         :return: A new SQL searcher bound to this store.
         """
         if as_of is not None:
             if not self.store_timestamps:
                 raise ValueError('as_of queries require SqlStore(store_timestamps="creation")')
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
-        return SqlSearcher(self, as_of=as_of)
+        return SqlSearcher(self, as_of=as_of, scoped=scoped)
 
     def fsck(
         self,
@@ -2305,7 +2348,9 @@ class SqlStore:
 
         return stored_property_sql_plan(self, family)
 
-    def referring(self, cls: type, *, field: str, to: Any, eager: bool = False) -> list[Any]:
+    def referring(
+        self, cls: type, *, field: str, to: Any, eager: bool = False, as_of: object = None, scoped: bool = True
+    ) -> list[Any]:
         """Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
 
         ``field`` must be a reference field of ``cls`` targeting ``to``'s class
@@ -2315,10 +2360,18 @@ class SqlStore:
         returned by default (batched over the matched sids); pass ``eager=True``
         to fully materialize them.
 
+        Referrers are the current time slice by default in versioned mode
+        (``scoped=True``): a superseded family referrer is hidden, and ``as_of``
+        selects the historic slice with the same half-open interval semantics as
+        :meth:`searcher`. ``scoped=False`` disables lifecycle filtering (an
+        ``as_of`` cutoff still applies).
+
         :param cls: The storable class whose references should be searched.
         :param field: The reference field to match.
         :param to: The stored target instance.
         :param eager: Whether to fully materialize the records instead of returning lazy rows.
+        :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param scoped: Whether versioned-mode lifecycle filtering is applied to the referrer.
         :return: The referring stored instances ordered by sid.
         :raises httk.store.db.schema.SchemaError: If ``field`` is not a compatible reference field.
         :raises ValueError: If ``to`` is not known to this store.
@@ -2330,6 +2383,11 @@ class SqlStore:
         assert spec.target is not None
         if not isinstance(to, spec.target):
             raise SchemaError(f"{cls.__name__}.{field} references {spec.target.__name__}, not {type(to).__name__}")
+        as_of_units: int | None = None
+        if as_of is not None:
+            if not self.store_timestamps:
+                raise ValueError('as_of queries require SqlStore(store_timestamps="creation")')
+            as_of_units = ns_operand_to_store_units(as_of, cast(int, self._store_timestamp_resolution))
         sid = self.sid_of(to)
         if sid is None:
             raise ValueError(f"the {type(to).__name__} instance has not been stored or fetched through this store")
@@ -2337,11 +2395,12 @@ class SqlStore:
             if self._missing_tables_for_read((cls,)):
                 return []
             table = self._table(schema.table_name)
-            found = connection.execute(
-                sqlalchemy.select(table.c[SID_COLUMN])
-                .where(table.c[spec.columns[0].name] == sid)
-                .order_by(table.c[SID_COLUMN])
-            ).all()
+            statement = sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[spec.columns[0].name] == sid)
+            if self._store_timestamps == "versioned" and scoped:
+                statement = statement.where(lifecycle_clause(self, table, schema.table_name, as_of_units))
+            elif as_of_units is not None:
+                statement = statement.where(table.c[TS_START_COLUMN] <= as_of_units)
+            found = connection.execute(statement.order_by(table.c[SID_COLUMN])).all()
             found_sids = [int(row[0]) for row in found]
             if eager:
                 return [self._fetch(connection, cls, referring_sid) for referring_sid in found_sids]

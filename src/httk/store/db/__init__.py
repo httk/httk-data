@@ -59,6 +59,7 @@ __all__ = [
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredLazyRecordError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "FsckSummary",  # pyright: ignore[reportUnsupportedDunderAll]
+    "LifecycleScopeError",  # pyright: ignore[reportUnsupportedDunderAll]
     "MultipleResultsError",
     "NoResultError",
     "RecordReviveError",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -113,6 +114,7 @@ _SQL_EXPORTS = {
     "ExpiredLazyRecordError": ".rows",
     "ExpiredCursorRowError": ".results",
     "FsckSummary": ".fsck",
+    "LifecycleScopeError": ".lifecycle",
     "ResultColumn": ".results",
     "SqlResultSet": ".results",
 }

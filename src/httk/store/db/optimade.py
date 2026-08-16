@@ -95,6 +95,7 @@ def optimade_filter_searcher(
     definition: EntryTypeDefinition | None = None,
     extra_handlers: Mapping[str, Mapping[str, Callable[..., Any]]] | None = None,
     related_classes: Mapping[str, type] | None = None,
+    scoped: bool = True,
 ) -> Searcher:
     """Build a searcher over the stored rows of ``cls`` from an OPTIMADE filter.
 
@@ -149,6 +150,7 @@ def optimade_filter_searcher(
     :param definition: An optional entry definition supplying additional property types.
     :param extra_handlers: Optional handlers for ids, types, or additional properties.
     :param related_classes: Related entry types and their storable classes.
+    :param scoped: Whether versioned-mode lifecycle filtering is injected at the root variable.
     :return: A searcher yielding the matching stored instances.
     :raises ~httk.store.query.optimade_filters.FilterTranslationError: When the filter cannot be translated.
     :raises ~httk.core.optimade.ParserSyntaxError: When a filter string does not parse.
@@ -195,12 +197,17 @@ def optimade_filter_searcher(
         relationship_targets = tuple(related)
 
         def resolve_related(related_type: str, sub_ast: FilterAst) -> tuple[str, ...]:
+            # The nested semi-join collects sids of related rows that the outer,
+            # already-scoped variable references by pinned foreign key. Those
+            # pinned targets stay correct members even when superseded in their
+            # own entry role, so the nested searcher must not lifecycle-filter.
             nested = optimade_filter_searcher(
                 store,
                 related[related_type],
                 sub_ast,
                 prefix=prefix,
                 extra_handlers={"id": _own_id_handlers(related_type)},
+                scoped=False,
             )
             assert isinstance(nested, SqlSearcher)
             sid_column = nested._variables[0].sid
@@ -227,4 +234,5 @@ def optimade_filter_searcher(
         recognized_prefixes=(prefix,),
         relationship_targets=relationship_targets,
         related_property_resolver=resolver,
+        scoped=scoped,
     )

@@ -75,6 +75,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 import sqlalchemy
 
 from httk.store.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
+from httk.store.db.lifecycle import lifecycle_clause
 from httk.store.db.mapping import SID_COLUMN, TS_START_COLUMN
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
@@ -710,8 +711,6 @@ class SqlVariable:
             sub = SqlVariable(self._searcher, spec.target, target_schema, alias)
             self._reference_variables[spec.field] = sub
             self._joins.append((alias, onclause, sub))
-            if self._searcher._as_of is not None:
-                self._searcher.add(cast(SqlColumn, sub.ts_start) <= self._searcher._as_of)
         return sub
 
     def _flat_joins(self) -> Iterator[tuple[sqlalchemy.FromClause, sqlalchemy.ColumnElement[bool]]]:
@@ -751,15 +750,31 @@ class SqlSearcher:
 
     :param store: The SQL store whose tables and connection serve the query.
     :param as_of: Optional historic cutoff in canonical timestamp form.
+    :param scoped: Whether versioned-mode lifecycle filtering is injected at the root.
 
-    An historic cutoff is injected for every root and reference variable;
-    visible rows' dependencies are always visible because references only point
-    at earlier-or-equal rows from the same transaction.
+    In ``store_timestamps="versioned"`` mode a scoped searcher injects a
+    time-slice predicate on each **root** variable — the current view, or the
+    half-open ``[ts_start, ts_end)`` slice named by ``as_of``. A root variable on
+    a versioned family table gets the interval predicate directly; a root
+    variable on a non-family (deduplicated dependency/content) table gets the
+    derived ``role = 1 OR EXISTS(ownership chain to a live family row)`` form (see
+    :mod:`httk.store.db.lifecycle`). Forward reference traversals and child-table
+    joins are **never** lifecycle-filtered: a pinned reference to a row later
+    superseded in its own entry role remains the correct member of this
+    aggregate, and references only point at earlier-or-equal rows from the same
+    transaction. ``scoped=False`` disables all lifecycle injection (an ``as_of``
+    cutoff on the root still applies as a plain ``ts_start <= T`` bound, matching
+    creation-mode semantics).
+
+    Documented approximation: ``_httk_role`` promotion (a dependency later saved
+    top-level) is not timestamped, so a non-family root's role term under
+    ``as_of`` reflects the current role and errs toward visibility.
     """
 
-    def __init__(self, store: "SqlStore", *, as_of: object = None) -> None:
+    def __init__(self, store: "SqlStore", *, as_of: object = None, scoped: bool = True) -> None:
         self._store = store
         self._as_of = as_of
+        self._scoped = scoped
         self._variables: list[SqlVariable] = []
         self._where: list[SqlExpression] = []
         self._having: list[SqlExpression] = []
@@ -785,9 +800,17 @@ class SqlSearcher:
         alias = self._store._table(schema.table_name).alias()
         variable = SqlVariable(self, target, schema, alias)
         self._variables.append(variable)
-        if self._as_of is not None:
+        if self._store._store_timestamps == "versioned" and self._scoped:
+            self.add(_same(lifecycle_clause(self._store, variable._alias, schema.table_name, self._as_of_units())))
+        elif self._as_of is not None:
             self.add(cast(SqlColumn, variable.ts_start) <= self._as_of)
         return variable
+
+    def _as_of_units(self) -> int | None:
+        """The searcher's ``as_of`` cutoff in integer store units, or ``None``."""
+        if self._as_of is None:
+            return None
+        return ns_operand_to_store_units(self._as_of, cast(int, self._store.store_timestamp_resolution))
 
     def output(self, variable: "SqlVariable | SqlColumn", name: str) -> None:
         """Append an output for a reconstructed instance or raw column value.

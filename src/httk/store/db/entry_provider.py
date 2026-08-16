@@ -59,6 +59,7 @@ from httk.core import (
 from httk.core.storage import RelationshipLink
 
 from httk.store.db.codecs import codec_named
+from httk.store.db.lifecycle import lifecycle_clause
 from httk.store.db.mapping import SID_COLUMN
 from httk.store.db.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlColumn, _query_index
@@ -380,6 +381,12 @@ class StoreEntryProvider(EntryProvider):
                 None if fast_ids else store._fetch(connection, related_cls, sid),
             )
 
+        versioned = store._store_timestamps == "versioned"
+
+        def current_scope(scope_table: sqlalchemy.Table, scope_name: str) -> sqlalchemy.ColumnElement[bool] | None:
+            """The current-view lifecycle predicate for a top-entered scan, or None off versioned mode."""
+            return lifecycle_clause(store, scope_table, scope_name, None) if versioned else None
+
         result: dict[str, tuple[RelatedEntry, ...]] = {}
         with store._read_connection() as connection:
             # The related (target class, target sid, related entry type,
@@ -389,7 +396,11 @@ class StoreEntryProvider(EntryProvider):
             related_by_sid: dict[int, list[tuple[type, int, str, str | None, str | None]]] = {}
             if reference_specs:
                 columns = [table.c[SID_COLUMN]] + [table.c[spec.columns[0].name] for spec, _related in reference_specs]
-                for row in connection.execute(sqlalchemy.select(*columns).order_by(table.c[SID_COLUMN])):
+                reference_stmt = sqlalchemy.select(*columns)
+                own_scope = current_scope(table, schema.table_name)
+                if own_scope is not None:
+                    reference_stmt = reference_stmt.where(own_scope)
+                for row in connection.execute(reference_stmt.order_by(table.c[SID_COLUMN])):
                     sid = int(row[0])
                     for (spec, related), value in zip(reference_specs, row[1:], strict=True):
                         if value is not None:
@@ -409,9 +420,18 @@ class StoreEntryProvider(EntryProvider):
                 child_table = store._table(spec.child.table_name)
                 parent_column = child_table.c[f"{schema.table_name}_sid"]
                 element_column = child_table.c[spec.child.element_columns[0].name]
-                statement = sqlalchemy.select(parent_column, element_column).order_by(
-                    parent_column, child_table.c[f"{spec.field}_index"]
-                )
+                statement = sqlalchemy.select(parent_column, element_column)
+                parent_scope = current_scope(table, schema.table_name)
+                if parent_scope is not None:
+                    # The child rows belong to the parent's lifecycle: enumerate
+                    # only those whose owning parent row is currently live.
+                    statement = statement.where(
+                        sqlalchemy.select(sqlalchemy.literal(1))
+                        .select_from(table)
+                        .where(table.c[SID_COLUMN] == parent_column, parent_scope)
+                        .exists()
+                    )
+                statement = statement.order_by(parent_column, child_table.c[f"{spec.field}_index"])
                 marker = spec.related
                 for parent_sid, element_sid in connection.execute(statement):
                     related_by_sid.setdefault(int(parent_sid), []).append(
@@ -425,9 +445,11 @@ class StoreEntryProvider(EntryProvider):
                     )
             for scan in link_scans:
                 link_table = store._table(scan.schema.table_name)
-                statement = sqlalchemy.select(
-                    link_table.c[scan.source_column], link_table.c[scan.target_column]
-                ).order_by(link_table.c[SID_COLUMN])
+                statement = sqlalchemy.select(link_table.c[scan.source_column], link_table.c[scan.target_column])
+                link_scope = current_scope(link_table, scan.schema.table_name)
+                if link_scope is not None:
+                    statement = statement.where(link_scope)
+                statement = statement.order_by(link_table.c[SID_COLUMN])
                 for from_sid, to_sid in connection.execute(statement):
                     if from_sid is None or to_sid is None:
                         continue

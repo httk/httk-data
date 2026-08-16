@@ -315,6 +315,23 @@ deliberately ignores the cutoff and serves that source's current state; sources
 with timestamps enabled apply their own-resolution cutoff. Existing layouts do
 not require an enable/disable migration for reading this capability.
 
+### Versioned stores: current view by default
+
+Under `store_timestamps="versioned"`, `replace(old, new)` supersedes a family
+entry (see the `replace` API for lifetime intervals). Every query entered from
+the top then sees one consistent time slice by default: `store.searcher()` and
+`store.referring()` return only the current view (`as_of=T` returns the
+half-open `[ts_start, ts_end)` slice — at `T == successor.ts_start` the successor
+is visible and the closed predecessor is not). A non-family dependency row is
+current when it was saved standalone or is still owned by a live family entry;
+forward reference traversals and child joins inside a match are never
+lifecycle-filtered, so a pinned reference to a row later superseded in its own
+role stays a correct member of that aggregate. Pass `scoped=False` to
+`searcher()`/`referring()` to disable lifecycle filtering entirely (an `as_of`
+cutoff still applies). One documented approximation: role promotion (a
+dependency later saved top-level) is not timestamped, so a non-family row's
+`as_of` visibility reflects its current role.
+
 ## Permanentization, degraded writes, and fsck
 
 SQL stores use a storage-only `_httk_role` parent column: `1` marks a record
