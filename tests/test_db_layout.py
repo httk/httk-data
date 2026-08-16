@@ -320,6 +320,38 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
         assert actual_table_names(connection) == before
 
 
+def test_read_candidate_metadata_is_memoized_per_class_set(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+    store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
+    calls: list[frozenset[type]] = []
+    original = SqlStore._candidate_metadata
+
+    def spy(self: SqlStore, classes: object) -> object:
+        materialized = tuple(classes)  # type: ignore[call-overload]
+        calls.append(frozenset(materialized))
+        return original(self, materialized)
+
+    monkeypatch.setattr(SqlStore, "_candidate_metadata", spy)
+    assert store.fetch_by_content_id(LayoutSingle, "missing") is None
+    assert len(calls) == 1
+    for _ in range(5):
+        assert store.fetch_by_content_id(LayoutSingle, "missing") is None
+    # The first read builds candidate metadata; later reads of the same
+    # class-set reuse the memoized name set and never rebuild it.
+    assert len(calls) == 1
+
+
+def test_warm_read_memo_does_not_block_table_creation_on_write(database: Database) -> None:
+    store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
+    # Warm the read memo for {LayoutSingle} while its table is still absent.
+    assert store.fetch_by_content_id(LayoutSingle, "missing") is None
+    store.save(LayoutSingle("kept"))
+    # The write path creates the table despite the warm read memo, and the
+    # next read (memoized name set, live presence) finds the new row.
+    key = content_id(LayoutSingle("kept"))
+    fetched = store.fetch_by_content_id(LayoutSingle, key)
+    assert fetched is not None and fetched.value == "kept"
+
+
 @pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"])
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     database: Database, old_protocol: str

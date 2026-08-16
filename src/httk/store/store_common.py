@@ -4,7 +4,7 @@ import functools
 import types
 import typing
 import weakref
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Protocol, TypeVar, runtime_checkable
 
@@ -47,6 +47,18 @@ class EntryStore(Protocol):
 
     def fetch(self, cls: type[_StoredRecord], sid: int) -> _StoredRecord:
         """Fetch the stored record of ``cls`` identified by ``sid``."""
+        ...
+
+    def fetch_many(self, cls: type[_StoredRecord], sids: Sequence[int]) -> list[_StoredRecord]:
+        """Fetch the stored records of ``cls`` identified by ``sids``.
+
+        Batched counterpart of :meth:`fetch`.
+
+        :param cls: The storable record class.
+        :param sids: The stored row identifiers to fetch.
+        :return: The reconstructed instances in ``sids`` order.
+        :raises KeyError: When any requested row is absent.
+        """
         ...
 
     def stored_property_plan(self, family: type) -> Any:

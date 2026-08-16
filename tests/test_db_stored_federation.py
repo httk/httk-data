@@ -154,6 +154,9 @@ def test_stored_entry_source_accepts_structural_entry_store() -> None:
         def fetch(self, cls: type, sid: int) -> object:
             raise AssertionError("the acceptance test must not fetch from the fake store")
 
+        def fetch_many(self, cls: type, sids: object) -> list[object]:
+            raise AssertionError("the acceptance test must not fetch from the fake store")
+
         def stored_property_plan(self, family: type) -> object:
             raise AssertionError("the acceptance test must not acquire a plan from the fake store")
 
@@ -545,3 +548,44 @@ def test_audit_scans_bounded_id_only_batches_without_hydration(databases, monkey
     assert limits and set(limits) == {1}
     assert offsets == []
     assert _RESPONSES == []
+
+
+def test_page_render_batches_into_one_fetch_per_source(databases, monkeypatch):
+    records = tuple(_record(f"row-{index:03d}") for index in range(24))
+    federation = _federation(databases, records, ())
+    fetch_many_sizes: list[int] = []
+    per_row_fetches: list[int] = []
+    original_many = SqlStore.fetch_many
+    original_fetch = SqlStore.fetch
+
+    def tracked_many(self, cls, sids):
+        materialized = list(sids)
+        fetch_many_sizes.append(len(materialized))
+        return original_many(self, cls, materialized)
+
+    def tracked_fetch(self, cls, sid):
+        per_row_fetches.append(sid)
+        return original_fetch(self, cls, sid)
+
+    monkeypatch.setattr(SqlStore, "fetch_many", tracked_many)
+    monkeypatch.setattr(SqlStore, "fetch", tracked_fetch)
+    page = federation.query(limit=50)
+    assert [row["immutable_id"] for row in page.rows] == [f"row-{index:03d}" for index in range(24)]
+    # One batched fetch covers the whole page's single source; never one fetch per row.
+    assert fetch_many_sizes == [24]
+    assert per_row_fetches == []
+
+
+def test_batched_page_matches_single_id_render(databases):
+    federation = _federation(
+        databases,
+        (_record("a"), _record("c")),
+        (_record("b"), _record("d")),
+    )
+    page = federation.query(sort=(("immutable_id", False),), limit=10)
+    assert [row["immutable_id"] for row in page.rows] == ["a", "b", "c", "d"]
+    assert page.total_count == 4
+    assert page.more_data_available is False
+    # Each batched row equals the row the single-id render path produces.
+    for row in page.rows:
+        assert federation.fetch(row["id"]) == dict(row)

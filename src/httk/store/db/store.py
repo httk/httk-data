@@ -204,6 +204,7 @@ class SqlStore:
         self._managed_table_names: frozenset[str] = frozenset()
         self._known_record_types: set[type] = set()
         self._tables_present: set[str] = set()
+        self._candidate_names: dict[frozenset[type], frozenset[str]] = {}
         self._initialized = False
         self._initialization_ddl_journal: list[sqlalchemy.Table] = []
         self._identity = IdentityCaches()
@@ -305,6 +306,9 @@ class SqlStore:
             self._layout = None
             self._managed_table_names = frozenset()
             self._tables_present.clear()
+            # The memo maps class-sets to names registered in _metadata; a hit
+            # skips re-registration, so it must be dropped with _metadata.
+            self._candidate_names.clear()
             self._initialized = False
             self._clear_identity_caches()
             raise
@@ -1291,8 +1295,14 @@ class SqlStore:
 
     def _missing_tables_for_read(self, classes: Iterable[type]) -> bool:
         """Register tables and report absence without issuing DDL."""
-        candidate = self._register_tables(classes)
-        candidate_names = frozenset(candidate.tables)
+        key = frozenset(classes)
+        candidate_names = self._candidate_names.get(key)
+        if candidate_names is None:
+            # The name set is a pure function of the class-set given the fixed
+            # layout and _store_timestamps; _register_tables also idempotently
+            # populates _metadata so later _table() lookups resolve on a hit.
+            candidate_names = frozenset(self._register_tables(key).tables)
+            self._candidate_names[key] = candidate_names
         self._validate_table_names(candidate_names)
         pending = self._pending_table_names()
         missing = candidate_names - self._tables_present - pending
@@ -1624,6 +1634,41 @@ class SqlStore:
         """
         with self._read_connection() as connection:
             return cast(T, self._fetch(connection, cls, sid))
+
+    def fetch_many[T](self, cls: type[T], sids: Sequence[int]) -> list[T]:
+        """Reconstruct every ``cls`` instance stored under ``sids`` in one batch.
+
+        The batched counterpart of :meth:`fetch`: child-element and reference
+        reads are shared across the requested rows instead of re-queried per
+        sid.  Mirroring :meth:`fetch`, a live cached object is returned for any
+        ``(class, sid)`` still alive without touching the database (so a fully
+        cached call issues no SQL); the remaining rows share one connection.
+        Memory is O(``len(sids)``) — every chunk stays pinned for the batch —
+        so callers pass bounded pages.
+
+        :param cls: The storable class to reconstruct.
+        :param sids: The stored row identifiers to reconstruct.
+        :return: The reconstructed instances in ``sids`` order.
+        :raises KeyError: If any requested row does not exist.
+        """
+        resolved = [int(sid) for sid in sids]
+        instances: dict[int, Any] = {}
+        missing: list[int] = []
+        for sid in resolved:
+            cached = self._identity._instances.get((cls, sid))
+            if cached is None:
+                missing.append(sid)
+            else:
+                instances[sid] = cached
+        if missing:
+            with self._read_connection():
+                try:
+                    # materialize() populates the identity map via _remember.
+                    hydrated = RowHydrator(self, cls, missing).materialize_many()
+                except StaleResultError as error:
+                    raise KeyError(cls, tuple(missing)) from error
+            instances.update(zip(missing, hydrated, strict=True))
+        return cast(list[T], [instances[sid] for sid in resolved])
 
     def fetch_by_content_id[T](self, cls: type[T], key: str) -> T | None:
         """Return the ``cls`` instance whose content identity is ``key``, or None if not stored.

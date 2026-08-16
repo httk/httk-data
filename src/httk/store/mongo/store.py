@@ -970,6 +970,16 @@ class MongoStore:
         """
         return typing.cast(T, self._fetch(cls, int(sid), _HydrationContext()))
 
+    def fetch_many[T](self, cls: type[T], sids: Sequence[int]) -> list[T]:
+        """Fetch and eagerly hydrate ``cls`` at each sid in ``sids``.
+
+        :param cls: The storable record class.
+        :param sids: The integer sids to fetch.
+        :return: The hydrated records in ``sids`` order.
+        :raises KeyError: If any record does not exist.
+        """
+        return [self.fetch(cls, sid) for sid in sids]
+
     def _fetch(self, cls: type, sid: int, context: _HydrationContext | None = None) -> Any:
         if context is None:
             context = _HydrationContext()

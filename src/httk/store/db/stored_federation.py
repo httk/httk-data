@@ -334,7 +334,7 @@ class StoredEntryFederation:
         # limit=0 metadata calls.
         for candidate in visible:
             self._probe_candidate(candidate, as_of=as_of)
-        rows = tuple(self._row(candidate) for candidate in visible)
+        rows = self._render_page(visible)
         return StoredEntryPage(rows, total_count, more)
 
     def fetch(self, public_id: str, *, as_of: object = None) -> Mapping[str, Any] | None:
@@ -505,9 +505,42 @@ class StoredEntryFederation:
         return tuple(matches)
 
     @staticmethod
-    def _row(candidate: _Candidate) -> Mapping[str, Any]:
+    def _render_page(visible: Sequence[_Candidate]) -> tuple[Mapping[str, Any], ...]:
+        """Render visible candidates, batching the record fetch per source backing.
+
+        Candidates are grouped by their originating ``_Stream`` (one per
+        ``(source, backing)`` per ``_streams()`` call, and every visible
+        candidate comes from one such call) so each distinct backing table is
+        hydrated in one batched ``fetch_many`` call instead of one ``fetch`` per
+        row.  Grouping is by object identity; streams need not be hashable by
+        value.  Rows are then rendered in the original ``visible`` order.
+
+        :param visible: The page candidates in final output order.
+        :return: The rendered response rows in ``visible`` order.
+        """
+        groups: dict[int, list[_Candidate]] = {}
+        for candidate in visible:
+            groups.setdefault(id(candidate.stream), []).append(candidate)
+        record_by_candidate: dict[int, object] = {}
+        for group in groups.values():
+            store = group[0].stream.source.source.store
+            backing = group[0].stream.backing
+            records: list[object] = store.fetch_many(backing, [candidate.sid for candidate in group])
+            for candidate, record in zip(group, records, strict=True):
+                record_by_candidate[id(candidate)] = record
+        return tuple(
+            StoredEntryFederation._render(candidate, record_by_candidate[id(candidate)]) for candidate in visible
+        )
+
+    @staticmethod
+    def _render(candidate: _Candidate, record: object) -> Mapping[str, Any]:
+        """Render one already-fetched record into its public response row.
+
+        :param candidate: The visible candidate to render.
+        :param record: The hydrated backing record for ``candidate``.
+        :return: The immutable response row.
+        """
         source = candidate.stream.source
-        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid)
         row = source.plan.response_row(
             candidate.stream.backing,
             record,
@@ -515,6 +548,12 @@ class StoredEntryFederation:
             store_timestamp=candidate.store_timestamp,
         )
         return MappingProxyType(dict(row))
+
+    @staticmethod
+    def _row(candidate: _Candidate) -> Mapping[str, Any]:
+        source = candidate.stream.source
+        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid)
+        return StoredEntryFederation._render(candidate, record)
 
 
 class _BatchedCandidateIterator:

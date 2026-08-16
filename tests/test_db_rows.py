@@ -379,3 +379,65 @@ def test_fetch_one_with_child_uses_at_most_two_statements(database):
         assert len(statements) <= 2
     finally:
         sqlalchemy.event.remove(database.engine, "before_cursor_execute", count)
+
+
+def test_fetch_many_preserves_input_order_and_shares_identity(database):
+    store = SqlStore(database, entry_records={})
+    # `records` stays live so the save-time identity cache holds each instance;
+    # the batch must therefore return those very objects, not fresh hydrations.
+    records = [ParityRecord(name, number) for number, name in enumerate("ABCDE")]
+    sids = [store.save(record) for record in records]
+    shuffled = [sids[index] for index in (3, 0, 4, 1, 2)]
+    fetched = store.fetch_many(ParityRecord, shuffled)
+    assert [record.name for record in fetched] == ["D", "A", "E", "B", "C"]
+    assert fetched[1] is records[0]  # the identity pre-filter returned the live object
+
+
+def test_fetch_many_returns_cached_object_for_deleted_row(database):
+    store = SqlStore(database, entry_records={})
+    record = ParityRecord("A", 1)
+    sid = store.save(record)
+    with database.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(f"DELETE FROM parity_record WHERE sid = {sid}"))
+    # Parity with fetch: a live-cached instance survives its row's deletion.
+    assert store.fetch(ParityRecord, sid) is record
+    assert store.fetch_many(ParityRecord, [sid])[0] is record
+
+
+def test_fetch_many_raises_key_error_not_stale_for_absent_sid(database):
+    store = SqlStore(database, entry_records={})
+    present = store.save(ParityRecord("A", 1))
+    absent = store.save(ParityRecord("B", 2))
+    store._clear_identity_caches()
+    with database.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(f"DELETE FROM parity_record WHERE sid = {absent}"))
+    with pytest.raises(KeyError):
+        store.fetch_many(ParityRecord, [present, absent])
+
+
+@pytest.mark.parametrize("records", [502, pytest.param(1500, marks=pytest.mark.extended)])
+def test_fetch_many_batches_children_per_chunk(database, records: int):
+    store = SqlStore(database, entry_records={})
+    sids = [store.save(BatchRecord(str(index), [str(index)])) for index in range(records)]
+    # Make the cold-cache condition deterministic: the weak identity caches
+    # would usually have dropped the save-time temporaries already, but that
+    # depends on GC timing rather than on anything this test asserts.
+    store._clear_identity_caches()
+    statements: list[str] = []
+
+    def count(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    sqlalchemy.event.listen(database.engine, "before_cursor_execute", count)
+    try:
+        fetched = store.fetch_many(BatchRecord, sids)
+    finally:
+        sqlalchemy.event.remove(database.engine, "before_cursor_execute", count)
+    assert [record.values for record in fetched] == [[str(index)] for index in range(records)]
+    chunks = -(-records // 500)
+    # One parent plus one child SELECT per 500-row chunk, far below the
+    # per-row 2 x N of the unbatched fetch path.  The lower bound keeps the
+    # assertion meaningful: a fully cached run would issue zero SELECTs and
+    # pass the upper bound vacuously.
+    assert chunks <= len(statements) <= 2 * chunks + 1

@@ -135,6 +135,9 @@ nitpick_ignore = [
     ("py:class", "sqlalchemy.FromClause"),
     # PEP 695 method type parameters (e.g. SqlStore.fetch[T]) are not classes.
     ("py:class", "T"),
+    # module-private TypeVar of the EntryStore Protocol (fetch/fetch_many);
+    # deliberately undocumented, so its :param:/:return: xrefs cannot resolve.
+    ("py:class", "_StoredRecord"),
     # AutoAPI renders the value of the RelatedPropertyResolver type alias with a
     # bare (unqualified) FilterAst class xref; the name comes from httk-core (a
     # separate distribution sharing the "httk" namespace), so it cannot resolve
