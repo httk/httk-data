@@ -510,7 +510,9 @@ def test_transactional_save_has_no_p3_round_trips_except_dedup_promotion() -> No
         event.listen(database.engine, "before_cursor_execute", record)
         try:
             store.save(StatementRecord("fresh"))
-            assert len(statements) == 2  # content-id SELECT then INSERT; role is only an INSERT value.
+            # content-id SELECT, INSERT..RETURNING, then the sanctioned same-transaction
+            # logical_id fill UPDATE (own sid); role is only an INSERT value.
+            assert len(statements) == 3
             statements.clear()
             store.save(StatementRecord("fresh"))
             assert len(statements) == 1  # content-id SELECT hit; it is already main, so no UPDATE.

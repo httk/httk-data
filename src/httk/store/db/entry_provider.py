@@ -168,6 +168,7 @@ class StoreEntryProvider(EntryProvider):
     :param prefix: The registered prefix for generated property names.
     :param id_of: The function that maps a served record to its public id.
     :param link_classes: Additional storable classes supplied for link metadata validation.
+    :param only_latest: Whether served searchers restrict root variables to the latest row of each lineage.
     """
 
     def __init__(
@@ -179,6 +180,7 @@ class StoreEntryProvider(EntryProvider):
         prefix: str = "_httk_",
         id_of: Callable[[str, int, Any], str] | None = None,
         link_classes: Iterable[type] = (),
+        only_latest: bool = False,
     ) -> None:
         if prefix not in known_definition_prefixes():
             raise ValueError(
@@ -188,6 +190,7 @@ class StoreEntryProvider(EntryProvider):
             )
         self._store = store
         self._classes: dict[str, type] = dict(classes)
+        self._only_latest = only_latest
         self._prefix = prefix
         self._id_of: Callable[[str, int, Any], str] = id_of if id_of is not None else _default_id
         self._entry_type_of: dict[type, str] = {cls: name for name, cls in self._classes.items()}
@@ -330,7 +333,7 @@ class StoreEntryProvider(EntryProvider):
         cls = self._require_entry_type(entry_type)
         served = self._served_specs(entry_type)
         schema = self._schemas[entry_type]
-        searcher = self._store.searcher()
+        searcher = self._store.searcher(only_latest=self._only_latest)
         variable = searcher.variable(cls)
         sid_column = SqlColumn(searcher, variable._alias.c[SID_COLUMN])
         searcher.output(variable, "obj")

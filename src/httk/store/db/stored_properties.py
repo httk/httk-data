@@ -619,6 +619,7 @@ class StoredPropertySqlPlan:
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
         as_of: object = None,
+        only_latest: bool = False,
     ) -> tuple[SqlSearcher, ...]:
         """Return one concrete-backing SQL searcher for an OPTIMADE filter and sort list.
 
@@ -626,10 +627,14 @@ class StoredPropertySqlPlan:
         :param sort: The property sort keys and directions.
         :param public_id_prefix: The prefix used when filtering or sorting ids.
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param only_latest: Whether root variables are restricted to the latest row of each lineage.
         :return: One searcher for each configured backing.
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
-        return tuple(self._filter_searcher(backing, ast, sort, public_id_prefix, as_of) for backing in self._backings)
+        return tuple(
+            self._filter_searcher(backing, ast, sort, public_id_prefix, as_of, only_latest)
+            for backing in self._backings
+        )
 
     def candidate_searchers(
         self,
@@ -638,6 +643,7 @@ class StoredPropertySqlPlan:
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
         as_of: object = None,
+        only_latest: bool = False,
     ) -> tuple[StoredPropertySqlCandidateStream, ...]:
         """Return ID-only concrete streams for a bounded federated page.
 
@@ -650,12 +656,15 @@ class StoredPropertySqlPlan:
         :param sort: The property sort keys and directions.
         :param public_id_prefix: The prefix used when filtering or sorting ids.
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param only_latest: Whether root variables are restricted to the latest row of each lineage.
         :return: One candidate stream for each configured backing.
         """
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[StoredPropertySqlCandidateStream] = []
         for backing, backing_name in zip(self._backings, self.layout.record_names, strict=True):
-            searcher, variable, sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix, as_of)
+            searcher, variable, sort_values = self._candidate_searcher(
+                backing, ast, sort, public_id_prefix, as_of, only_latest
+            )
             searcher.output(SqlColumn(searcher, variable._alias.c[SID_COLUMN]), "sid")
             searcher.output(SqlColumn(searcher, variable._alias.c[CONTENT_ID_COLUMN]), "content_id")
             for index, value in enumerate(sort_values):
@@ -730,8 +739,8 @@ class StoredPropertySqlPlan:
             row[name] = None if projection is None else _response_json_value(projection.response(record))
         return row
 
-    def _records_for(self, backing: _BackingPlan) -> Iterator[Mapping[str, Any]]:
-        searcher = self.store.searcher()
+    def _records_for(self, backing: _BackingPlan, *, only_latest: bool = False) -> Iterator[Mapping[str, Any]]:
+        searcher = self.store.searcher(only_latest=only_latest)
         variable = searcher.variable(backing.backing)
         sid = SqlColumn(searcher, variable._alias.c[SID_COLUMN])
         searcher.output(sid, "sid")
@@ -747,8 +756,11 @@ class StoredPropertySqlPlan:
         sort: Sequence[tuple[str, bool]],
         public_id_prefix: str,
         as_of: object,
+        only_latest: bool = False,
     ) -> SqlSearcher:
-        searcher, variable, _sort_values = self._candidate_searcher(backing, ast, sort, public_id_prefix, as_of)
+        searcher, variable, _sort_values = self._candidate_searcher(
+            backing, ast, sort, public_id_prefix, as_of, only_latest
+        )
         searcher.output(variable, "record")
         return searcher
 
@@ -759,8 +771,9 @@ class StoredPropertySqlPlan:
         sort: Sequence[tuple[str, bool]],
         public_id_prefix: str,
         as_of: object,
+        only_latest: bool = False,
     ) -> tuple[SqlSearcher, SqlVariable, tuple[_SqlValue, ...]]:
-        searcher = self.store.searcher(as_of=as_of)
+        searcher = self.store.searcher(as_of=as_of, only_latest=only_latest)
         variable = searcher.variable(backing.backing)
         context = _SqlQueryContext(searcher, variable)
         if ast is None:

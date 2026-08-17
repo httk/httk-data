@@ -75,7 +75,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 import sqlalchemy
 
 from httk.store.db.codecs import ValueCodec, codec_named, decode_fracvector_exact
-from httk.store.db.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import LOGICAL_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.store_timestamp import ns_operand_to_store_units
@@ -627,6 +627,11 @@ class SqlVariable:
             # The store-managed integer primary key ('sid' is a reserved field
             # name, so this never shadows a stored field).
             return SqlColumn(self._searcher, self._alias.c[SID_COLUMN])
+        if name == LOGICAL_ID_COLUMN:
+            # The store-managed lineage id ('logical_id' is a reserved field
+            # name). Unlike store_timestamp it carries no unit conversion and no
+            # store_timestamps=True requirement (the column is unconditional).
+            return SqlColumn(self._searcher, self._alias.c[LOGICAL_ID_COLUMN], variable=self)
         if name == STORE_TIMESTAMP_COLUMN:
             if not self._searcher._store.store_timestamps:
                 raise AttributeError("store_timestamp queries require SqlStore(store_timestamps=True)")
@@ -751,15 +756,21 @@ class SqlSearcher:
 
     :param store: The SQL store whose tables and connection serve the query.
     :param as_of: Optional historic cutoff in canonical timestamp form.
+    :param only_latest: Whether root variables are restricted to the latest row of each lineage.
 
     An historic cutoff is injected for every root and reference variable;
     visible rows' dependencies are always visible because references only point
-    at earlier-or-equal rows from the same transaction.
+    at earlier-or-equal rows from the same transaction. When ``only_latest`` is
+    set, every root variable is additionally restricted to rows that are the
+    latest of their ``logical_id`` lineage by sid (bounded by ``as_of`` when
+    given); reference/child variables stay unfiltered so pinned references may
+    still resolve replaced rows.
     """
 
-    def __init__(self, store: "SqlStore", *, as_of: object = None) -> None:
+    def __init__(self, store: "SqlStore", *, as_of: object = None, only_latest: bool = False) -> None:
         self._store = store
         self._as_of = as_of
+        self._only_latest = only_latest
         self._variables: list[SqlVariable] = []
         self._where: list[SqlExpression] = []
         self._having: list[SqlExpression] = []
@@ -787,7 +798,31 @@ class SqlSearcher:
         self._variables.append(variable)
         if self._as_of is not None:
             self.add(cast(SqlColumn, variable.store_timestamp) <= self._as_of)
+        if self._only_latest:
+            self.add(self._latest_of_lineage(schema, alias))
         return variable
+
+    def _latest_of_lineage(self, schema: TableSchema, alias: sqlalchemy.FromClause) -> SqlExpression:
+        """A ``NOT EXISTS`` restricting ``alias`` to the latest row of its lineage by sid.
+
+        Latest is decided by ``sid`` alone (monotone), never by timestamp. When
+        the searcher carries an ``as_of`` cutoff the "newer" subquery is bounded
+        by that cutoff in store units, giving "latest as of T".
+
+        :param schema: The table schema of the restricted root variable.
+        :param alias: The table alias the restriction correlates against.
+        :return: A WHERE-position condition true only for latest-of-lineage rows.
+        """
+        newer = self._store._table(schema.table_name).alias()
+        conds: list[sqlalchemy.ColumnElement[bool]] = [
+            _bool_clause(newer.c[LOGICAL_ID_COLUMN] == alias.c[LOGICAL_ID_COLUMN]),
+            _bool_clause(newer.c[SID_COLUMN] > alias.c[SID_COLUMN]),
+        ]
+        if self._as_of is not None:
+            as_of_units = ns_operand_to_store_units(self._as_of, cast(int, self._store.store_timestamp_resolution))
+            conds.append(_bool_clause(newer.c[STORE_TIMESTAMP_COLUMN] <= as_of_units))
+        subquery = sqlalchemy.select(sqlalchemy.literal(1)).select_from(newer).where(*conds).correlate(alias)
+        return _same(~subquery.exists())
 
     def output(self, variable: "SqlVariable | SqlColumn", name: str) -> None:
         """Append an output for a reconstructed instance or raw column value.

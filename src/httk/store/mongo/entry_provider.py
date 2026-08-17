@@ -86,7 +86,8 @@ class StoreEntryProvider(EntryProvider):
     family's :class:`~httk.store.mongo.stored_properties.MongoStoredPropertyPlan`; backing classes use the same
     schema-derived property contract as the SQL provider. ``id_of`` receives
     ``(entry_type, sid, hydrated_record)`` and defaults to the record's
-    content identity.
+    content identity. ``only_latest`` restricts served searchers' root
+    variables to the latest document of each lineage.
     """
 
     def __init__(
@@ -98,6 +99,7 @@ class StoreEntryProvider(EntryProvider):
         prefix: str = "_httk_",
         id_of: Callable[[str, int, Any], str] | None = None,
         link_classes: Iterable[type] = (),
+        only_latest: bool = False,
     ) -> None:
         if prefix not in known_definition_prefixes():
             raise ValueError(
@@ -107,6 +109,7 @@ class StoreEntryProvider(EntryProvider):
             )
         self._store = store
         self._classes = dict(classes)
+        self._only_latest = only_latest
         self._prefix = prefix
         self._id_of = id_of if id_of is not None else _default_id
         self._definitions = dict(definitions or {})
@@ -230,7 +233,7 @@ class StoreEntryProvider(EntryProvider):
         return served_specs(self._schemas[record], self._prefix)
 
     def _iter_records(self, record: type) -> Iterator[tuple[Any, int]]:
-        searcher = self._store.searcher()
+        searcher = self._store.searcher(only_latest=self._only_latest)
         variable = searcher.variable(record)
         searcher.add_sort(variable.sid)
         searcher.output(variable, "record")

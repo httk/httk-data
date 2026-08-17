@@ -81,6 +81,7 @@ from httk.store.db.layout import (
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    LOGICAL_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
     STORE_TIMESTAMP_COLUMN,
@@ -124,9 +125,23 @@ type SidResolver = Callable[[type, Any, str], int]
 __all__ = [
     "EntryDispatchIntegrityError",
     "EntryMetadataConflictError",
+    "EntryReplacementError",
     "SqlStore",
     "StoreClockRegressionError",
 ]
+
+
+class EntryReplacementError(ValueError):
+    """A :meth:`SqlStore.replace` deduplicated onto a row from a different lineage."""
+
+    def __init__(self, table_name: str, predecessor_logical_id: int, conflicting_logical_id: int) -> None:
+        self.table_name = table_name
+        self.predecessor_logical_id = predecessor_logical_id
+        self.conflicting_logical_id = conflicting_logical_id
+        super().__init__(
+            f"replacement in table {table_name!r} deduplicated onto an existing row with logical_id "
+            f"{conflicting_logical_id}, but the predecessor's logical_id is {predecessor_logical_id}"
+        )
 
 
 class _DegradedWriteCrash(BaseException):
@@ -1383,6 +1398,10 @@ class SqlStore:
         :raises httk.core.storage.identity.StorageProjectionCycleError: If projection reaches a reference cycle.
         :raises RuntimeError: If a :meth:`bulk_ingest` context is currently open.
         """
+        return self._save_top(obj, as_record=as_record, replace_logical_id=None)
+
+    def _save_top(self, obj: Any, *, as_record: type | None, replace_logical_id: int | None) -> int:
+        """Run one top-level save, optionally as a replacement carrying ``replace_logical_id``."""
         self._check_mutation_policy("save")
         self._reject_during_bulk()
         reject_cursor_proxy(obj)
@@ -1404,7 +1423,9 @@ class SqlStore:
                 timestamp_state["initialized"] = True
             else:
                 projection.store_timestamp = timestamp_state["captured"]
-            sid = self._save(connection, record_type, obj, projection, "", top_level=True)
+            sid = self._save(
+                connection, record_type, obj, projection, "", top_level=True, replace_logical_id=replace_logical_id
+            )
             family = self._family_for_backing(record_type)
             if family is not None:
                 self._save_entry_dispatch(connection, family, record_type, sid, projection.content_id(record_type, obj))
@@ -1433,13 +1454,22 @@ class SqlStore:
         path: str,
         *,
         top_level: bool = False,
+        replace_logical_id: int | None = None,
     ) -> int:
         active_key = (record_type, id(source))
         if active_key in projection.active:
             raise StorageProjectionCycleError(path, record_type)
         projection.active.add(active_key)
         try:
-            return self._save_active(connection, record_type, source, projection, path, top_level=top_level)
+            return self._save_active(
+                connection,
+                record_type,
+                source,
+                projection,
+                path,
+                top_level=top_level,
+                replace_logical_id=replace_logical_id,
+            )
         finally:
             projection.active.remove(active_key)
 
@@ -1452,7 +1482,12 @@ class SqlStore:
         path: str,
         *,
         top_level: bool,
+        replace_logical_id: int | None = None,
     ) -> int:
+        # The replacement lineage applies ONLY to the top-level parent row; a
+        # nested record reached through references/ownership keeps its own-sid
+        # lineage. A fresh row's logical_id is its own sid.
+        replacement = replace_logical_id if top_level else None
         schema = resolve_schema(record_type)
         table = self._table(schema.table_name)
         projected = projection.projector(record_type, source)
@@ -1475,6 +1510,8 @@ class SqlStore:
                 if self._write_profile == "degraded":
                     self._after_degraded_write(f"content-dedup-select:{table.name}")
                 sid = int(found[0])
+                if replacement is not None:
+                    self._apply_replacement_collision(connection, table, sid, replacement)
                 # Match Mongo's order: a rejected metadata comparison is
                 # observational only and must never promote a dependency.
                 self._check_metadata(connection, record_type, sid, source, projection)
@@ -1502,11 +1539,13 @@ class SqlStore:
             found = connection.execute(statement.limit(1)).first()
             if found is not None:
                 sid = int(found[0])
+                self._discard_inserted(connection, projection, checkpoint)
+                if replacement is not None:
+                    self._apply_replacement_collision(connection, table, sid, replacement)
                 if top_level and int(found[1]) == 0:
                     connection.execute(
                         sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({ROLE_COLUMN: 1})
                     )
-                self._discard_inserted(connection, projection, checkpoint)
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
 
@@ -1519,6 +1558,10 @@ class SqlStore:
             sid = self._allocate_degraded_sid(connection, table.name)
             values[SID_COLUMN] = sid
             values[ROLE_COLUMN] = int(top_level)
+            # The sid is client-allocated pre-insert, so the lineage is known
+            # directly: a replacement copies its predecessor's, a fresh row uses
+            # its own sid.
+            values[LOGICAL_ID_COLUMN] = replacement if replacement is not None else sid
             if projection.store_timestamp is not None:
                 values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
             if key is not None:
@@ -1545,9 +1588,15 @@ class SqlStore:
             values[ROLE_COLUMN] = int(top_level)
             if projection.store_timestamp is not None:
                 values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
+            # A replacement knows its lineage pre-insert; a fresh row's sid is
+            # DB-allocated by the ON CONFLICT ... RETURNING below, so it inserts
+            # a placeholder and is filled in the same transaction just after.
+            values[LOGICAL_ID_COLUMN] = replacement if replacement is not None else 0
             sid, inserted = self._insert_content_row(connection, table, values, key)
             if not inserted:
                 self._discard_inserted(connection, projection, checkpoint)
+                if replacement is not None:
+                    self._apply_replacement_collision(connection, table, sid, replacement)
                 self._check_metadata(connection, record_type, sid, source, projection)
                 if top_level:
                     connection.execute(
@@ -1557,13 +1606,28 @@ class SqlStore:
                     )
                 self._remember(record_type, sid, source, cache_instance=type(source) is record_type)
                 return sid
+            if replacement is None:
+                # The only sanctioned write-after-insert: fill the fresh row's
+                # own-sid lineage inside the same transaction as its insert.
+                connection.execute(
+                    sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({LOGICAL_ID_COLUMN: sid})
+                )
         else:
             values[ROLE_COLUMN] = int(top_level)
             if projection.store_timestamp is not None:
                 values[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
-            insert = sqlalchemy.insert(table).values(values) if values else sqlalchemy.insert(table)
-            result = connection.execute(insert)
+            # A replacement knows its lineage pre-insert; a fresh row's sid is
+            # DB-allocated, so it inserts a placeholder and is filled in the same
+            # transaction just after.
+            values[LOGICAL_ID_COLUMN] = replacement if replacement is not None else 0
+            result = connection.execute(sqlalchemy.insert(table).values(values))
             sid = int(cast(Any, result.inserted_primary_key)[0])
+            if replacement is None:
+                # The only sanctioned write-after-insert: fill the fresh row's
+                # own-sid lineage inside the same transaction as its insert.
+                connection.execute(
+                    sqlalchemy.update(table).where(table.c[SID_COLUMN] == sid).values({LOGICAL_ID_COLUMN: sid})
+                )
         projection.inserted.append((record_type, sid))
         for spec in schema.fields:
             if spec.role == "child":
@@ -1612,6 +1676,23 @@ class SqlStore:
             sqlalchemy.select(table.c[SID_COLUMN]).where(table.c[CONTENT_ID_COLUMN] == key)
         ).scalar_one()
         return int(found), False
+
+    def _apply_replacement_collision(
+        self, connection: sqlalchemy.Connection, table: sqlalchemy.Table, hit_sid: int, predecessor_logical_id: int
+    ) -> None:
+        """Enforce :meth:`replace`'s dedup collision policy against a deduplicated hit row.
+
+        A replacement whose content deduplicates onto an existing row is an
+        idempotent no-op when that row shares the predecessor's lineage, and a
+        :class:`EntryReplacementError` when it belongs to a different one.
+        """
+        existing = int(
+            connection.execute(
+                sqlalchemy.select(table.c[LOGICAL_ID_COLUMN]).where(table.c[SID_COLUMN] == hit_sid)
+            ).scalar_one()
+        )
+        if existing != predecessor_logical_id:
+            raise EntryReplacementError(table.name, predecessor_logical_id, existing)
 
     def _parent_row(
         self,
@@ -1927,7 +2008,7 @@ class SqlStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self, *, as_of: object = None) -> SqlSearcher:
+    def searcher(self, *, as_of: object = None, only_latest: bool = False) -> SqlSearcher:
         """Return a new :class:`~httk.store.db.searcher.SqlSearcher` querying this store.
 
         The searcher runs on this store's read path — inside an open
@@ -1936,13 +2017,16 @@ class SqlStore:
         access exactly as the lazy default of :meth:`fetch` does.
 
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param only_latest: Whether root variables are restricted to the latest row of each
+            ``logical_id`` lineage by sid (bounded by ``as_of`` when given). Reference/child
+            variables stay unfiltered. Does not require ``store_timestamps=True``.
         :return: A new SQL searcher bound to this store.
         """
         if as_of is not None:
             if not self._store_timestamps:
                 raise ValueError("as_of queries require SqlStore(store_timestamps=True)")
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
-        return SqlSearcher(self, as_of=as_of)
+        return SqlSearcher(self, as_of=as_of, only_latest=only_latest)
 
     def fsck(
         self,
@@ -2024,6 +2108,93 @@ class SqlStore:
             if eager:
                 return [self._fetch(connection, cls, referring_sid) for referring_sid in found_sids]
             return self._fetch_many_lazy(cls, found_sids)
+
+    def replace(self, predecessor: Any, obj: Any) -> int:
+        """Store ``obj`` as a logical replacement of ``predecessor`` and return its sid.
+
+        The saved row copies ``predecessor``'s ``logical_id`` (its lineage
+        identity) instead of starting a fresh one, so both rows share the
+        lineage :meth:`history` walks. Nothing is updated or deleted: plain
+        :meth:`fetch` and :meth:`searcher` queries keep returning both rows, and
+        the lineage's latest row is simply the one with the highest sid.
+        ``predecessor`` need not itself be the latest row of its lineage —
+        replacing an already-replaced row is allowed and extends the same
+        lineage. ``obj`` is saved through the ordinary :meth:`save` path, so its
+        dedup policy, timestamp capture, identity caching and entry-family
+        dispatch all behave exactly as they do there.
+
+        If ``obj``'s content deduplicates onto an existing row (under the
+        ``"content_id"`` or ``"by_value"`` policies), that row's lineage is
+        compared with ``predecessor``'s: an equal lineage (including ``obj``
+        equalling ``predecessor`` itself) is an idempotent no-op returning the
+        existing sid, while a different lineage raises
+        :class:`EntryReplacementError`.
+
+        :param predecessor: The stored instance or lazy proxy being replaced; it must have been stored or fetched through this store.
+        :param obj: The replacement object to store.
+        :return: The stored replacement row's sid.
+        :raises ValueError: If ``predecessor`` is not known to this store, or ``obj``'s record table differs from ``predecessor``'s.
+        :raises EntryReplacementError: If ``obj`` deduplicates onto a row from a different lineage.
+        """
+        self._check_mutation_policy("replace")
+        self._reject_during_bulk()
+        predecessor_sid = self.sid_of(predecessor)
+        if predecessor_sid is None:
+            raise ValueError(
+                f"the {type(predecessor).__name__} instance has not been stored or fetched through this store"
+            )
+        predecessor_type = resolve_storage_record(predecessor)
+        obj_type = resolve_storage_record(obj)
+        predecessor_table = resolve_schema(predecessor_type).table_name
+        obj_table = resolve_schema(obj_type).table_name
+        if obj_table != predecessor_table:
+            raise ValueError(
+                f"cannot replace a record stored in table {predecessor_table!r} with a "
+                f"{obj_type.__name__} record stored in table {obj_table!r}"
+            )
+        with self._read_connection() as connection:
+            self._missing_tables_for_read((predecessor_type,))
+            table = self._table(predecessor_table)
+            predecessor_logical_id = int(
+                connection.execute(
+                    sqlalchemy.select(table.c[LOGICAL_ID_COLUMN]).where(table.c[SID_COLUMN] == predecessor_sid)
+                ).scalar_one()
+            )
+        return self._save_top(obj, as_record=None, replace_logical_id=predecessor_logical_id)
+
+    def history(self, obj: Any) -> tuple[Any, ...]:
+        """Return every record in ``obj``'s replacement lineage, oldest first.
+
+        The lineage is the set of rows sharing ``obj``'s ``logical_id`` — the
+        fresh record that started it and every :meth:`replace` of it — ordered
+        by sid ascending (the fresh record first, the latest replacement last).
+        Records are reconstructed through the same machinery as :meth:`fetch`,
+        lazily by default.
+
+        :param obj: A stored instance or lazy proxy whose lineage to walk; it must have been stored or fetched through this store.
+        :return: The lineage's records ordered by ascending sid.
+        :raises ValueError: If ``obj`` is not known to this store.
+        """
+        obj_sid = self.sid_of(obj)
+        if obj_sid is None:
+            raise ValueError(f"the {type(obj).__name__} instance has not been stored or fetched through this store")
+        record_type = resolve_storage_record(obj)
+        schema = resolve_schema(record_type)
+        with self._read_connection() as connection:
+            if self._missing_tables_for_read((record_type,)):
+                return ()
+            table = self._table(schema.table_name)
+            logical_id = int(
+                connection.execute(
+                    sqlalchemy.select(table.c[LOGICAL_ID_COLUMN]).where(table.c[SID_COLUMN] == obj_sid)
+                ).scalar_one()
+            )
+            found = connection.execute(
+                sqlalchemy.select(table.c[SID_COLUMN])
+                .where(table.c[LOGICAL_ID_COLUMN] == logical_id)
+                .order_by(table.c[SID_COLUMN])
+            ).all()
+            return tuple(self._fetch_many_lazy(record_type, [int(row[0]) for row in found]))
 
     def _fetch(self, connection: sqlalchemy.Connection, cls: type, sid: int) -> Any:
         sid = int(sid)

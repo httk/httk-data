@@ -56,6 +56,7 @@ __all__ = [
     "DuplicateEntryIdError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryDispatchIntegrityError",  # pyright: ignore[reportUnsupportedDunderAll]
     "EntryMetadataConflictError",  # pyright: ignore[reportUnsupportedDunderAll]
+    "EntryReplacementError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredCursorRowError",  # pyright: ignore[reportUnsupportedDunderAll]
     "ExpiredLazyRecordError",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "FsckSummary",  # pyright: ignore[reportUnsupportedDunderAll]
@@ -91,6 +92,7 @@ _SQL_EXPORTS = {
     "Database": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
+    "EntryReplacementError": ".store",
     "StoreClockRegressionError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",

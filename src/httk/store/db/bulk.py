@@ -111,6 +111,7 @@ from httk.store.db.layout import METADATA_TABLE_NAME, actual_schema_objects, bac
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    LOGICAL_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
     STORE_TIMESTAMP_COLUMN,
@@ -1231,7 +1232,7 @@ class BulkIngest:
 
         sid = self._next_sid[table_name]
         self._next_sid[table_name] = sid + 1
-        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
+        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, LOGICAL_ID_COLUMN: sid, **values}
         if projection.store_timestamp is not None:
             row[STORE_TIMESTAMP_COLUMN] = projection.store_timestamp
         if key is not None:
@@ -2276,7 +2277,7 @@ class BulkIngest:
             value_columns = [
                 column.name
                 for column in table.columns
-                if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+                if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN, LOGICAL_ID_COLUMN)
             ]
             condition = sqlalchemy.and_(*(stage.c[name].is_not_distinct_from(table.c[name]) for name in value_columns))
             statement = (
@@ -2621,6 +2622,6 @@ def _value_tuple(row: Mapping[str, Any]) -> tuple[Any, ...]:
         sorted(
             (name, value)
             for name, value in row.items()
-            if name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+            if name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN, LOGICAL_ID_COLUMN)
         )
     )

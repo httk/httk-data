@@ -18,6 +18,7 @@ from pymongo.write_concern import WriteConcern
 
 from httk.store.db.codecs import codec_named, decode_fracvector_exact
 from httk.store.db.schema import SchemaError, resolve_schema
+from httk.store.db.store import EntryReplacementError
 from httk.store.storage_layout import (
     DECLARATION_PROTOCOL_VERSION,
     EntryFamilyDeclaration,
@@ -671,6 +672,10 @@ class MongoStore:
         :raises ~httk.core.storage.StorageProjectionCycleError: If the projected graph cycles.
         :raises ~httk.store.store_common.EntryMetadataConflictError: If identity-excluded metadata conflicts.
         """
+        return self._save_graph(obj, as_record=as_record, replace_logical_id=None)
+
+    def _save_graph(self, obj: Any, *, as_record: type | None, replace_logical_id: int | None) -> int:
+        """Run one top-level save, optionally as a replacement carrying ``replace_logical_id``."""
         reject_cursor_proxy(obj)
         record_type = resolve_storage_record(obj, as_record=as_record)
         if self._current_transaction() is not None:
@@ -681,7 +686,7 @@ class MongoStore:
             if not transaction.timestamp_initialized:
                 transaction.store_timestamp = self._capture_store_timestamp()
                 transaction.timestamp_initialized = True
-            sid = self._save_once(record_type, obj, transaction.store_timestamp)
+            sid = self._save_once(record_type, obj, transaction.store_timestamp, replace_logical_id)
             return sid
         with self._write_lock:
             lease = acquire_writer(self._database.database)
@@ -697,22 +702,24 @@ class MongoStore:
                         previous_session = getattr(self._local, "write_session", None)
                         self._local.write_session = session
                         try:
-                            sid = self._save_once(record_type, obj, captured)
+                            sid = self._save_once(record_type, obj, captured, replace_logical_id)
                         finally:
                             self._local.write_session = previous_session
                 else:
-                    sid = self._save_implicit_transaction(record_type, obj, lease, captured)
+                    sid = self._save_implicit_transaction(record_type, obj, lease, captured, replace_logical_id)
                 self._advance_store_timestamp_mark(captured)
                 return sid
             finally:
                 self._local.writer_lease = previous_lease
                 lease.release()
 
-    def _save_once(self, record_type: type, obj: Any, store_timestamp: int | None) -> int:
+    def _save_once(
+        self, record_type: type, obj: Any, store_timestamp: int | None, replace_logical_id: int | None = None
+    ) -> int:
         projection = SaveProjection(store_timestamp=store_timestamp)
         self._projection_state(projection)
         try:
-            sid = self._save(record_type, obj, projection, "", top_level=True)
+            sid = self._save(record_type, obj, projection, "", top_level=True, replace_logical_id=replace_logical_id)
             family = self._family_for_backing(record_type)
             if family is not None:
                 self._save_entry_dispatch(family, record_type, sid, projection.content_id(record_type, obj))
@@ -726,7 +733,12 @@ class MongoStore:
             raise
 
     def _save_implicit_transaction(
-        self, record_type: type, obj: Any, lease: WriterLease, store_timestamp: int | None
+        self,
+        record_type: type,
+        obj: Any,
+        lease: WriterLease,
+        store_timestamp: int | None,
+        replace_logical_id: int | None = None,
     ) -> int:
         last_error: BaseException | None = None
         for attempt in range(_TRANSACTION_ATTEMPTS):
@@ -736,7 +748,7 @@ class MongoStore:
                 stack.append(transaction)
                 try:
                     self._start_transaction(session)
-                    sid = self._save_once(record_type, obj, store_timestamp)
+                    sid = self._save_once(record_type, obj, store_timestamp, replace_logical_id)
                     self._commit(session)
                 except BaseException as error:
                     self._abort(session)
@@ -788,7 +800,16 @@ class MongoStore:
             self.ensure_collections(current)
             pending.extend(spec.target for spec in schema.fields if spec.target is not None)
 
-    def _save(self, record_type: type, source: Any, projection: SaveProjection, path: str, *, top_level: bool) -> int:
+    def _save(
+        self,
+        record_type: type,
+        source: Any,
+        projection: SaveProjection,
+        path: str,
+        *,
+        top_level: bool,
+        replace_logical_id: int | None = None,
+    ) -> int:
         self._refresh_writer_lease()
         key = (record_type, id(source))
         if key in projection.active:
@@ -799,7 +820,9 @@ class MongoStore:
         projection.active.add(key)
         self._projection_sources(projection)[key] = source
         try:
-            return self._save_active(record_type, source, projection, path, top_level=top_level)
+            return self._save_active(
+                record_type, source, projection, path, top_level=top_level, replace_logical_id=replace_logical_id
+            )
         finally:
             projection.active.remove(key)
 
@@ -811,7 +834,12 @@ class MongoStore:
         path: str,
         *,
         top_level: bool,
+        replace_logical_id: int | None = None,
     ) -> int:
+        # The replacement lineage applies ONLY to the top-level parent document;
+        # a nested record reached through references/ownership keeps its own-sid
+        # lineage. A fresh document's logical_id is its own sid.
+        replacement = replace_logical_id if top_level else None
         schema = resolve_schema(record_type)
         projected = projection.projector(record_type, source)
         validation_key = (record_type, id(source))
@@ -828,6 +856,8 @@ class MongoStore:
             found = collection.find_one({"content_id": content_key}, **self._session_kwargs())
             if found is not None:
                 sid = int(found["_id"])
+                if replacement is not None:
+                    self._apply_replacement_collision(collection, sid, replacement)
                 self._check_metadata(record_type, sid, source, projection)
                 self._projection_sids(projection)[validation_key] = sid
                 if top_level and found.get("_httk_role") == "dep":
@@ -850,6 +880,8 @@ class MongoStore:
             if found is not None:
                 sid = int(found["_id"])
                 self._discard_inserts(projection, checkpoint)
+                if replacement is not None:
+                    self._apply_replacement_collision(collection, sid, replacement)
                 self._projection_sids(projection)[validation_key] = sid
                 if top_level and found.get("_httk_role") == "dep":
                     collection.update_one({"_id": sid}, {"$set": {"_httk_role": "main"}}, **self._session_kwargs())
@@ -857,6 +889,9 @@ class MongoStore:
 
         sid = counter_next(self._database.database, schema.table_name, session=self._write_session())
         document: dict[str, Any] = {"_id": sid, "_httk_role": "main" if top_level else "dep", "f": f_document}
+        # The sid is allocated pre-insert, so the lineage is known directly: a
+        # replacement copies its predecessor's, a fresh document uses its own sid.
+        document["logical_id"] = replacement if replacement is not None else sid
         if projection.store_timestamp is not None:
             document["store_timestamp"] = projection.store_timestamp
         if content_key is not None:
@@ -872,6 +907,8 @@ class MongoStore:
                 raise
             sid = int(winner["_id"])
             self._discard_inserts(projection, checkpoint)
+            if replacement is not None:
+                self._apply_replacement_collision(collection, sid, replacement)
             self._check_metadata(record_type, sid, source, projection)
             self._projection_sids(projection)[validation_key] = sid
             if top_level and winner.get("_httk_role") == "dep":
@@ -921,6 +958,28 @@ class MongoStore:
                 if value == sid and key[0] is record_type:
                     del sids[key]
         del projection.inserted[checkpoint:]
+
+    def _apply_replacement_collision(self, collection: Any, hit_sid: int, predecessor_logical_id: int) -> None:
+        """Enforce :meth:`replace`'s dedup collision policy against a deduplicated hit document.
+
+        A replacement whose content deduplicates onto an existing document is an
+        idempotent no-op when that document shares the predecessor's lineage, and
+        an :class:`~httk.store.db.store.EntryReplacementError` when it belongs to a
+        different one.
+
+        :param collection: The record collection holding the deduplicated document.
+        :param hit_sid: The sid of the deduplicated document.
+        :param predecessor_logical_id: The predecessor's lineage identity.
+        :raises ~httk.store.db.store.EntryReplacementError: If the hit belongs to a different lineage.
+        """
+        document = collection.find_one({"_id": hit_sid}, {"logical_id": 1}, **self._session_kwargs())
+        if document is None:
+            raise RuntimeError(
+                f"record collection {collection.name!r} is missing the deduplicated document for sid {hit_sid}"
+            )
+        existing = int(document["logical_id"])
+        if existing != predecessor_logical_id:
+            raise EntryReplacementError(collection.name, predecessor_logical_id, existing)
 
     def _family_for_backing(self, record_type: type) -> Any:
         return next((family for family in self.layout.families if record_type in family.records), None)
@@ -1161,7 +1220,86 @@ class MongoStore:
         self._remember(record_type, sid, obj, cache_instance=type(obj) is record_type)
         return sid
 
-    def searcher(self, *, as_of: object = None) -> Any:
+    def replace(self, predecessor: Any, obj: Any) -> int:
+        """Store ``obj`` as a logical replacement of ``predecessor`` and return its sid.
+
+        The saved document copies ``predecessor``'s ``logical_id`` (its lineage
+        identity) instead of starting a fresh one, so both documents share the
+        lineage :meth:`history` walks. Nothing is updated or deleted: plain
+        :meth:`fetch` and :meth:`searcher` queries keep returning both documents,
+        and the lineage's latest document is simply the one with the highest sid.
+        ``predecessor`` need not itself be the latest document of its lineage —
+        replacing an already-replaced document is allowed and extends the same
+        lineage. ``obj`` is saved through the ordinary :meth:`save` path, so its
+        dedup policy, timestamp capture, identity caching and entry-family
+        dispatch all behave exactly as they do there.
+
+        If ``obj``'s content deduplicates onto an existing document (under the
+        ``"content_id"`` or ``"by_value"`` policies), that document's lineage is
+        compared with ``predecessor``'s: an equal lineage (including ``obj``
+        equalling ``predecessor`` itself) is an idempotent no-op returning the
+        existing sid, while a different lineage raises
+        :class:`~httk.store.db.store.EntryReplacementError`.
+
+        :param predecessor: The stored instance being replaced; it must have been stored or fetched through this store.
+        :param obj: The replacement object to store.
+        :return: The stored replacement document's sid.
+        :raises ValueError: If ``predecessor`` is not known to this store, or ``obj``'s record collection differs from ``predecessor``'s.
+        :raises ~httk.store.db.store.EntryReplacementError: If ``obj`` deduplicates onto a document from a different lineage.
+        """
+        predecessor_sid = self.sid_of(predecessor)
+        if predecessor_sid is None:
+            raise ValueError(
+                f"the {type(predecessor).__name__} instance has not been stored or fetched through this store"
+            )
+        predecessor_type = resolve_storage_record(predecessor)
+        obj_type = resolve_storage_record(obj)
+        predecessor_collection = collection_name_for(resolve_schema(predecessor_type))
+        obj_collection = collection_name_for(resolve_schema(obj_type))
+        if obj_collection != predecessor_collection:
+            raise ValueError(
+                f"cannot replace a record stored in collection {predecessor_collection!r} with a "
+                f"{obj_type.__name__} record stored in collection {obj_collection!r}"
+            )
+        document = self._database.database[predecessor_collection].find_one(
+            {"_id": predecessor_sid}, {"logical_id": 1}, **self._session_kwargs()
+        )
+        if document is None:
+            raise RuntimeError(
+                f"record collection {predecessor_collection!r} is missing the predecessor document for sid "
+                f"{predecessor_sid}"
+            )
+        predecessor_logical_id = int(document["logical_id"])
+        return self._save_graph(obj, as_record=None, replace_logical_id=predecessor_logical_id)
+
+    def history(self, obj: Any) -> tuple[Any, ...]:
+        """Return every record in ``obj``'s replacement lineage, oldest first.
+
+        The lineage is the set of documents sharing ``obj``'s ``logical_id`` — the
+        fresh record that started it and every :meth:`replace` of it — ordered by
+        sid ascending (the fresh record first, the latest replacement last).
+        Records are reconstructed through the same machinery as :meth:`fetch`.
+
+        :param obj: A stored instance whose lineage to walk; it must have been stored or fetched through this store.
+        :return: The lineage's records ordered by ascending sid.
+        :raises ValueError: If ``obj`` is not known to this store.
+        """
+        obj_sid = self.sid_of(obj)
+        if obj_sid is None:
+            raise ValueError(f"the {type(obj).__name__} instance has not been stored or fetched through this store")
+        record_type = resolve_storage_record(obj)
+        collection = self._database.database[collection_name_for(resolve_schema(record_type))]
+        document = collection.find_one({"_id": obj_sid}, {"logical_id": 1}, **self._session_kwargs())
+        if document is None:
+            raise RuntimeError(f"record collection {collection.name!r} is missing the document for sid {obj_sid}")
+        logical_id = int(document["logical_id"])
+        sids = [
+            int(item["_id"])
+            for item in collection.find({"logical_id": logical_id}, {"_id": 1}, **self._session_kwargs()).sort("_id", 1)
+        ]
+        return tuple(self.fetch(record_type, sid) for sid in sids)
+
+    def searcher(self, *, as_of: object = None, only_latest: bool = False) -> Any:
         """Return a Mongo searcher bound to this store's read path.
 
         Queries use the active transaction session when one is open, so they
@@ -1169,6 +1307,9 @@ class MongoStore:
         through :meth:`fetch`, preserving the identity-cache contract.
 
         :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param only_latest: Whether root variables are restricted to the latest document of each
+            ``logical_id`` lineage by sid (bounded by ``as_of`` when given). Reference/child
+            scopes stay unfiltered so pinned references may still resolve replaced documents.
         :return: A new MongoDB searcher bound to this store.
         """
         if as_of is not None:
@@ -1177,7 +1318,7 @@ class MongoStore:
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
         from .searcher import MongoSearcher
 
-        return MongoSearcher(self, as_of=as_of)
+        return MongoSearcher(self, as_of=as_of, only_latest=only_latest)
 
     def stored_property_plan(self, family: type) -> Any:
         """Return the Mongo stored-property plan for one configured entry family.

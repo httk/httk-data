@@ -64,6 +64,7 @@ from httk.core.storage import StorageProjectionCycleError, resolve_storage_recor
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
+    LOGICAL_ID_COLUMN,
     ROLE_COLUMN,
     SID_COLUMN,
     STORE_TIMESTAMP_COLUMN,
@@ -693,7 +694,7 @@ class _WorkerEncoder:
                 "reduce the worker count or split the ingest"
             )
         self._next_sid[table_name] = sid + 1
-        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, **values}
+        row = {SID_COLUMN: sid, ROLE_COLUMN: 0, LOGICAL_ID_COLUMN: sid, **values}
         if self._config.store_timestamp is not None:
             row[STORE_TIMESTAMP_COLUMN] = self._config.store_timestamp
         if key is not None:
@@ -1315,7 +1316,7 @@ class _Merger:
         value_columns = [
             column.name
             for column in table.columns
-            if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN)
+            if column.name not in (SID_COLUMN, ROLE_COLUMN, STORE_TIMESTAMP_COLUMN, LOGICAL_ID_COLUMN)
         ]
         while True:
             keep = (
@@ -1669,6 +1670,12 @@ class _Merger:
             for referrer_table, column in self._referrers.get(name, ()):
                 self._remap_column(referrer_table, column, map_table)
             self._remap_column(name, SID_COLUMN, map_table)
+            # A bulk row's logical_id starts equal to its own block sid, so the
+            # same renumbering keeps the invariant logical_id == final sid.  The
+            # map only contains block sids (>= _SID_BLOCK); pre-existing rows,
+            # whose logical_id may differ from their sid after replace(), carry
+            # ids below that floor and are never matched, hence never disturbed.
+            self._remap_column(name, LOGICAL_ID_COLUMN, map_table)
         finally:
             self._drop_map_table(map_table)
 

@@ -299,7 +299,7 @@ class MongoStoredPropertyPlan:
 
     def records(self) -> Iterator[Mapping[str, Any]]:
         for backing in self._backings:
-            searcher = self.store.searcher()
+            searcher = self.store.searcher(only_latest=False)
             variable = searcher.variable(backing.backing)
             searcher.output(variable, "record")
             for result in searcher:
@@ -312,10 +312,13 @@ class MongoStoredPropertyPlan:
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
         as_of: object = None,
+        only_latest: bool = False,
     ) -> tuple[MongoSearcher, ...]:
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         return tuple(
-            self._searcher_for(item, ast, sort, public_id_prefix, candidate=False, as_of=as_of)[0]
+            self._searcher_for(
+                item, ast, sort, public_id_prefix, candidate=False, as_of=as_of, only_latest=only_latest
+            )[0]
             for item in self._backings
         )
 
@@ -326,12 +329,13 @@ class MongoStoredPropertyPlan:
         sort: Sequence[tuple[str, bool]] = (),
         public_id_prefix: str = "",
         as_of: object = None,
+        only_latest: bool = False,
     ) -> tuple[MongoStoredPropertyCandidateStream, ...]:
         ast = parse_optimade_filter(filter_string) if isinstance(filter_string, str) else filter_string
         streams: list[MongoStoredPropertyCandidateStream] = []
         for backing, name in zip(self._backings, self.layout.record_names, strict=True):
             searcher, variable, sorts = self._searcher_for(
-                backing, ast, sort, public_id_prefix, candidate=True, as_of=as_of
+                backing, ast, sort, public_id_prefix, candidate=True, as_of=as_of, only_latest=only_latest
             )
             searcher.output(variable.sid, "sid")
             # ``content_id`` remains canonical: StoredEntryFederation applies
@@ -414,8 +418,9 @@ class MongoStoredPropertyPlan:
         *,
         candidate: bool,
         as_of: object = None,
+        only_latest: bool = False,
     ) -> tuple[MongoSearcher, MongoVariable, tuple[MongoField, ...]]:
-        searcher = self.store.searcher(as_of=as_of)
+        searcher = self.store.searcher(as_of=as_of, only_latest=only_latest)
         variable = searcher.variable(backing.backing)
         context = _MongoQueryContext(backing.backing, self.store)
         if ast is not None:

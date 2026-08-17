@@ -644,6 +644,11 @@ class MongoVariable:
             raise AttributeError(name)
         if name == "sid":
             return self.sid
+        if name == "logical_id":
+            # The store-managed lineage id: a top-level document field (like sid
+            # and store_timestamp), carrying no unit conversion and, unlike
+            # store_timestamp, no store_timestamps=True requirement.
+            return MongoField(self, "logical_id", FieldSpec("logical_id", int, "scalar", ()))
         if name == "store_timestamp":
             if not self._searcher._store.store_timestamps:
                 raise AttributeError("store_timestamp queries require MongoStore(store_timestamps=True)")
@@ -699,12 +704,17 @@ class MongoSearcher:
 
     An historic cutoff is injected for every root and lookup variable; visible
     rows' dependencies are always visible because references only point at
-    earlier-or-equal rows from the same transaction.
+    earlier-or-equal rows from the same transaction. When ``only_latest`` is set,
+    every declared (root) variable is additionally restricted to the latest
+    document of its ``logical_id`` lineage by sid (bounded by ``as_of`` when
+    given); reference/lookup variables stay unfiltered so pinned references may
+    still resolve replaced documents.
     """
 
-    def __init__(self, store: "MongoStore", *, as_of: object = None) -> None:
+    def __init__(self, store: "MongoStore", *, as_of: object = None, only_latest: bool = False) -> None:
         self._store = store
         self._as_of = as_of
+        self._only_latest = only_latest
         self._variables: list[MongoVariable] = []
         self._hidden_variables: list[MongoVariable] = []
         self._root: MongoVariable | None = None
@@ -927,6 +937,47 @@ class MongoSearcher:
     def _truth_filter(self) -> dict[str, Any]:
         return _and(*(render_node(expression.node)[0] for expression in self._expressions))
 
+    def _latest_lineage_stages(self) -> list[dict[str, Any]]:
+        """Restrict each declared variable to the latest document of its lineage.
+
+        For every declared (root) variable a correlated self-``$lookup`` finds a
+        newer sibling — a same-collection document with equal ``logical_id`` and a
+        greater sid, additionally bounded by ``store_timestamp <= as_of`` when a
+        cutoff is set — and the following ``$match`` keeps only rows with no such
+        sibling. Reference/lookup variables are deliberately left unfiltered.
+
+        :return: The correlated self-join and anti-match stages, in order.
+        """
+        from httk.store.mongo.mapping import collection_name_for
+
+        as_of_units = (
+            ns_operand_to_store_units(self._as_of, cast(int, self._store.store_timestamp_resolution))
+            if self._as_of is not None
+            else None
+        )
+        stages: list[dict[str, Any]] = []
+        for index, variable in enumerate(self._variables):
+            prefix = "" if variable is self._root else f"{variable._alias}."
+            newer: list[dict[str, Any]] = [
+                {"$eq": ["$logical_id", "$$lid"]},
+                {"$gt": ["$_id", "$$sid"]},
+            ]
+            if as_of_units is not None:
+                newer.append({"$lte": ["$store_timestamp", as_of_units]})
+            alias = f"_httk_latest_{index}"
+            stages.append(
+                {
+                    "$lookup": {
+                        "from": collection_name_for(variable._schema),
+                        "let": {"lid": f"${prefix}logical_id", "sid": f"${prefix}_id"},
+                        "pipeline": [{"$match": {"$expr": {"$and": newer}}}, {"$limit": 1}],
+                        "as": alias,
+                    }
+                }
+            )
+            stages.append({"$match": {alias: {"$eq": []}}})
+        return stages
+
     def _pipeline(
         self,
         *,
@@ -939,6 +990,8 @@ class MongoSearcher:
         self._require_verifier_identity()
         pipeline = self._lookup_stages()
         pipeline.append({"$match": self._truth_filter()})
+        if self._only_latest:
+            pipeline.extend(self._latest_lineage_stages())
         if count:
             pipeline.append({"$count": "count"})
             return pipeline
@@ -1051,6 +1104,8 @@ def _scalar_value(document: dict[str, Any], field: MongoField) -> Any:
         return None
     if field._key_path == "_id":
         return source.get("_id")
+    if field._key_path == "logical_id":
+        return source.get("logical_id")
     if field._key_path == "content_id":
         value = source.get("content_id")
         return None if value is None else field._presentation_prefix + value

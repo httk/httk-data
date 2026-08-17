@@ -42,6 +42,7 @@ from httk.store.db.schema import (
 __all__ = [
     "CONTENT_ID_COLUMN",
     "DISPATCH_CONTENT_ID_COLUMN",
+    "LOGICAL_ID_COLUMN",
     "ROLE_COLUMN",
     "SID_COLUMN",
     "STORE_TIMESTAMP_COLUMN",
@@ -63,6 +64,9 @@ ROLE_COLUMN: Final = "_httk_role"
 
 STORE_TIMESTAMP_COLUMN: Final = "store_timestamp"
 """The store-managed integer timestamp on every parent record table."""
+
+LOGICAL_ID_COLUMN: Final = "logical_id"
+"""The store-managed lineage identity on every parent record table (a fresh record's own sid, copied by a replacement)."""
 
 DISPATCH_CONTENT_ID_COLUMN: Final = "content_id"
 """The content identity primary key of an entry-family dispatch table."""
@@ -216,6 +220,10 @@ def _build_parent_table(
     if store_timestamps:
         items.append(sqlalchemy.Column(STORE_TIMESTAMP_COLUMN, sqlalchemy.BigInteger, nullable=False))
         items.append(sqlalchemy.Index(_index_name("ix", name, (STORE_TIMESTAMP_COLUMN,)), STORE_TIMESTAMP_COLUMN))
+    # Unconditional lineage column (unlike the opt-in store_timestamp): a fresh
+    # record carries its own sid here, a replacement copies its predecessor's.
+    items.append(sqlalchemy.Column(LOGICAL_ID_COLUMN, sqlalchemy.BigInteger, nullable=False))
+    items.append(sqlalchemy.Index(_index_name("ix", name, (LOGICAL_ID_COLUMN,)), LOGICAL_ID_COLUMN))
     if schema.dedup == "content_id":
         items.append(sqlalchemy.Column(CONTENT_ID_COLUMN, sqlalchemy.Text, nullable=False))
         items.append(sqlalchemy.Index(_index_name("uq", name, (CONTENT_ID_COLUMN,)), CONTENT_ID_COLUMN, unique=True))

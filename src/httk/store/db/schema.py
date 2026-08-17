@@ -267,7 +267,7 @@ class TableSchema:
         return tuple(seen)
 
 
-_RESERVED_FIELD_NAMES: Final = frozenset({"sid", "content_id", "_httk_role", "store_timestamp"})
+_RESERVED_FIELD_NAMES: Final = frozenset({"sid", "content_id", "_httk_role", "store_timestamp", "logical_id"})
 
 _SCALAR_KINDS: Final[dict[type, ScalarKind]] = {
     int: "int",

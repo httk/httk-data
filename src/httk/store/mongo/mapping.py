@@ -222,6 +222,15 @@ def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> li
             _index_name("ix", collection, ("_httk_role",)),
         )
     )
+    # The lineage index is unconditional (unlike the opt-in store_timestamp one):
+    # every parent document carries a ``logical_id``, and both replace/history
+    # and ``only_latest`` searches correlate on it.
+    result.append(
+        IndexSpec(
+            (("logical_id", 1),),
+            _index_name("ix", collection, ("logical_id",)),
+        )
+    )
     if store_timestamps:
         result.append(
             IndexSpec(
@@ -304,8 +313,12 @@ def validator_for(schema: TableSchema, *, store_timestamps: bool = True) -> dict
         "_id": {"bsonType": ["int", "long"]},
         "_httk_role": {"enum": ["main", "dep"]},
         "f": {"bsonType": "object", "additionalProperties": True},
+        # The store-managed lineage identity, present on every parent document
+        # regardless of ``store_timestamps`` (a fresh document's own sid, copied
+        # by a replacement).
+        "logical_id": {"bsonType": ["int", "long"]},
     }
-    required = ["_id", "_httk_role", "f"]
+    required = ["_id", "_httk_role", "f", "logical_id"]
     if store_timestamps:
         properties["store_timestamp"] = {"bsonType": ["long", "int"]}
         required.append("store_timestamp")
