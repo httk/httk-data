@@ -9,7 +9,7 @@ and bounds into SQL, and delay record hydration until a global page is known.
 import heapq
 import json
 import warnings
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, cast
@@ -298,6 +298,7 @@ class StoredEntryFederation:
         offset: int = 0,
         limit: int | None = None,
         as_of: object = None,
+        fields: Collection[str] | None = None,
     ) -> StoredEntryPage:
         """Return one globally merged page with an exact filtered total.
 
@@ -313,6 +314,7 @@ class StoredEntryFederation:
             deliberately omit this cutoff and serve their current state.
             Dependencies of a visible row remain visible because references
             only point at earlier-or-equal rows from the same transaction.
+        :param fields: The response property names to render, or ``None`` to render every configured property.
         :return: The globally merged page.
         :raises DuplicateEntryIdError: If a visible id has multiple cross-source origins.
         """
@@ -334,15 +336,18 @@ class StoredEntryFederation:
         # limit=0 metadata calls.
         for candidate in visible:
             self._probe_candidate(candidate, as_of=as_of)
-        rows = self._render_page(visible)
+        rows = self._render_page(visible, fields)
         return StoredEntryPage(rows, total_count, more)
 
-    def fetch(self, public_id: str, *, as_of: object = None) -> Mapping[str, Any] | None:
+    def fetch(
+        self, public_id: str, *, as_of: object = None, fields: Collection[str] | None = None
+    ) -> Mapping[str, Any] | None:
         """Fetch one public id and detect a collision among its possible origins.
 
         :param public_id: The public id to fetch.
         :param as_of: Optional historic cutoff. Sources without store timestamps
             deliberately omit this cutoff and serve their current state.
+        :param fields: The response property names to render, or ``None`` to render every configured property.
         :return: The fetched response row, or ``None`` when it is absent.
         :raises DuplicateEntryIdError: If the id has multiple origins.
         """
@@ -351,7 +356,7 @@ class StoredEntryFederation:
         matches = self._probe_public_id(public_id, as_of=as_of)
         if not matches:
             return None
-        return self._row(matches[0])
+        return self._row(matches[0], fields)
 
     def audit_duplicate_ids(self, *, batch_size: int = _AUDIT_BATCH_SIZE) -> None:
         """Lazily scan sorted ID-only batches and raise on the first collision.
@@ -505,7 +510,7 @@ class StoredEntryFederation:
         return tuple(matches)
 
     @staticmethod
-    def _render_page(visible: Sequence[_Candidate]) -> tuple[Mapping[str, Any], ...]:
+    def _render_page(visible: Sequence[_Candidate], fields: Collection[str] | None) -> tuple[Mapping[str, Any], ...]:
         """Render visible candidates, batching the record fetch per source backing.
 
         Candidates are grouped by their originating ``_Stream`` (one per
@@ -516,30 +521,36 @@ class StoredEntryFederation:
         value.  Rows are then rendered in the original ``visible`` order.
 
         :param visible: The page candidates in final output order.
+        :param fields: The response property names to render, or ``None`` to render every configured property.
         :return: The rendered response rows in ``visible`` order.
         """
         groups: dict[int, list[_Candidate]] = {}
         for candidate in visible:
             groups.setdefault(id(candidate.stream), []).append(candidate)
         record_by_candidate: dict[int, object] = {}
+        # A full render (fields is None) touches every configured property, so
+        # eager hydration is kept to preserve the shipped batched profile. A
+        # field subset renders lazily: rows.py chunk-batches child tables, so
+        # untouched child tables are simply never SELECTed.
+        eager = fields is None
         for group in groups.values():
             store = group[0].stream.source.source.store
             backing = group[0].stream.backing
-            # Serving reads every configured property, so laziness buys nothing;
-            # eager keeps the shipped batched-hydration profile exactly.
-            records: list[object] = store.fetch_many(backing, [candidate.sid for candidate in group], eager=True)
+            records: list[object] = store.fetch_many(backing, [candidate.sid for candidate in group], eager=eager)
             for candidate, record in zip(group, records, strict=True):
                 record_by_candidate[id(candidate)] = record
         return tuple(
-            StoredEntryFederation._render(candidate, record_by_candidate[id(candidate)]) for candidate in visible
+            StoredEntryFederation._render(candidate, record_by_candidate[id(candidate)], fields)
+            for candidate in visible
         )
 
     @staticmethod
-    def _render(candidate: _Candidate, record: object) -> Mapping[str, Any]:
+    def _render(candidate: _Candidate, record: object, fields: Collection[str] | None) -> Mapping[str, Any]:
         """Render one already-fetched record into its public response row.
 
         :param candidate: The visible candidate to render.
         :param record: The hydrated backing record for ``candidate``.
+        :param fields: The response property names to render, or ``None`` to render every configured property.
         :return: The immutable response row.
         """
         source = candidate.stream.source
@@ -548,14 +559,16 @@ class StoredEntryFederation:
             record,
             public_id=candidate.public_id,
             store_timestamp=candidate.store_timestamp,
+            fields=fields,
         )
         return MappingProxyType(dict(row))
 
     @staticmethod
-    def _row(candidate: _Candidate) -> Mapping[str, Any]:
+    def _row(candidate: _Candidate, fields: Collection[str] | None) -> Mapping[str, Any]:
         source = candidate.stream.source
-        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid, eager=True)
-        return StoredEntryFederation._render(candidate, record)
+        eager = fields is None
+        record: object = source.source.store.fetch(candidate.stream.backing, candidate.sid, eager=eager)
+        return StoredEntryFederation._render(candidate, record, fields)
 
 
 class _BatchedCandidateIterator:

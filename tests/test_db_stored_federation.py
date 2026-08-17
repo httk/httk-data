@@ -1,7 +1,8 @@
 """Bounded durable entry-family federation over SQLite and DuckDB."""
 
 import datetime
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 import pytest
@@ -21,6 +22,7 @@ from httk.store.db import (
     StoredEntryFederation,
     StoredEntrySource,
 )
+from httk.store.db.schema import resolve_schema
 from httk.store.query.optimade_filters import FilterTranslationError
 from httk.store.store_common import EntryStore
 
@@ -41,6 +43,9 @@ class FederatedCalculation:
                 ),
                 "_httk_store_timestamp": PropertyDefinition.from_simple(
                     "_httk_store_timestamp", description="A store timestamp test filter.", fulltype="timestamp"
+                ),
+                "_httk_tags": PropertyDefinition.from_simple(
+                    "_httk_tags", description="Child-table tags for field-pruning tests.", fulltype="list of string"
                 ),
             }
         )
@@ -87,6 +92,7 @@ class FederationFirst:
 
     label: str
     modified: datetime.datetime | None
+    tags: list[str] = field(default_factory=list)
 
     __httk_stored_properties__: ClassVar = {
         "immutable_id": StoredPropertyProjection(
@@ -109,6 +115,7 @@ class FederationFirst:
             query=_label_query,
             sort=lambda context: context.field("label"),
         ),
+        "_httk_tags": StoredPropertyProjection(response=lambda record: list(record.tags)),
     }
 
 
@@ -118,6 +125,7 @@ class FederationSecond:
 
     label: str
     modified: datetime.datetime | None
+    tags: list[str] = field(default_factory=list)
 
     __httk_stored_properties__: ClassVar = FederationFirst.__httk_stored_properties__
 
@@ -139,9 +147,15 @@ register_entry_record(
 )
 
 
-def _record(label: str, modified: datetime.datetime | None = None, *, second: bool = False):
+def _record(
+    label: str,
+    modified: datetime.datetime | None = None,
+    *,
+    second: bool = False,
+    tags: Sequence[str] = (),
+):
     cls = FederationSecond if second else FederationFirst
-    return cls(label, modified)
+    return cls(label, modified, list(tags))
 
 
 def test_stored_entry_source_accepts_structural_entry_store() -> None:
@@ -589,3 +603,50 @@ def test_batched_page_matches_single_id_render(databases):
     # Each batched row equals the row the single-id render path produces.
     for row in page.rows:
         assert federation.fetch(row["id"]) == dict(row)
+
+
+def test_fields_prunes_unrequested_child_table_selects(databases):
+    records = tuple(_record(f"row-{index}", tags=[f"tag-{index}"]) for index in range(5))
+    federation = _federation(databases, records, ())
+    tags_table = resolve_schema(FederationFirst).field("tags").child.table_name
+    engines = [database.engine for database in databases]
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+        statements.append(statement)
+
+    for engine in engines:
+        sqlalchemy.event.listen(engine, "before_cursor_execute", capture)
+    try:
+        page = federation.query(fields=("id", "immutable_id"), limit=50)
+    finally:
+        for engine in engines:
+            sqlalchemy.event.remove(engine, "before_cursor_execute", capture)
+
+    assert [row["immutable_id"] for row in page.rows] == [f"row-{index}" for index in range(5)]
+    # The unrequested tags child table is never SELECTed: lazy rows never touch
+    # the child table because no requested projection reads record.tags.
+    assert all(tags_table not in statement for statement in statements)
+
+
+def test_fields_pruned_page_matches_requested_subset_of_full_render(databases):
+    federation = _federation(databases, (_record("a", tags=["x"]),), (_record("b", tags=["y"]),))
+    subset = ("id", "type", "immutable_id")
+    full = federation.query(sort=(("immutable_id", False),), limit=10)
+    pruned = federation.query(sort=(("immutable_id", False),), limit=10, fields=subset)
+    for pruned_row, full_row in zip(pruned.rows, full.rows, strict=True):
+        assert dict(pruned_row) == {name: full_row[name] for name in subset}
+
+
+def test_fields_none_matches_current_full_render(databases):
+    federation = _federation(databases, (_record("a", tags=["x"]),), (_record("b", tags=["y"]),))
+    implicit = federation.query(sort=(("immutable_id", False),), limit=10)
+    explicit = federation.query(sort=(("immutable_id", False),), limit=10, fields=None)
+    assert [dict(row) for row in explicit.rows] == [dict(row) for row in implicit.rows]
+
+
+def test_fields_including_child_property_serves_values(databases):
+    federation = _federation(databases, (_record("a", tags=["x", "y"]),), (_record("b", tags=[]),))
+    page = federation.query(sort=(("immutable_id", False),), limit=10, fields=("id", "immutable_id", "_httk_tags"))
+    assert [(row["immutable_id"], row["_httk_tags"]) for row in page.rows] == [("a", ["x", "y"]), ("b", [])]
+    assert all("last_modified" not in row for row in page.rows)

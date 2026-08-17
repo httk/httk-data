@@ -17,7 +17,7 @@ import datetime
 import decimal
 import fractions
 import re
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, cast
@@ -703,6 +703,7 @@ class StoredPropertySqlPlan:
         *,
         public_id: str | None = None,
         store_timestamp: int | None = None,
+        fields: Collection[str] | None = None,
     ) -> Mapping[str, Any]:
         """Render one hydrated backing record at the protocol boundary.
 
@@ -710,6 +711,7 @@ class StoredPropertySqlPlan:
         :param record: The hydrated backing record to project.
         :param public_id: The public id to use, or the record's canonical id when omitted.
         :param store_timestamp: An already-normalized timestamp from a candidate stream, when available.
+        :param fields: The response property names to render, or ``None`` to render every configured property.
         :return: The protocol-boundary response row.
         :raises StoredPropertySqlConfigurationError: If ``backing`` is not configured for the family.
         """
@@ -719,7 +721,12 @@ class StoredPropertySqlPlan:
                 f"{backing.__name__} is not a configured backing for {self.family.__name__}"
             )
         row: dict[str, Any] = {"id": content_id(record) if public_id is None else public_id, "type": self.entry_type}
-        for name in self.definition.properties:
+        names = (
+            self.definition.properties
+            if fields is None
+            else [name for name in self.definition.properties if name in fields]
+        )
+        for name in names:
             if name in _CORE_PROPERTIES:
                 continue
             if name == "_httk_store_timestamp":
