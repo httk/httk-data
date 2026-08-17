@@ -247,6 +247,68 @@ pointing at a stored instance are found with
 `store.referring(TagClass, field="structure", to=record)`, which returns lazy
 rows by default and accepts `eager=True`.
 
+## Record replacement and lineages
+
+The store is append-only, but a record can be marked as the logical successor
+of an earlier one. Every stored row carries a `logical_id` lineage identity:
+a freshly saved record starts a lineage whose id is its own sid, while
+`store.replace(predecessor, obj)` saves `obj` copying the predecessor's
+`logical_id` instead of starting a new one. Nothing is updated or deleted —
+both rows remain fetchable — and the lineage's *latest* row is simply the one
+with the highest sid.
+
+```python
+from dataclasses import dataclass
+from typing import Annotated
+
+from httk.core.storage import Indexed
+from httk.store.db import Database, SqlStore
+
+
+@dataclass(frozen=True)
+class Note:
+    key: Annotated[str, Indexed()]
+    text: str
+
+
+store = SqlStore(Database.sqlite(), entry_records={})
+with store.transaction():
+    first = Note("n", "first")
+    store.save(first)
+    second = store.replace(first, Note("n", "second"))            # replace the stored instance
+    latest = store.replace(store.fetch(Note, second), Note("n", "third"))  # a lazy proxy works too
+```
+
+`replace()` goes through the ordinary `save()` path, so its dedup policy,
+timestamp capture, identity caching, and entry dispatch behave exactly as they
+do there; it returns the new row's sid. The `predecessor` (a stored instance or
+lazy proxy) need not itself be the latest row of its lineage — replacing an
+already-replaced row extends the same lineage. If `obj` deduplicates onto an
+existing row, an equal lineage (including replacing a record with itself) is an
+idempotent no-op returning that sid, while a different lineage raises
+`EntryReplacementError`. Replacing across record tables raises `ValueError`.
+
+`store.history(obj)` returns every record sharing that lineage, oldest first
+(the fresh record, then each replacement), reconstructed lazily like `fetch()`:
+
+```python
+[record.text for record in store.history(store.fetch(Note, latest))]
+# ['first', 'second', 'third']
+```
+
+Plain `fetch()` and `searcher()` queries keep returning **all** rows of a
+lineage. Pass `only_latest=True` to `store.searcher()` to restrict *root*
+variables to the highest-sid row of each `logical_id` (bounded by `as_of` when
+given); reference and child variables stay unfiltered, and it does not require
+`store_timestamps=True`:
+
+```python
+search = store.searcher(only_latest=True)
+note = search.variable(Note)
+search.output(note, "note")
+current = [row.values[0] for row in search]  # one row per lineage
+```
+
 ## Store timestamps
 
 `SqlStore` enables store-managed timestamps by default:
@@ -856,3 +918,8 @@ provider handoff uses the httk-core contract, while *httk-serve* also consumes
 representation (`bytes`, custom codecs) are not served, and rationals are
 served as their nearest floats. The provider is also registered (as
 `store-db-store`) for discovery through the `httk.core` registry.
+
+Each served record also exposes its lineage identity as the integer property
+`_httk_logical_id` (see [Record replacement and lineages](#record-replacement-and-lineages)),
+filterable like any other served field. Pass `only_latest=True` to
+`StoreEntryProvider` to serve only the latest row of each lineage.

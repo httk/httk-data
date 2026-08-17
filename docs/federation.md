@@ -54,6 +54,12 @@ The opaque `search.origin` projection returns the stable source name without
 wrapping or changing the child record. Record and scalar projections otherwise
 retain the exact values returned by the child store.
 
+`combined.searcher()` accepts `as_of=T` for a historic cutoff — forwarded to
+every child, each applying its own resolution; a child that cannot honor it (a
+store without store timestamps) fails, and the federation surfaces that as a
+`FederatedSourceError` — and `only_latest=True` to restrict each child's root
+variables to the latest row of every `logical_id` lineage.
+
 Federation supports the portable single-root filter profile: literal scalar
 comparisons (including `None`), `contains`, `startswith`, `endswith`, `has`,
 `has_any`, `has_only`, `is_in`, boolean `&`, `|`, `~`, and

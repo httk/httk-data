@@ -27,9 +27,14 @@ as `store_timestamp <= T`; configure their unit size with
 The [detailed guide](details/db.md#store-timestamps) covers the query syntax,
 deduplication semantics, clock guard, and fsck repair behavior.
 
+Append-only record replacement is available too: `store.replace(predecessor,
+obj)` saves a logical successor sharing the predecessor's lineage, `store.history()`
+walks a lineage, and `store.searcher(only_latest=True)` restricts root variables
+to each lineage's latest row.
+
 The full guide, {doc}`details/db`, covers declaring storable classes with the
 httk-core marker vocabulary, entry families and multi-record dispatch, the
-search DSL and stored properties, bulk ingestion (including
-`bulk_ingest(workers=N)` and the crash-safe `finalize="deferred"` fresh-store
-profile), the permanentization role model with `store.fsck()` recovery,
-OPTIMADE serving, and store-layout versioning.
+search DSL and stored properties, record replacement lineages, bulk ingestion
+(including `bulk_ingest(workers=N)` and the crash-safe `finalize="deferred"`
+fresh-store profile), the permanentization role model with `store.fsck()`
+recovery, OPTIMADE serving, and store-layout versioning.

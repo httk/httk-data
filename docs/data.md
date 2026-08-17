@@ -146,5 +146,6 @@ except PropertyValidationError as exc:
 
 The entry providers above are in-memory. To store records in a database and
 serve them the same way, see {doc}`db`: `httk.store.db.SqlStore` stores plain
-frozen dataclasses in SQLite or DuckDB, and `StoreEntryProvider` (registered
-as `store-db-store`) serves them through the identical provider contract.
+frozen dataclasses in SQLite, DuckDB, or PostgreSQL, and `StoreEntryProvider`
+(registered as `store-db-store`) serves them through the identical provider
+contract.

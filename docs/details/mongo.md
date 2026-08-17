@@ -121,6 +121,17 @@ degraded mode the backing is written first, so a crash can temporarily make
 `fetch_entry()` report dispatch integrity failure; re-saving the record or
 running fsck repairs the main-role case.
 
+## Record replacement and lineages
+
+`MongoStore` carries the same `logical_id` lineage identity and append-only
+replacement API as the SQL backend: `store.replace(predecessor, obj)` saves a
+logical successor sharing the predecessor's lineage, `store.history(obj)` walks
+that lineage oldest-first, and `store.searcher(only_latest=True)` restricts
+root variables to each lineage's latest document. The semantics — idempotent
+same-lineage replacement, `EntryReplacementError` on a cross-lineage dedup hit,
+and `only_latest` leaving reference/child scopes unfiltered — match SQL exactly;
+see [Record replacement and lineages](db.md#record-replacement-and-lineages).
+
 ## Store timestamps
 
 `MongoStore` enables store-managed timestamps by default:
