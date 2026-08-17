@@ -26,19 +26,12 @@ import sqlalchemy
 
 from httk.store.db.graph import LifecyclePath
 from httk.store.db.mapping import ROLE_COLUMN, SID_COLUMN, TS_END_COLUMN, TS_START_COLUMN
+from httk.store.store_common import LifecycleScopeError
 
 if TYPE_CHECKING:
     from httk.store.db.store import SqlStore
 
 __all__ = ["LifecycleScopeError", "lifecycle_clause"]
-
-
-class LifecycleScopeError(ValueError):
-    """A scoped query targets a non-family table caught in a reference cycle.
-
-    Ownership chains cannot be resolved statically for such a table; query it
-    with ``scoped=False`` to disable lifecycle filtering.
-    """
 
 
 def _family_lifetime(alias: sqlalchemy.FromClause, as_of_units: int | None) -> sqlalchemy.ColumnElement[bool]:

@@ -160,6 +160,25 @@ class _MongoQueryContext:
             if scope.parent is not None:
                 raise MongoStoredPropertyConfigurationError("ts_start is only available on parent scopes")
             return MongoValue("ts_start", scope=scope, field=name)
+        if name == "ts_end":
+            store = self._store
+            if (
+                store is None
+                or scope.parent is not None
+                or not store._is_versioned_family_collection(scope.schema.table_name)
+            ):
+                raise MongoStoredPropertyConfigurationError("ts_end is only available on versioned family scopes")
+            # ponytail: ts_end is served in the response but not filterable through
+            # the Mongo stored-property federation path. The client-side candidate
+            # evaluator hydrates records and reads attributes; ts_end is a
+            # store-managed document field, not a record attribute, so it has no
+            # resolver here (unlike ts_start, whose value the candidate stream
+            # already carries). Wire a ts_end candidate resolver if federation
+            # filtering on _httk_ts_end is ever required.
+            raise MongoStoredPropertyConfigurationError(
+                "filtering on ts_end is not supported through the Mongo stored-property federation path; "
+                "ts_end is served in responses but query it via the store searcher's ts_end pseudo-column instead"
+            )
         if scope.scalar_child:
             if scope.relationship is None or name not in {"value", scope.relationship.field}:
                 raise MongoStoredPropertyConfigurationError("scalar child scopes use field('value')")
@@ -399,6 +418,22 @@ class MongoStoredPropertyPlan:
                             )
                         )
                         value = None if found is None else found.get("ts_start")
+                        result[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
+                    continue
+                if name == "_httk_ts_end":
+                    # NULL on the current row of a lineage; the ns-scaled close
+                    # time on a superseded row. Only versioned family collections
+                    # carry ts_end; anywhere else it is served as null.
+                    sid = self.store.sid_of(record, as_record=backing)
+                    if sid is None or not self.store._is_versioned_family_collection(
+                        resolve_schema(backing).table_name
+                    ):
+                        result[name] = None
+                    else:
+                        found = self.store._database.database[collection_name_for(resolve_schema(backing))].find_one(
+                            {"_id": sid}, {"ts_end": 1}, **self.store._session_kwargs()
+                        )
+                        value = None if found is None else found.get("ts_end")
                         result[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
                     continue
                 projection = configured.projections.get(name)

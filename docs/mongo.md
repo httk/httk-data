@@ -28,6 +28,13 @@ as `ts_start <= T`; configure their unit size with
 The [detailed guide](details/mongo.md#store-timestamps) covers the query
 syntax, deduplication semantics, clock guard, and fsck repair behavior.
 
+`store_timestamps="versioned"` adds record versioning: `store.replace(old, new)`
+supersedes a family entry, queries return the current view by default (with
+`as_of=T` slicing and a `scoped=False` escape), and each entry serves
+`_httk_ts_start` / `_httk_ts_end` lifetime bounds. `replace` requires a
+replica-set deployment (multi-document transactions). See
+[Versioned stores](details/mongo.md#versioned-stores).
+
 The full guide, {doc}`details/mongo`, covers the document mapping, query
 translation, continuation paging, replica-set requirements, and the documented
 differences from the SQL backend.

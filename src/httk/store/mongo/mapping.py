@@ -205,12 +205,26 @@ def _make_index(
     )
 
 
-def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> list[IndexSpec]:
+def index_specs_for(
+    schema: TableSchema, *, store_timestamps: bool = True, versioned_family: bool = False
+) -> list[IndexSpec]:
     """Derive all record-collection indexes from the schema IR.
 
     :param schema: Resolved storable schema.
     :param store_timestamps: Whether to index the store-managed timestamp.
+    :param versioned_family: Whether this is a versioned-mode family backing collection.
     :return: Deterministically ordered index specifications.
+
+    MongoDB partial filter expressions do not support ``$exists: false`` nor an
+    equality-to-``null`` predicate, so a ``partialFilterExpression`` keyed on the
+    current-row marker (``ts_end IS NULL``) is not expressible — the trick that
+    the SQLite/PostgreSQL backends use for unique-among-current cannot be
+    reproduced here.  As on DuckDB, an author-``Unique`` field on a versioned
+    family collection therefore drops to a plain non-unique lookup index;
+    uniqueness among current rows is enforced transactionally in ``save`` and
+    ``replace`` and re-verified unconditionally by fsck.  The store-wide
+    ``content_id`` unique index is retained regardless, since dedup identity is
+    global and revive detection depends on it.
     """
     collection = collection_name_for(schema)
     result: list[IndexSpec] = []
@@ -229,6 +243,8 @@ def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> li
                 _index_name("ix", collection, ("ts_start",)),
             )
         )
+    if versioned_family:
+        result.append(IndexSpec((("ts_end", 1),), _index_name("ix", collection, ("ts_end",))))
     for field in schema.fields:
         if field.role == "child":
             continue
@@ -236,15 +252,19 @@ def index_specs_for(schema: TableSchema, *, store_timestamps: bool = True) -> li
         requested_indexed = any(column.indexed for column in field.columns)
         if not requested_unique and not requested_indexed:
             continue
-        prefix = "uq" if requested_unique else "ix"
+        # A versioned family collection cannot enforce unique-among-current in
+        # the engine (see the note above), so the author-Unique index degrades
+        # to a plain lookup index there.
+        enforce_unique = requested_unique and not versioned_family
+        prefix = "uq" if enforce_unique else "ix"
         for column in field.columns:
-            partial = _partial_filter(f"f.{column.name}", column.kind) if requested_unique and column.nullable else None
+            partial = _partial_filter(f"f.{column.name}", column.kind) if enforce_unique and column.nullable else None
             result.append(
                 _make_index(
                     prefix,
                     collection,
                     (column.name,),
-                    unique=requested_unique,
+                    unique=enforce_unique,
                     partial_filter_expression=partial,
                 )
             )
@@ -292,12 +312,20 @@ def _field_validator(spec: FieldSpec) -> tuple[dict[str, Any], dict[str, list[st
     return properties, dependencies, required
 
 
-def validator_for(schema: TableSchema, *, store_timestamps: bool = True) -> dict[str, Any]:
+def validator_for(
+    schema: TableSchema, *, store_timestamps: bool = True, versioned_family: bool = False
+) -> dict[str, Any]:
     """Build the writer-owned ``$jsonSchema`` validator for a record collection.
 
     :param schema: Resolved storable schema.
     :param store_timestamps: Whether parent documents require a timestamp.
+    :param versioned_family: Whether this is a versioned-mode family backing collection.
     :return: A MongoDB collection validator command fragment.
+
+    A versioned family collection always carries ``ts_end`` and
+    ``replaced_by_sid`` (written explicitly as ``null`` on insert, mirroring the
+    SQL ``NULL`` columns), so both are required-present with a nullable bson
+    type.
     """
     collection_name_for(schema)
     properties: dict[str, Any] = {
@@ -309,6 +337,10 @@ def validator_for(schema: TableSchema, *, store_timestamps: bool = True) -> dict
     if store_timestamps:
         properties["ts_start"] = {"bsonType": ["long", "int"]}
         required.append("ts_start")
+    if versioned_family:
+        properties["ts_end"] = {"bsonType": ["long", "int", "null"]}
+        properties["replaced_by_sid"] = {"bsonType": ["long", "int", "null"]}
+        required.extend(("ts_end", "replaced_by_sid"))
     if schema.dedup == "content_id":
         properties["content_id"] = {"bsonType": "string", "pattern": "^[0-9a-fA-F]{64}$"}
         required.append("content_id")

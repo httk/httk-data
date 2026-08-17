@@ -658,6 +658,24 @@ class MongoVariable:
                     None if value is None else value * cast(int, self._searcher._store.store_timestamp_resolution)
                 ),
             )
+        if name == "ts_end":
+            store = self._searcher._store
+            if not store._is_versioned_family_collection(self._schema.table_name):
+                raise AttributeError(
+                    f"ts_end is only available on a versioned family table "
+                    f"(MongoStore(store_timestamps=\"versioned\")); {self._cls.__name__} has none"
+                )
+            return MongoField(
+                self,
+                "ts_end",
+                FieldSpec("ts_end", int, "scalar", ()),
+                operand_converter=lambda value: ns_operand_to_store_units(
+                    value, cast(int, store.store_timestamp_resolution)
+                ),
+                presentation_converter=lambda value: (
+                    None if value is None else value * cast(int, store.store_timestamp_resolution)
+                ),
+            )
         try:
             spec = self._schema.field(name)
         except SchemaError:
@@ -697,14 +715,22 @@ class _MongoOutput:
 class MongoSearcher:
     """Build and execute a MongoDB query over reference-connected variables.
 
-    An historic cutoff is injected for every root and lookup variable; visible
-    rows' dependencies are always visible because references only point at
-    earlier-or-equal rows from the same transaction.
+    In ``store_timestamps="versioned"`` mode a scoped searcher (the default)
+    injects a time-slice predicate on each declared variable: a family collection
+    gets a direct ``[ts_start, ts_end)`` interval predicate, a non-family one gets
+    the derived ``role == "main" OR EXISTS(ownership chain to a live family row)``
+    built from chained ``$lookup`` stages. Forward reference traversals are never
+    lifecycle-filtered — a pinned reference to a row later superseded in its own
+    entry role stays a correct member of the aggregate, and references only point
+    at earlier-or-equal rows from the same transaction. In creation mode, or with
+    ``scoped=False``, an ``as_of`` cutoff applies as a plain ``ts_start <= T``
+    bound on each declared variable instead.
     """
 
-    def __init__(self, store: "MongoStore", *, as_of: object = None) -> None:
+    def __init__(self, store: "MongoStore", *, as_of: object = None, scoped: bool = True) -> None:
         self._store = store
         self._as_of = as_of
+        self._scoped = scoped
         self._variables: list[MongoVariable] = []
         self._hidden_variables: list[MongoVariable] = []
         self._root: MongoVariable | None = None
@@ -747,13 +773,47 @@ class MongoSearcher:
 
     def variable(self, target: type) -> MongoVariable:
         """Bind a query variable; each additional one must be join-connected."""
-        variable = MongoVariable(self, target, resolve_schema(target), f"_httk_var_{len(self._variables)}")
+        schema = resolve_schema(target)
+        variable = MongoVariable(self, target, schema, f"_httk_var_{len(self._variables)}")
         self._variables.append(variable)
         if self._root is None:
             self._root = variable
-        if self._as_of is not None:
+        if self._store._store_timestamps == "versioned" and self._scoped:
+            if self._store._is_versioned_family_collection(schema.table_name):
+                # A family collection carries its own lifetime fields: inject the
+                # interval predicate directly (renders on this variable's alias).
+                self.add(self._family_interval_expression(variable))
+            else:
+                # A non-family collection needs role-or-reachability, injected as
+                # $lookup pipeline stages by _lifecycle_stages(). Surface a cyclic
+                # scope now, at declaration, exactly as the SQL backend does.
+                path_map = self._store._lifecycle_path_map()
+                if schema.table_name in path_map and path_map[schema.table_name] is None:
+                    from httk.store.mongo.lifecycle import LifecycleScopeError
+
+                    raise LifecycleScopeError(
+                        f"the non-family collection {schema.table_name!r} is caught in a reference cycle and "
+                        "cannot be scoped to a time slice; query with scoped=False to disable lifecycle filtering"
+                    )
+        elif self._as_of is not None:
             self.add(cast(MongoField, variable.ts_start) <= self._as_of)
         return variable
+
+    def _family_interval_expression(self, variable: "MongoVariable") -> "MongoExpression":
+        """The half-open ``[ts_start, ts_end)`` (or current-view) predicate on a family variable."""
+        ts_end = cast(MongoField, variable.ts_end)
+        # MongoField.__eq__ is overloaded: this builds a "ts_end IS NULL" predicate.
+        current = ts_end == None
+        if self._as_of is None:
+            return current
+        ts_start = cast(MongoField, variable.ts_start)
+        return (ts_start <= self._as_of) & (current | (ts_end > self._as_of))
+
+    def _as_of_units(self) -> int | None:
+        """The searcher's ``as_of`` cutoff in integer store units, or ``None``."""
+        if self._as_of is None:
+            return None
+        return ns_operand_to_store_units(self._as_of, cast(int, self._store.store_timestamp_resolution))
 
     def _root_sid_field(self) -> MongoField:
         """Return the store-managed SID field of this searcher's root variable.
@@ -778,8 +838,9 @@ class MongoSearcher:
         )
         variable._source = reference
         self._hidden_variables.append(variable)
-        if self._as_of is not None:
-            self.add(cast(MongoField, variable.ts_start) <= self._as_of)
+        # A forward reference traversal is never lifecycle- or as_of-filtered: it
+        # points at an earlier-or-equal row of the same transaction, which stays a
+        # correct member of the aggregate even once superseded in its own role.
         return variable
 
     def output(self, variable: MongoVariable | MongoField, name: str) -> None:
@@ -924,6 +985,41 @@ class MongoSearcher:
                 raise UnsupportedQueryError("Mongo search contains a cyclic or disconnected variable join")
         return stages
 
+    def _lifecycle_stages(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Build non-family reachability ``$lookup`` stages and their combined ``$match``.
+
+        Family variables carry the interval predicate injected via ``add`` in
+        :meth:`variable`; only non-family declared variables need the derived
+        role-or-reachability form, keyed off each variable's own alias.
+        """
+        if not (self._store._store_timestamps == "versioned" and self._scoped):
+            return [], {}
+        from httk.store.mongo.lifecycle import reachability_stages
+
+        stages: list[dict[str, Any]] = []
+        matches: list[dict[str, Any]] = []
+        as_of_units = self._as_of_units()
+        for index, variable in enumerate(self._variables):
+            table = variable._schema.table_name
+            if self._store._is_versioned_family_collection(table):
+                continue
+            is_root = variable is self._root
+            local_id = "$_id" if is_root else f"${variable._alias}._id"
+            role_path = "_httk_role" if is_root else f"{variable._alias}._httk_role"
+            ts_start_path = "ts_start" if is_root else f"{variable._alias}.ts_start"
+            variable_stages, match = reachability_stages(
+                self._store,
+                table,
+                local_id_expr=local_id,
+                role_path=role_path,
+                ts_start_path=ts_start_path,
+                as_of_units=as_of_units,
+                reach_prefix=f"_httk_reach_{index}",
+            )
+            stages.extend(variable_stages)
+            matches.append(match)
+        return stages, _and(*matches)
+
     def _truth_filter(self) -> dict[str, Any]:
         return _and(*(render_node(expression.node)[0] for expression in self._expressions))
 
@@ -938,7 +1034,12 @@ class MongoSearcher:
             raise ValueError("this searcher has no query variables; call variable() first")
         self._require_verifier_identity()
         pipeline = self._lookup_stages()
-        pipeline.append({"$match": self._truth_filter()})
+        lifecycle_stages, lifecycle_match = self._lifecycle_stages()
+        pipeline.extend(lifecycle_stages)
+        match = self._truth_filter()
+        if lifecycle_match:
+            match = _and(match, lifecycle_match)
+        pipeline.append({"$match": match})
         if count:
             pipeline.append({"$count": "count"})
             return pipeline

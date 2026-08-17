@@ -189,6 +189,81 @@ deliberately ignores the cutoff and serves that source's current state; sources
 with timestamps enabled apply their own-resolution cutoff. Existing layouts do
 not require an enable/disable migration for reading this capability.
 
+## Versioned stores
+
+`store_timestamps="versioned"` extends creation-timestamp mode with lineage
+bookkeeping, matching the SQL backend's semantics (see
+{doc}`db` → *Versioned stores*). Each family-collection document carries a
+half-open lifetime interval `[ts_start, ts_end)` and a `replaced_by_sid`
+successor pointer, both written **explicitly** — `ts_end: null` and
+`replaced_by_sid: null` on the current row — so the validator, indexes, and
+lifecycle predicates treat the current-row state uniformly:
+
+```python
+store = MongoStore(database, entry_records={}, store_timestamps="versioned")
+new_sid = store.replace(old_entry, new_entry)
+```
+
+`replace(old, new)` saves `new` at the pinned transaction timestamp `T`, then
+closes `old` (`ts_end = T`, `replaced_by_sid =` the successor sid) in the same
+transaction, closing the old row *first* so a successor keeping the same
+author-`Unique` key does not collide with the still-current predecessor. `old`
+may be a stored instance, a content id, or (single-backing families only) a sid.
+Converging lineages are allowed; reviving a superseded row — via `save` or
+`replace` — raises `RecordReviveError`; replacing a row saved in the same
+`transaction()` raises `ValueError` (zero-length `[T, T)` interval).
+
+**Transactions are required.** Versioned `replace` needs MongoDB multi-document
+transactions, so it runs only against a replica-set deployment; on a standalone
+server (degraded, no transactions) `replace` raises `RuntimeError`. Constructing
+a versioned store and plain `save` still work degraded, but without the
+transactional guarantees.
+
+**Current view by default.** `store.searcher()` and `store.referring()` return
+only the current view; `as_of=T` returns the `[ts_start, ts_end)` slice. A
+family-collection root gets the interval predicate directly; a non-family
+(deduplicated dependency/content) root gets the derived
+`_httk_role == "main" [AND ts_start <= T] OR EXISTS(ownership chain to a live
+family document)` form. Because MongoDB stores child elements as embedded arrays
+rather than in separate collections, that `EXISTS` is built as chained `$lookup`
+stages in the aggregation pipeline, with each ownership hop reduced to a single
+dotted key path (a scalar reference `f.<column>` or an embedded-child array
+`f.<field>.<element_key>`). Forward reference traversals are never
+lifecycle-filtered. `scoped=False` disables all lifecycle filtering (an `as_of`
+cutoff still applies as a plain `ts_start <= T` bound). A non-family collection
+caught in a reference cycle cannot be scoped statically and raises
+`LifecycleScopeError` when a scoped searcher binds it; query it with
+`scoped=False`.
+
+**Served lifecycle properties.** `_httk_ts_start` and `_httk_ts_end` are served
+and filterable through `optimade_filter_searcher` (`_httk_ts_end IS UNKNOWN`
+selects the current view, `IS KNOWN` the superseded rows). The neutral DSL
+exposes them as pseudo-columns (`variable.ts_start`, `variable.ts_end`);
+`variable.ts_end == None` is the current-row predicate, and `ts_end` raises
+`AttributeError` off a versioned family variable. `_httk_ts_end` is also served
+in stored-property federation *responses*, but filtering federation
+stored-property queries on `ts_end` is not supported on the Mongo backend (its
+client-side candidate evaluator reads hydrated record attributes, and `ts_end` is
+a store-managed document field with no such attribute) — query it through the
+store searcher's `ts_end` pseudo-column instead.
+
+**Unique-among-current enforcement.** MongoDB partial filter expressions cannot
+express the current-row marker: `partialFilterExpression` supports neither
+`$exists: false` nor an equality-to-`null` predicate, so the `ts_end IS NULL`
+partial unique index that SQLite/PostgreSQL use is not available. As on DuckDB,
+an author-`Unique` field on a versioned family collection therefore drops to a
+plain non-unique lookup index, uniqueness among current documents is enforced
+transactionally inside `save`/`replace`, and `store.fsck()` re-verifies it
+unconditionally. The store-wide `content_id` unique index is retained regardless,
+since dedup identity is global and revive detection depends on it.
+
+`store.fsck()` additionally verifies the lifecycle invariants (report-only):
+`ts_end`/`replaced_by_sid` set together, closed intervals non-empty, each
+`replaced_by_sid` referencing an existing same-collection document whose
+`ts_start` does not fall after the predecessor's `ts_end`, and at most one
+current document per uniqueness class. A future `ts_end` is clamped alongside
+`ts_start` under `clamp_future_timestamps=True`.
+
 ## Roles, leases, and fsck
 
 Every Mongo record document has a store-managed role:

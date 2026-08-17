@@ -19,6 +19,7 @@ __all__ = [
     "EntryMetadataConflictError",
     "EntryStore",
     "IdentityCaches",
+    "LifecycleScopeError",
     "RecordReviveError",
     "RecordSupersededError",
     "ReplaceConflictError",
@@ -111,6 +112,15 @@ class ReplaceConflictError(RuntimeError):
 
     The end-of-life update matched no current row, so another transaction won
     the race; retry against the target's new successor.
+    """
+
+
+class LifecycleScopeError(ValueError):
+    """A scoped query targets a non-family table caught in a reference cycle.
+
+    Ownership chains cannot be resolved statically for such a table; query it
+    with ``scoped=False`` to disable lifecycle filtering. Backend-neutral so the
+    SQL and MongoDB query layers can raise and re-export the one error type.
     """
 
 

@@ -18,6 +18,7 @@ from httk.store.mongo.store import MongoStore
 from httk.store.query import Searcher
 from httk.store.query.optimade_filters import (
     FilterTranslationError,
+    field_unknown_handler,
     filter_searcher,
     known_unknown_handler,
     simple_property_handlers,
@@ -107,6 +108,7 @@ def optimade_filter_searcher(
     definition: EntryTypeDefinition | None = None,
     extra_handlers: Mapping[str, Mapping[str, Callable[..., Any]]] | None = None,
     related_classes: Mapping[str, type] | None = None,
+    scoped: bool = True,
 ) -> Searcher:
     """Build a Mongo searcher over ``cls`` from an OPTIMADE filter.
 
@@ -117,6 +119,7 @@ def optimade_filter_searcher(
     :param definition: An optional definition supplying additional property types.
     :param extra_handlers: Optional handlers for ids, types, or extra properties.
     :param related_classes: Related entry types and their storable classes.
+    :param scoped: Whether versioned-mode lifecycle filtering is injected at the root variable.
     :return: A Mongo searcher yielding matching stored instances.
     :raises ~httk.store.query.optimade_filters.FilterTranslationError: If the filter cannot be translated.
     :raises ValueError: If a related class does not match exactly one relationship field.
@@ -126,6 +129,15 @@ def optimade_filter_searcher(
     property_fulltypes = {"id": "string", "type": "string"}
     property_fulltypes.update({name: fulltype for name, _spec, fulltype in served})
     property_keys = {name: spec.field for name, spec, _fulltype in served}
+    if store.store_timestamps:
+        property_fulltypes[f"{prefix}ts_start"] = "integer"
+        property_keys[f"{prefix}ts_start"] = "ts_start"
+        if store._is_versioned_family_collection(schema.table_name):
+            # ts_end is nullable (NULL on the current row); it routes through the
+            # standard integer/unknown handlers, and IS NULL filtering works via
+            # the ts_end pseudo-column's None-tolerant operand converter.
+            property_fulltypes[f"{prefix}ts_end"] = "integer"
+            property_keys[f"{prefix}ts_end"] = "ts_end"
     if definition is not None:
         for name, prop in definition.properties.items():
             if name not in ("id", "type"):
@@ -134,6 +146,15 @@ def optimade_filter_searcher(
     handlers = simple_property_handlers(cls.__name__, property_keys, property_fulltypes)
     del handlers["id"]
     del handlers["type"]
+    if store.store_timestamps and store._is_versioned_family_collection(schema.table_name):
+        # ts_end is genuinely nullable (NULL on the current row), unlike the
+        # always-known default: IS UNKNOWN must map to ts_end IS NULL (current
+        # rows) and IS KNOWN to ts_end IS NOT NULL (superseded rows).
+        ts_end_name = f"{prefix}ts_end"
+        handlers[ts_end_name] = {
+            **handlers[ts_end_name],
+            "unknown": lambda entry, sv, unknown_type: field_unknown_handler("ts_end", sv, unknown_type),
+        }
     entry_type = cls.__name__
 
     relationship_targets: tuple[str, ...] = ()
@@ -154,12 +175,17 @@ def optimade_filter_searcher(
         relationship_targets = tuple(related)
 
         def resolve_related(related_type: str, sub_ast: FilterAst) -> tuple[str, ...]:
+            # The nested semi-join collects sids of related rows that the outer,
+            # already-scoped variable references by pinned foreign key. Those
+            # pinned targets stay correct members even when superseded in their
+            # own entry role, so the nested searcher must not lifecycle-filter.
             nested = optimade_filter_searcher(
                 store,
                 related[related_type],
                 sub_ast,
                 prefix=prefix,
                 extra_handlers={"id": _own_id_handlers(related_type)},
+                scoped=False,
             )
             assert isinstance(nested, MongoSearcher)
             result = nested.results(sid=nested._root_sid_field())
@@ -183,4 +209,5 @@ def optimade_filter_searcher(
         recognized_prefixes=(prefix,),
         relationship_targets=relationship_targets,
         related_property_resolver=resolver,
+        scoped=scoped,
     )

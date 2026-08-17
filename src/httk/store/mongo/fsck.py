@@ -120,24 +120,116 @@ def _check_future_timestamps(
     repaired_any = False
     for name in schemas:
         collection = store._database.database[name]
-        for document in collection.find({"ts_start": {"$gt": limit_units}}, {"_id": 1, "ts_start": 1}):
-            counters[name].examined += 1
-            sid = document["_id"]
-            future_ns = int(document["ts_start"]) * resolution
-            limit_ns = limit_units * resolution
-            if clamp:
-                collection.update_one({"_id": sid}, {"$set": {"ts_start": now_units}})
-                repaired_any = True
-                counters[name].repaired += 1
-                violations.append(
-                    f"collection {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns; "
-                    f"clamped to {now_ns} ns"
-                )
-            else:
-                counters[name].conflicts += 1
-                violations.append(f"collection {name!r} sid {sid} ts_start {future_ns} ns exceeds {limit_ns} ns")
+        # Both lifecycle bounds are checked; ts_end exists only on versioned
+        # family collections. Clamping ts_end down to now can make a successor's
+        # ts_start exceed its (now clamped) predecessor's ts_end — the lineage
+        # check reports that, which is acceptable for a badly skewed clock.
+        columns = ("ts_start", "ts_end") if store._is_versioned_family_collection(name) else ("ts_start",)
+        for column in columns:
+            for document in collection.find({column: {"$gt": limit_units, "$ne": None}}, {"_id": 1, column: 1}):
+                counters[name].examined += 1
+                sid = document["_id"]
+                future_ns = int(document[column]) * resolution
+                limit_ns = limit_units * resolution
+                if clamp:
+                    collection.update_one({"_id": sid}, {"$set": {column: now_units}})
+                    repaired_any = True
+                    counters[name].repaired += 1
+                    violations.append(
+                        f"collection {name!r} sid {sid} {column} {future_ns} ns exceeds {limit_ns} ns; "
+                        f"clamped to {now_ns} ns"
+                    )
+                else:
+                    counters[name].conflicts += 1
+                    violations.append(f"collection {name!r} sid {sid} {column} {future_ns} ns exceeds {limit_ns} ns")
     if clamp and repaired_any:
         store._initialize_store_timestamp_mark()
+
+
+def _check_version_invariants(
+    store: MongoStore,
+    schemas: Mapping[str, TableSchema],
+    counters: dict[str, _Counters],
+    violations: list[str],
+) -> None:
+    """Report versioning-invariant violations on versioned family collections (report-only).
+
+    Checks the half-open lifetime bookkeeping: ``ts_end`` and ``replaced_by_sid``
+    are set together (pairing), a closed interval is non-empty (ordering), the
+    successor exists and does not start after the predecessor closed (lineage),
+    and — since MongoDB cannot enforce a ``ts_end IS NULL`` partial unique index —
+    no author-``Unique`` value repeats among current documents.
+    """
+    for name, schema in schemas.items():
+        if not store._is_versioned_family_collection(name):
+            continue
+        collection = store._database.database[name]
+        for document in collection.find(
+            {
+                "$or": [
+                    {"$and": [{"ts_end": None}, {"replaced_by_sid": {"$ne": None}}]},
+                    {"$and": [{"ts_end": {"$ne": None}}, {"replaced_by_sid": None}]},
+                ]
+            },
+            {"_id": 1, "ts_end": 1, "replaced_by_sid": 1},
+        ):
+            counters[name].conflicts += 1
+            if document.get("ts_end") is None:
+                violations.append(
+                    f"collection {name!r} sid {document['_id']} has replaced_by_sid "
+                    f"{document.get('replaced_by_sid')} but no ts_end"
+                )
+            else:
+                violations.append(
+                    f"collection {name!r} sid {document['_id']} has ts_end {document.get('ts_end')} "
+                    "but no replaced_by_sid"
+                )
+        for document in collection.find(
+            {"ts_end": {"$ne": None}, "$expr": {"$lte": ["$ts_end", "$ts_start"]}},
+            {"_id": 1, "ts_start": 1, "ts_end": 1},
+        ):
+            counters[name].conflicts += 1
+            violations.append(
+                f"collection {name!r} sid {document['_id']} ts_end {document.get('ts_end')} "
+                f"is not after ts_start {document.get('ts_start')}"
+            )
+        for document in collection.find(
+            {"replaced_by_sid": {"$ne": None}}, {"_id": 1, "replaced_by_sid": 1, "ts_end": 1}
+        ):
+            repl = document.get("replaced_by_sid")
+            successor = collection.find_one({"_id": repl}, {"_id": 1, "ts_start": 1})
+            if successor is None:
+                counters[name].conflicts += 1
+                violations.append(
+                    f"collection {name!r} sid {document['_id']} replaced_by_sid {repl} references a missing row"
+                )
+                continue
+            end = document.get("ts_end")
+            successor_start = successor.get("ts_start")
+            if end is not None and successor_start is not None and int(successor_start) > int(end):
+                counters[name].conflicts += 1
+                violations.append(
+                    f"collection {name!r} sid {document['_id']} successor {repl} ts_start "
+                    f"{successor_start} is after ts_end {end}"
+                )
+        for spec in schema.fields:
+            if spec.role == "child":
+                continue
+            for column in spec.columns:
+                if not column.unique:
+                    continue
+                # NULLs never conflict, mirroring unique-index semantics.
+                pipeline = [
+                    {"$match": {"ts_end": None, f"f.{column.name}": {"$ne": None}}},
+                    {"$group": {"_id": f"$f.{column.name}", "count": {"$sum": 1}}},
+                    {"$match": {"count": {"$gt": 1}}},
+                ]
+                for group in collection.aggregate(pipeline):
+                    counters[name].conflicts += 1
+                    violations.append(
+                        f"collection {name!r} field {column.name!r} value {group['_id']!r} "
+                        f"appears in {group['count']} current rows"
+                    )
 
 
 def _valid_sid(value: Any) -> bool:
@@ -403,6 +495,8 @@ def run_fsck(
                 violations,
                 clamp=clamp_future_timestamps and repair and not unattributed,
             )
+            if store.store_timestamp_mode == "versioned":
+                _check_version_invariants(store, schemas, counters, violations)
             if repair:
                 _integrity_pass(store, schemas, counters, violations, repair_conflicts=repair_conflicts, lease=lease)
             marked = _mark(store, schemas, counters, violations, lease=lease)

@@ -35,6 +35,9 @@ from httk.store.store_common import (
     EntryDispatchIntegrityError,
     EntryMetadataConflictError,
     IdentityCaches,
+    RecordReviveError,
+    RecordSupersededError,
+    ReplaceConflictError,
     SaveProjection,
     _metadata_plan,
     reject_cursor_proxy,
@@ -109,7 +112,7 @@ class MongoStore:
     :param entry_records: The required entry-family declaration on first open.
     :param entry_families: Application-owned declarations which bypass global registration.
     :param store_timestamps: The store-managed timestamp mode, one of ``"off"``,
-        ``"creation"``, or ``"versioned"`` (``"versioned"`` is not yet implemented).
+        ``"creation"``, or ``"versioned"``.
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
@@ -140,8 +143,6 @@ class MongoStore:
             or store_timestamp_resolution <= 0
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
-        if store_timestamps == "versioned":
-            raise NotImplementedError("versioned stores are not implemented yet")
         self._database = database
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
@@ -159,6 +160,9 @@ class MongoStore:
         self._write_lock = threading.RLock()
         self._local = threading.local()
         self._failed_identities: set[tuple[type, int]] = set()
+        self._versioned_tables: frozenset[str] = frozenset()
+        self._lifecycle_path_cache: Mapping[str, Any] | None = None
+        self._lifecycle_path_signature: frozenset[type] | None = None
         hello = database.client.admin.command("hello")
         self._max_bson_size = int(hello.get("maxBsonObjectSize", 16 * 1024 * 1024))
         if not database.supports_transactions:
@@ -394,6 +398,35 @@ class MongoStore:
 
     def _install_layout(self, layout: StorageLayout) -> None:
         self._layout = layout
+        self._versioned_tables = (
+            frozenset(resolve_schema(record).table_name for family in layout.families for record in family.records)
+            if self._store_timestamps == "versioned"
+            else frozenset()
+        )
+        self._lifecycle_path_cache = None
+        self._lifecycle_path_signature = None
+
+    def _is_versioned_family_collection(self, collection_name: str) -> bool:
+        """Whether ``collection_name`` is a family backing collection carrying lifecycle fields."""
+        return self._store_timestamps == "versioned" and collection_name in self._versioned_tables
+
+    def _lifecycle_path_map(self) -> Mapping[str, Any]:
+        """The cached non-family ownership paths to versioned family collections.
+
+        Rebuilt whenever the known-record closure changes: a newly-saved referrer
+        can add an ownership path to a previously orphan-looking dependency.
+        """
+        from httk.store.db.graph import LogicalEdgeGraph, lifecycle_paths
+
+        records = frozenset(
+            {*self._known_record_types, *(record for family in self.layout.families for record in family.records)}
+        )
+        if self._lifecycle_path_cache is None or self._lifecycle_path_signature != records:
+            schemas = tuple(resolve_schema(record) for record in records)
+            graph = LogicalEdgeGraph.from_store(self, schemas)
+            self._lifecycle_path_cache = lifecycle_paths(graph, self._versioned_tables)
+            self._lifecycle_path_signature = records
+        return self._lifecycle_path_cache
 
     def ensure_collections(self, *classes: type) -> None:
         r"""Synchronously create or update record collections and their indexes.
@@ -410,11 +443,16 @@ class MongoStore:
             schema = resolve_schema(cls)
             name = collection_name_for(schema)
             if name not in seen:
+                versioned_family = self._is_versioned_family_collection(name)
                 requested.append(
                     (
                         name,
-                        validator_for(schema, store_timestamps=self.store_timestamps),
-                        index_specs_for(schema, store_timestamps=self.store_timestamps),
+                        validator_for(
+                            schema, store_timestamps=self.store_timestamps, versioned_family=versioned_family
+                        ),
+                        index_specs_for(
+                            schema, store_timestamps=self.store_timestamps, versioned_family=versioned_family
+                        ),
                     )
                 )
                 seen.add(name)
@@ -723,6 +761,230 @@ class MongoStore:
                 self._local.writer_lease = previous_lease
                 lease.release()
 
+    def replace(self, old: Any, new_obj: Any, *, as_record: type | None = None) -> int:
+        """Supersede a current family entry ``old`` with ``new_obj`` in one transaction.
+
+        Versions form half-open lifetime intervals ``[ts_start, ts_end)``. This
+        saves ``new_obj`` as an ordinary top-level entry with the pinned
+        transaction timestamp ``T`` as its ``ts_start``, then closes ``old`` by
+        setting its ``ts_end`` to ``T`` and its ``replaced_by_sid`` to the new
+        sid — atomically, so the closed interval of ``old`` abuts the open
+        interval of the successor exactly. The old row is closed **first**, so a
+        successor keeping the same author-``Unique`` key does not collide with the
+        still-current predecessor. Only available in
+        ``store_timestamps="versioned"`` mode and only with multi-document
+        transactions (a replica-set deployment).
+
+        ``old`` selects the target row and may be a stored instance (a domain
+        object or record of a backing of the same family as ``new_obj``), a
+        ``str`` content identity, or an ``int`` sid (single-backing families
+        only — a bare sid is ambiguous across a multi-backing family).
+
+        Converging lineages are allowed: if ``new_obj`` deduplicates onto a
+        *different* current row, that row's sid becomes the successor and ``old``
+        is still closed and pointed at it. Reviving is refused: if ``new_obj``'s
+        content deduplicates onto a superseded row (or onto ``old`` itself) a
+        :class:`~httk.store.store_common.RecordReviveError` is raised.
+
+        Inside an open :meth:`transaction` block ``replace`` shares that
+        transaction's single pinned timestamp, so replacing a row saved in the
+        same transaction would form a zero-length ``[T, T)`` interval; that is
+        refused with a :class:`ValueError` (replace it in a later transaction).
+
+        :param old: The current family entry to supersede — instance, content id, or sid.
+        :param new_obj: The replacement object, saved as a new top-level entry.
+        :param as_record: The alternate record representation of ``new_obj`` to use, if any.
+        :return: The successor row's sid.
+        :raises TypeError: If ``new_obj`` is a cursor proxy.
+        :raises ValueError: If not in versioned mode, ``new_obj`` has no entry family, ``old`` cannot be resolved,
+            or the successor would form a zero-length interval with ``old``.
+        :raises RuntimeError: If the store lacks multi-document transactions.
+        :raises httk.store.store_common.RecordSupersededError: If ``old`` is already superseded.
+        :raises httk.store.store_common.RecordReviveError: If ``new_obj``'s content revives a superseded row.
+        :raises httk.store.store_common.ReplaceConflictError: If a concurrent replace closed ``old`` first.
+        """
+        reject_cursor_proxy(new_obj)
+        if self._store_timestamps != "versioned":
+            raise ValueError('replace requires MongoStore(store_timestamps="versioned")')
+        if not self._database.supports_transactions:
+            raise RuntimeError(
+                "replace requires MongoDB multi-document transactions (a replica-set deployment); "
+                "this store is running in degraded mode"
+            )
+        record_type = resolve_storage_record(new_obj, as_record=as_record)
+        family = self._family_for_backing(record_type)
+        if family is None:
+            raise ValueError("replace requires a record belonging to an entry family")
+        if self._current_transaction() is not None:
+            self._ensure_graph_collections(record_type)
+            self._ensure_counter_collection()
+            transaction = self._current_transaction()
+            assert transaction is not None
+            if not transaction.timestamp_initialized:
+                transaction.store_timestamp = self._capture_store_timestamp()
+                transaction.timestamp_initialized = True
+            return self._replace_once(record_type, old, new_obj, family, transaction.store_timestamp)
+        with self._write_lock:
+            lease = acquire_writer(self._database.database)
+            previous_lease = getattr(self._local, "writer_lease", None)
+            self._local.writer_lease = lease
+            try:
+                self._observe_generation(lease.generation)
+                self._ensure_graph_collections(record_type)
+                self._ensure_counter_collection()
+                captured = self._capture_store_timestamp()
+                new_sid = self._replace_implicit_transaction(record_type, old, new_obj, family, lease, captured)
+                self._advance_store_timestamp_mark(captured)
+                return new_sid
+            finally:
+                self._local.writer_lease = previous_lease
+                lease.release()
+
+    def _replace_implicit_transaction(
+        self, record_type: type, old: Any, new_obj: Any, family: Any, lease: WriterLease, store_timestamp: int | None
+    ) -> int:
+        last_error: BaseException | None = None
+        for attempt in range(_TRANSACTION_ATTEMPTS):
+            with self._database.client.start_session(causal_consistency=True) as session:
+                transaction = _TransactionState(session, lease)
+                stack = self._transaction_stack()
+                stack.append(transaction)
+                try:
+                    self._start_transaction(session)
+                    new_sid = self._replace_once(record_type, old, new_obj, family, store_timestamp)
+                    self._commit(session)
+                except BaseException as error:
+                    self._abort(session)
+                    last_error = error
+                    if self._is_protocol_duplicate(error) or self._has_label(error, "TransientTransactionError"):
+                        time.sleep(min(0.01 * (2**attempt), 0.1))
+                        continue
+                    raise
+                else:
+                    self._publish_transaction_cache(transaction)
+                    return new_sid
+                finally:
+                    stack.pop()
+        assert last_error is not None
+        self._identity._clear_identity_caches()
+        raise last_error
+
+    def _replace_once(self, record_type: type, old: Any, new_obj: Any, family: Any, store_timestamp: int | None) -> int:
+        assert store_timestamp is not None  # versioned mode always captures a timestamp
+        _backing, collection_name, old_sid = self._resolve_replace_target(old, family)
+        collection = self._database.database[collection_name]
+        old_doc = collection.find_one({"_id": old_sid}, {"ts_start": 1, "ts_end": 1}, **self._session_kwargs())
+        if old_doc is None:
+            raise ValueError(f"replace target sid {old_sid} is not present in {collection_name!r}")
+        if old_doc.get("ts_end") is not None:
+            raise RecordSupersededError(
+                f"replace target sid {old_sid} in {collection_name!r} is already superseded (ts_end set)"
+            )
+        if int(old_doc["ts_start"]) == store_timestamp:
+            raise ValueError(
+                f"replace of sid {old_sid} would form a zero-length interval [T, T); the target was created "
+                "in this same transaction — replace it in a later transaction"
+            )
+        # Close the old row FIRST so it stops occupying the unique-among-current
+        # slot; replaced_by_sid is set once the successor's sid is known. The
+        # conditional on ts_end catches a lost race with a concurrent replace.
+        closed = collection.update_one(
+            {"_id": old_sid, "ts_end": None}, {"$set": {"ts_end": store_timestamp}}, **self._session_kwargs()
+        )
+        if closed.modified_count == 0:
+            raise ReplaceConflictError(
+                f"replace of sid {old_sid} in {collection_name!r} lost a race: the row was superseded concurrently"
+            )
+        # With the old row now superseded, content equal to it deduplicates onto
+        # a closed interval and _save raises RecordReviveError.
+        projection = SaveProjection(store_timestamp=store_timestamp)
+        self._projection_state(projection)
+        try:
+            new_sid = self._save(record_type, new_obj, projection, "", top_level=True)
+            self._save_entry_dispatch(family, record_type, new_sid, projection.content_id(record_type, new_obj))
+            for (saved_type, identity), saved_sid in self._projection_sids(projection).items():
+                source = self._projection_sources(projection)[(saved_type, identity)]
+                self._remember(saved_type, saved_sid, source, cache_instance=type(source) is saved_type)
+                self._failed_identities.discard((saved_type, identity))
+        except BaseException:
+            self._failed_identities.update(self._projection_sources(projection))
+            raise
+        collection.update_one({"_id": old_sid}, {"$set": {"replaced_by_sid": new_sid}}, **self._session_kwargs())
+        return new_sid
+
+    def _resolve_replace_target(self, old: Any, family: Any) -> tuple[type, str, int]:
+        """Resolve ``old`` to ``(backing_record_cls, collection_name, sid)`` within ``family``."""
+        if isinstance(old, str):
+            if len(family.records) == 1:
+                backing = family.records[0]
+                schema = resolve_schema(backing)
+                document = self._database.database[collection_name_for(schema)].find_one(
+                    {"content_id": old}, {"_id": 1}, **self._session_kwargs()
+                )
+                if document is None:
+                    raise ValueError(f"replace target content_id {old!r} is not stored in family {family.name!r}")
+                return backing, schema.table_name, int(document["_id"])
+            dispatch = self._database.database[entry_dispatch_table_name(family.name)]
+            row = dispatch.find_one({"_id": old}, **self._session_kwargs())
+            if row is None:
+                raise ValueError(f"replace target content_id {old!r} is not stored in family {family.name!r}")
+            record_name = row.get("record")
+            backing = next(
+                (record for name, record in zip(family.record_names, family.records) if name == record_name), None
+            )
+            if backing is None:
+                raise ValueError(
+                    f"replace target content_id {old!r} names an unknown backing in family {family.name!r}"
+                )
+            return backing, resolve_schema(backing).table_name, int(row["sid"])
+        if type(old) is int:
+            if len(family.records) != 1:
+                raise ValueError(
+                    f"replace target for multi-backing family {family.name!r} is ambiguous by sid; "
+                    "pass the instance or its content id instead"
+                )
+            backing = family.records[0]
+            schema = resolve_schema(backing)
+            document = self._database.database[collection_name_for(schema)].find_one(
+                {"_id": old}, {"_id": 1}, **self._session_kwargs()
+            )
+            if document is None:
+                raise ValueError(f"replace target sid {old} is not present in {schema.table_name!r}")
+            return backing, schema.table_name, int(document["_id"])
+        old_record_type = resolve_storage_record(old)
+        if old_record_type not in family.records:
+            raise ValueError(f"replace target {old_record_type.__name__} is not a backing of family {family.name!r}")
+        old_sid = self.sid_of(old)
+        if old_sid is None:
+            raise ValueError(f"replace target {old_record_type.__name__} is not stored in this MongoStore")
+        return old_record_type, resolve_schema(old_record_type).table_name, int(old_sid)
+
+    def _enforce_versioned_unique(self, schema: Any, collection: Any, f_document: Mapping[str, Any]) -> None:
+        """Enforce unique-among-current author fields inside the write transaction.
+
+        MongoDB cannot express a ``ts_end IS NULL`` partial unique index (see
+        :func:`~httk.store.mongo.mapping.index_specs_for`), so the guarantee is
+        checked here before the insert, exactly as DuckDB does on the SQL side.
+        NULLs never conflict, matching unique-index semantics; fsck re-verifies
+        the invariant unconditionally as the backstop against write races.
+        """
+        for spec in schema.fields:
+            if spec.role == "child":
+                continue
+            for column in spec.columns:
+                if not column.unique:
+                    continue
+                value = f_document.get(column.name)
+                if value is None:
+                    continue
+                existing = collection.find_one(
+                    {f"f.{column.name}": value, "ts_end": None}, {"_id": 1}, **self._session_kwargs()
+                )
+                if existing is not None:
+                    raise DuplicateKeyError(
+                        f"unique constraint failed among current rows: {schema.table_name}.{column.name}"
+                    )
+
     def _save_once(self, record_type: type, obj: Any, store_timestamp: int | None) -> int:
         projection = SaveProjection(store_timestamp=store_timestamp)
         self._projection_state(projection)
@@ -838,10 +1100,18 @@ class MongoStore:
 
         content_key: str | None = None
         collection = self._database.database[collection_name_for(schema)]
+        versioned_family = self._is_versioned_family_collection(schema.table_name)
         if schema.dedup == "content_id":
             content_key = projection.content_id(record_type, source)
             found = collection.find_one({"content_id": content_key}, **self._session_kwargs())
             if found is not None:
+                if versioned_family and found.get("ts_end") is not None:
+                    # A superseded row carries a closed lifetime interval; equal
+                    # content cannot revive it. Checked before metadata/promotion.
+                    raise RecordReviveError(
+                        f"content_id {content_key!r} deduplicates onto a superseded row in {schema.table_name!r}; "
+                        "a superseded record cannot be revived"
+                    )
                 sid = int(found["_id"])
                 self._check_metadata(record_type, sid, source, projection)
                 self._projection_sids(projection)[validation_key] = sid
@@ -861,8 +1131,15 @@ class MongoStore:
         )
         if schema.dedup == "by_value":
             query = self._by_value_query(schema, f_document)
-            found = collection.find_one(query, {"_id": 1, "_httk_role": 1}, **self._session_kwargs())
+            found = collection.find_one(query, {"_id": 1, "_httk_role": 1, "ts_end": 1}, **self._session_kwargs())
             if found is not None:
+                if versioned_family and found.get("ts_end") is not None:
+                    # A by_value family backing is uncommon, but a match against a
+                    # superseded row is a revive just as under content_id.
+                    raise RecordReviveError(
+                        f"a by_value save deduplicates onto a superseded row in {schema.table_name!r}; "
+                        "a superseded record cannot be revived"
+                    )
                 sid = int(found["_id"])
                 self._discard_inserts(projection, checkpoint)
                 self._projection_sids(projection)[validation_key] = sid
@@ -870,10 +1147,18 @@ class MongoStore:
                     collection.update_one({"_id": sid}, {"$set": {"_httk_role": "main"}}, **self._session_kwargs())
                 return sid
 
+        if versioned_family:
+            self._enforce_versioned_unique(schema, collection, f_document)
         sid = counter_next(self._database.database, schema.table_name, session=self._write_session())
         document: dict[str, Any] = {"_id": sid, "_httk_role": "main" if top_level else "dep", "f": f_document}
         if projection.store_timestamp is not None:
             document["ts_start"] = projection.store_timestamp
+        if versioned_family:
+            # Written explicitly (never absent) so the validator, indexes, and
+            # lifecycle predicates treat the current-row state uniformly, exactly
+            # as the SQL backends store NULL.
+            document["ts_end"] = None
+            document["replaced_by_sid"] = None
         if content_key is not None:
             document["content_id"] = content_key
         preflight_document(document, self._max_bson_size, record_type)
@@ -885,6 +1170,13 @@ class MongoStore:
             winner = collection.find_one({"content_id": content_key}, **self._session_kwargs())
             if winner is None:
                 raise
+            if versioned_family and winner.get("ts_end") is not None:
+                # A row appeared between the dedup select and this insert; if it
+                # is already superseded, equal content is a revive.
+                raise RecordReviveError(
+                    f"content_id {content_key!r} deduplicates onto a superseded row in {schema.table_name!r}; "
+                    "a superseded record cannot be revived"
+                ) from None
             sid = int(winner["_id"])
             self._discard_inserts(projection, checkpoint)
             self._check_metadata(record_type, sid, source, projection)
@@ -1183,19 +1475,27 @@ class MongoStore:
         see that transaction's uncommitted writes, and object outputs hydrate
         through :meth:`fetch`, preserving the identity-cache contract.
 
+        In ``store_timestamps="versioned"`` mode a scoped searcher (the default)
+        injects a time-slice predicate on each declared **root** variable: the
+        current view, or the half-open ``[ts_start, ts_end)`` slice named by
+        ``as_of``. A family-collection root gets the interval predicate directly;
+        a non-family (deduplicated dependency/content) root gets the derived
+        ``role = "main" OR EXISTS(ownership chain to a live family row)`` form.
+        Forward reference traversals are never lifecycle-filtered. ``scoped=False``
+        disables all lifecycle injection (an ``as_of`` cutoff still applies as a
+        plain ``ts_start <= T`` bound).
+
         :param as_of: Optional historic cutoff in canonical timestamp form.
-        :param scoped: Accepted for :class:`~httk.store.query.protocols.Store`
-            conformance; the Mongo backend has no versioned lifecycle, so it is inert.
+        :param scoped: Whether versioned-mode lifecycle filtering is injected at the root.
         :return: A new MongoDB searcher bound to this store.
         """
-        _ = scoped
         if as_of is not None:
             if not self.store_timestamps:
                 raise ValueError('as_of queries require MongoStore(store_timestamps="creation")')
             ns_operand_to_store_units(as_of, self._store_timestamp_resolution)
         from .searcher import MongoSearcher
 
-        return MongoSearcher(self, as_of=as_of)
+        return MongoSearcher(self, as_of=as_of, scoped=scoped)
 
     def stored_property_plan(self, family: type) -> Any:
         """Return the Mongo stored-property plan for one configured entry family.
@@ -1207,16 +1507,26 @@ class MongoStore:
 
         return stored_property_mongo_plan(self, family)
 
-    def referring(self, cls: type, *, field: str, to: Any, eager: bool = False) -> list[Any]:
+    def referring(
+        self, cls: type, *, field: str, to: Any, eager: bool = False, as_of: object = None, scoped: bool = True
+    ) -> list[Any]:
         """Return records whose reference field points at ``to``, ordered by sid.
 
         The ``eager`` flag is accepted for backend transparency; Mongo always
         returns materialized records (see :meth:`fetch`).
 
+        In ``store_timestamps="versioned"`` mode referrers are the current time
+        slice by default (``scoped=True``): a superseded family referrer is
+        hidden, and ``as_of`` selects the historic slice with the same half-open
+        interval semantics as :meth:`searcher`. ``scoped=False`` disables
+        lifecycle filtering (an ``as_of`` cutoff still applies).
+
         :param cls: The referring record class.
         :param field: The reference field.
         :param to: The stored target instance.
         :param eager: Accepted for interface parity; materialized records are always returned.
+        :param as_of: Optional historic cutoff in canonical timestamp form.
+        :param scoped: Whether versioned-mode lifecycle filtering is applied to the referrer.
         :return: Matching records ordered by sid.
         :raises ~httk.store.db.schema.SchemaError: If the field or target class is incompatible.
         :raises ValueError: If ``to`` is not stored or fetched here.
@@ -1231,12 +1541,16 @@ class MongoStore:
         sid = self.sid_of(to)
         if sid is None:
             raise ValueError(f"the {type(to).__name__} instance has not been stored or fetched through this store")
-        path = f"f.{spec.columns[0].name}"
-        collection = self._database.database[collection_name_for(schema)]
-        return [
-            self.fetch(cls, int(document["_id"]))
-            for document in collection.find({path: sid}, {"_id": 1}, **self._session_kwargs()).sort("_id", 1)
-        ]
+        # Route through the searcher so versioned-mode lifecycle scoping applies
+        # to the referrer exactly as it does for searcher()/entry providers; the
+        # reference-field equality is a plain forward foreign-key match (never a
+        # join), so a superseded target is still found by its pinned sid.
+        searcher = self.searcher(as_of=as_of, scoped=scoped)
+        variable = searcher.variable(cls)
+        searcher.add(getattr(variable, field) == to)
+        searcher.add_sort(variable.sid)
+        searcher.output(variable, "referring")
+        return [row[0][0] for row in searcher]
 
     def _remember(self, cls: type, sid: int, obj: Any, *, cache_instance: bool = True) -> None:
         transaction = self._current_transaction()
