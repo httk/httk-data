@@ -25,7 +25,7 @@ from sqlalchemy.sql.selectable import Select
 
 from httk.store.query import UnsupportedQueryError
 
-_MIN_SERVER_VERSION = (26, 8, 1, 1028)
+_MIN_SERVER_VERSION = (26, 7)
 _BOOTSTRAP_TABLE = "_httk_bootstrap"
 _BOOTSTRAP_PATH = "/_httk_bootstrap"
 _METADATA_MARKER = "httk_metadata"

@@ -42,7 +42,7 @@ from sqlalchemy.sql.selectable import Exists, ScalarSelect
 from sqlalchemy.sql.visitors import replacement_traverse
 
 from httk.store.db.codecs import ValueCodec, codec_named
-from httk.store.db.mapping import CONTENT_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.db.mapping import CONTENT_ID_COLUMN, LOGICAL_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.db.rows import RowHydrator
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
@@ -172,6 +172,12 @@ class _SqlScope:
                     ),
                 ),
             )
+        if name == LOGICAL_ID_COLUMN:
+            # The store-managed lineage id, unconditional and unscaled (a plain
+            # integer). Like store_timestamp it lives only on parent scopes.
+            if self.scalar_child is not None:
+                raise StoredPropertySqlConfigurationError("logical_id is only available on parent scopes")
+            return self.context._scoped_scalar(self, _SqlValue(self.alias.c[LOGICAL_ID_COLUMN], scope=self))
         if self.scalar_child is not None:
             if name not in {"value", self.scalar_child.field}:
                 raise StoredPropertySqlConfigurationError(
@@ -734,6 +740,23 @@ class StoredPropertySqlPlan:
                         row[name] = (
                             None if value is None else int(value) * cast(int, self.store.store_timestamp_resolution)
                         )
+                continue
+            if name == "_httk_logical_id":
+                # Unconditional and unscaled: the store manages the lineage id,
+                # so no backing projection can produce it. Unlike store_timestamp
+                # no candidate value is threaded here, so this re-reads the column.
+                # ponytail: one small SELECT per served row; add candidate
+                # pass-through if this shows up in profiles.
+                sid = self.store.sid_of(record, as_record=backing)
+                if sid is None:
+                    row[name] = None
+                else:
+                    table = self.store._table(resolve_schema(backing).table_name)
+                    with self.store._read_connection() as connection:
+                        value = connection.execute(
+                            sqlalchemy.select(table.c[LOGICAL_ID_COLUMN]).where(table.c[SID_COLUMN] == sid)
+                        ).scalar_one_or_none()
+                    row[name] = None if value is None else int(value)
                 continue
             projection = configured.projections.get(name)
             row[name] = None if projection is None else _response_json_value(projection.response(record))

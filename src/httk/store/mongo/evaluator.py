@@ -49,7 +49,7 @@ class MongoScope:
 class MongoValue:
     """A field, aggregate, null, or literal value in the neutral AST."""
 
-    kind: Literal["field", "store_timestamp", "present", "constant", "null", "count", "distinct_count"]
+    kind: Literal["field", "store_timestamp", "logical_id", "present", "constant", "null", "count", "distinct_count"]
     scope: MongoScope | None = None
     field: str | None = None
     spec: FieldSpec | None = None
@@ -81,17 +81,26 @@ def _predicate(value: object) -> MongoPredicate:
 
 
 def evaluate(
-    predicate: MongoPredicate, record: object, store_timestamp_resolver: Callable[[], object] | None = None
+    predicate: MongoPredicate,
+    record: object,
+    store_timestamp_resolver: Callable[[], object] | None = None,
+    logical_id_resolver: Callable[[], object] | None = None,
 ) -> bool | None:
     """Evaluate ``predicate`` exactly over a hydrated backing object.
 
     :param predicate: Frozen predicate produced by ``_MongoQueryContext``.
     :param record: Hydrated backing record for the candidate SID.
     :param store_timestamp_resolver: Optional resolver for the candidate's store timestamp.
+    :param logical_id_resolver: Optional resolver for the candidate's store-managed lineage id.
     :return: ``True``, ``False``, or ``None`` for SQL UNKNOWN.
     """
     root = _root_scope(predicate)
-    return _eval_predicate(predicate, {} if root is None else {root.identifier: record}, store_timestamp_resolver)
+    return _eval_predicate(
+        predicate,
+        {} if root is None else {root.identifier: record},
+        store_timestamp_resolver,
+        logical_id_resolver,
+    )
 
 
 def _root_scope(predicate: MongoPredicate) -> MongoScope | None:
@@ -115,6 +124,7 @@ def _eval_predicate(
     predicate: MongoPredicate,
     environment: dict[int, object],
     store_timestamp_resolver: Callable[[], object] | None = None,
+    logical_id_resolver: Callable[[], object] | None = None,
 ) -> bool | None:
     kind = predicate.kind
     values = predicate.operands
@@ -124,42 +134,48 @@ def _eval_predicate(
         left, operator, right = values
         left_value, right_value = _value(left), _value(right)
         return _compare(
-            _eval_value(left_value, environment, store_timestamp_resolver),
+            _eval_value(left_value, environment, store_timestamp_resolver, logical_id_resolver),
             left_value,
             str(operator),
-            _eval_value(right_value, environment, store_timestamp_resolver),
+            _eval_value(right_value, environment, store_timestamp_resolver, logical_id_resolver),
             right_value,
         )
     if kind == "is_null":
-        return _eval_value(_value(values[0]), environment, store_timestamp_resolver) is None
+        return _eval_value(_value(values[0]), environment, store_timestamp_resolver, logical_id_resolver) is None
     if kind == "exists":
         scope, nested = _scope(values[0]), _predicate(values[1])
-        for item in _items(scope, environment, store_timestamp_resolver):
-            result = _eval_predicate(nested, environment | {scope.identifier: item}, store_timestamp_resolver)
+        for item in _items(scope, environment, store_timestamp_resolver, logical_id_resolver):
+            result = _eval_predicate(
+                nested, environment | {scope.identifier: item}, store_timestamp_resolver, logical_id_resolver
+            )
             if result is True:
                 return True
         return False
     if kind == "and":
         left, right = (
-            _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver),
-            _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver),
+            _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver, logical_id_resolver),
+            _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver, logical_id_resolver),
         )
         return False if False in (left, right) else None if None in (left, right) else True
     if kind == "or":
         left, right = (
-            _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver),
-            _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver),
+            _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver, logical_id_resolver),
+            _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver, logical_id_resolver),
         )
         return True if True in (left, right) else None if None in (left, right) else False
     if kind == "not":
-        value = _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver)
+        value = _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver, logical_id_resolver)
         return None if value is None else not value
     if kind == "when_known":
-        known = _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver)
-        return _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver) if known is True else None
+        known = _eval_predicate(_predicate(values[0]), environment, store_timestamp_resolver, logical_id_resolver)
+        return (
+            _eval_predicate(_predicate(values[1]), environment, store_timestamp_resolver, logical_id_resolver)
+            if known is True
+            else None
+        )
     assert kind == "scaled"
     left, left_factor, right, right_factor = (
-        _eval_value(_value(item), environment, store_timestamp_resolver) for item in values
+        _eval_value(_value(item), environment, store_timestamp_resolver, logical_id_resolver) for item in values
     )
     if None in (left, left_factor, right, right_factor):
         return None
@@ -175,12 +191,13 @@ def _items(
     scope: MongoScope,
     environment: dict[int, object],
     store_timestamp_resolver: Callable[[], object] | None = None,
+    logical_id_resolver: Callable[[], object] | None = None,
 ) -> tuple[object, ...]:
     if scope.identifier in environment:
         return (environment[scope.identifier],)
     if scope.parent is None or scope.relationship is None:
         return ()
-    parents = _items(scope.parent, environment, store_timestamp_resolver)
+    parents = _items(scope.parent, environment, store_timestamp_resolver, logical_id_resolver)
     values: list[object] = []
     for parent in parents:
         child = getattr(parent, scope.relationship.field, None)
@@ -194,7 +211,12 @@ def _items(
         values = [
             item
             for item in values
-            if _eval_predicate(scope.filter_predicate, environment | {scope.identifier: item}, store_timestamp_resolver)
+            if _eval_predicate(
+                scope.filter_predicate,
+                environment | {scope.identifier: item},
+                store_timestamp_resolver,
+                logical_id_resolver,
+            )
             is True
         ]
     return tuple(values)
@@ -204,6 +226,7 @@ def _eval_value(
     value: MongoValue,
     environment: dict[int, object],
     store_timestamp_resolver: Callable[[], object] | None = None,
+    logical_id_resolver: Callable[[], object] | None = None,
 ) -> object:
     if value.kind == "constant":
         return value.literal
@@ -213,23 +236,29 @@ def _eval_value(
         if store_timestamp_resolver is None:
             return None
         return store_timestamp_resolver()
+    if value.kind == "logical_id":
+        if logical_id_resolver is None:
+            return None
+        return logical_id_resolver()
     if value.kind == "present":
         assert value.scope is not None and value.field is not None
-        items = _items(value.scope, environment, store_timestamp_resolver)
+        items = _items(value.scope, environment, store_timestamp_resolver, logical_id_resolver)
         return len(items) == 1 and getattr(items[0], value.field, None) is not None
     if value.kind == "count":
         assert value.scope is not None
-        return len(_items(value.scope, environment, store_timestamp_resolver))
+        return len(_items(value.scope, environment, store_timestamp_resolver, logical_id_resolver))
     if value.kind == "distinct_count":
         assert value.scope is not None and value.value is not None
         found: set[object] = set()
-        for item in _items(value.scope, environment, store_timestamp_resolver):
-            candidate = _eval_value(value.value, environment | {value.scope.identifier: item}, store_timestamp_resolver)
+        for item in _items(value.scope, environment, store_timestamp_resolver, logical_id_resolver):
+            candidate = _eval_value(
+                value.value, environment | {value.scope.identifier: item}, store_timestamp_resolver, logical_id_resolver
+            )
             if candidate is not None:
                 found.add(_exact_key(value.value, candidate))
         return len(found)
     assert value.scope is not None and value.field is not None
-    items = _items(value.scope, environment, store_timestamp_resolver)
+    items = _items(value.scope, environment, store_timestamp_resolver, logical_id_resolver)
     if len(items) != 1:
         return None
     if value.scope.scalar_child:

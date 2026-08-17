@@ -163,6 +163,11 @@ def optimade_filter_searcher(
     if store.store_timestamps:
         property_fulltypes[f"{prefix}store_timestamp"] = "integer"
         property_keys[f"{prefix}store_timestamp"] = "store_timestamp"
+    # The store-managed lineage id is unconditional: every parent row carries a
+    # ``logical_id`` regardless of the timestamp option, and it needs no unit
+    # scaling (a plain integer resolved through ``SqlVariable.logical_id``).
+    property_fulltypes[f"{prefix}logical_id"] = "integer"
+    property_keys[f"{prefix}logical_id"] = "logical_id"
     if definition is not None:
         for name, prop in definition.properties.items():
             if name in ("id", "type"):

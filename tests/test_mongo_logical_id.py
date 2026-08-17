@@ -253,6 +253,47 @@ def test_variable_logical_id_filters_and_outputs(mongo_test_database) -> None:
     assert sorted(row[0][0].value for row in filtered) == [1, 2]
 
 
+def test_evaluator_resolves_logical_id_without_a_database() -> None:
+    # The evaluator's logical_id resolver is pure Python, so this runs without
+    # MongoDB and guards the resolver threading directly.
+    from httk.store.mongo.evaluator import evaluate
+    from httk.store.mongo.stored_properties import _MongoQueryContext
+
+    context = _MongoQueryContext(Widget, store=None)
+    predicate = context.compare(context.field("logical_id"), "=", context.constant(5))
+    record = Widget(1)
+    assert evaluate(predicate, record, logical_id_resolver=lambda: 5) is True
+    assert evaluate(predicate, record, logical_id_resolver=lambda: 9) is False
+    # Absent resolver leaves the store-managed value UNKNOWN, never a crash.
+    assert evaluate(predicate, record) is None
+
+
+def test_stored_property_plan_serves_filters_and_sorts_logical_id(mongo_test_database) -> None:
+    from test_logical_id import LogicalIdBacking, LogicalIdCalculation
+
+    store = MongoStore(mongo_test_database, entry_records={LogicalIdCalculation: (LogicalIdBacking,)})
+    first = LogicalIdBacking("first")
+    a = store.save(first)
+    store.replace(first, LogicalIdBacking("second"))
+    store.save(LogicalIdBacking("independent"))  # a separate lineage
+    plan = store.stored_property_plan(LogicalIdCalculation)
+
+    # The served row carries the lineage id, unconditional and unscaled.
+    rows = {row["immutable_id"]: row["_httk_logical_id"] for row in plan.records()}
+    assert rows["first"] == a
+    assert rows["second"] == a
+    assert rows["independent"] != a
+
+    # Filtering by _httk_logical_id selects the whole lineage (resolved through
+    # the evaluator's logical_id resolver over each candidate document).
+    searchers = plan.filter_searchers(f"_httk_logical_id = {a}")
+    assert sorted(result[0][0].label for searcher in searchers for result in searcher) == ["first", "second"]
+
+    # Sorting by _httk_logical_id resolves the native document field.
+    streams = plan.candidate_searchers(None, sort=(("_httk_logical_id", False),))
+    assert sum(1 for stream in streams for _row in stream.searcher) == 3
+
+
 def test_stored_property_plan_threads_only_latest(mongo_test_database) -> None:
     from test_db_stored_properties import GenericCalculationFirst, GenericCalculationSecond
 

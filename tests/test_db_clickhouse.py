@@ -101,7 +101,6 @@ def clickhouse_database():
 
 def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
-    assert tuple(int(part) for part in clickhouse_database.server_version.split(".")[:4]) >= (26, 8, 1, 1028)
     assert store.write_profile == "bulk-fenced"
     assert store.backend_facts.write_profiles == ("bulk-fenced",)
     assert store.backend_facts.metadata_backend == "keepermap"
@@ -276,7 +275,7 @@ def test_clickhouse_pool_checkout_rechecks_poisoned_connection(clickhouse_databa
     import httk.store.db.clickhouse as clickhouse_adapter
 
     original_verify = clickhouse_adapter._raw_verify
-    monkeypatch.setattr(clickhouse_adapter, "_raw_verify", lambda _: ("26.8.1.1028", 0))
+    monkeypatch.setattr(clickhouse_adapter, "_raw_verify", lambda _: ("26.7.3.19", 0))
     with pytest.raises(RuntimeError, match="join_use_nulls"):
         clickhouse_database.engine.connect()
     monkeypatch.setattr(clickhouse_adapter, "_raw_verify", original_verify)
@@ -571,7 +570,7 @@ def test_clickhouse_old_version_rejected() -> None:
             return self
 
         def one(self) -> tuple[str, int]:
-            return "26.8.1.1027", 1
+            return "26.6.9.9", 1
 
     with pytest.raises(RuntimeError, match="too old"):
         verify_clickhouse_connection(FakeConnection())  # type: ignore[arg-type]

@@ -33,6 +33,23 @@ from httk.store.db.layout import StoreUnderConstructionError
 from httk.store.store_common import EntryMetadataConflictError
 
 
+def _rows_without_batch_timestamp(store) -> dict[str, list[tuple[object, ...]]]:
+    """``_logical_rows`` with the store-managed ``store_timestamp`` column dropped.
+
+    Two independent ingests each stamp their own batch timestamp, so that column
+    is a legitimate replay variant; row identity/count/content is what proves the
+    exactly-once landing.
+    """
+    rows = _logical_rows(store)
+    result: dict[str, list[tuple[object, ...]]] = {}
+    for name, table in store._metadata.tables.items():
+        if name not in rows:
+            continue
+        drop = {index for index, column in enumerate(table.columns) if column.name == "store_timestamp"}
+        result[name] = [tuple(value for index, value in enumerate(row) if index not in drop) for row in rows[name]]
+    return result
+
+
 @contextmanager
 def _clickhouse_bulk_database(uri):
     """Yield one isolated ClickHouse database with its deployment bootstrap table."""
@@ -252,7 +269,10 @@ def test_clickhouse_generated_integrity_rejects_raw_corruption(clickhouse_bulk_d
             if case == "content":
                 connection.execute(
                     text(
-                        "INSERT INTO bulk_author SELECT 4, _httk_role, content_id, name, year FROM bulk_author LIMIT 1"
+                        "INSERT INTO bulk_author "
+                        "(sid, _httk_role, store_timestamp, logical_id, content_id, name, year) "
+                        "SELECT 4, _httk_role, store_timestamp, logical_id, content_id, name, year "
+                        "FROM bulk_author LIMIT 1"
                     )
                 )
             elif case == "sid":
@@ -371,7 +391,7 @@ def test_clickhouse_loader_disconnect_is_exactly_once(clickhouse_bulk_database, 
         with reference.bulk_ingest(workers=1) as bulk:
             for value in corpus:
                 bulk.save(value)
-        expected = _logical_rows(reference)
+        expected = _rows_without_batch_timestamp(reference)
 
         original_client = clickhouse._client_for_url
 
@@ -383,7 +403,10 @@ def test_clickhouse_loader_disconnect_is_exactly_once(clickhouse_bulk_database, 
         with store.bulk_ingest(workers=1) as bulk:
             for value in corpus:
                 bulk.save(value)
-        assert _logical_rows(store) == expected
+        # Row identity/count/content proves exactly-once; the store-managed
+        # store_timestamp is excluded because a separate ingest legitimately
+        # stamps its own batch timestamp (a replay would re-stamp it too).
+        assert _rows_without_batch_timestamp(store) == expected
 
 
 @pytest.mark.extended

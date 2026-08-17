@@ -210,3 +210,49 @@ def test_clickhouse_select_fetch_is_refused_without_synthesized_limit(clickhouse
     statement = sqlalchemy.select(sqlalchemy.literal(1)).fetch(3).offset(7)
     with pytest.raises(ClickHouseUnsupportedQueryError, match="FETCH"):
         statement.compile(dialect=clickhouse_read_store._database.engine.dialect)
+
+
+def _read_rows(store: SqlStore, query: str) -> list[tuple]:
+    with store._database.engine.connect() as connection:
+        return list(connection.execute(sqlalchemy.text(query)).all())
+
+
+def test_clickhouse_bulk_row_logical_id_equals_own_sid(clickhouse_read_store: SqlStore) -> None:
+    """A ClickHouse store is bulk-fenced, so every row roots its own lineage."""
+    rows = _read_rows(clickhouse_read_store, 'SELECT sid, logical_id FROM "read_record" ORDER BY sid')
+    assert rows and all(int(sid) == int(logical_id) for sid, logical_id in rows)
+
+
+def test_clickhouse_only_latest_correlated_subquery_is_a_server_side_no_op(clickhouse_read_store: SqlStore) -> None:
+    """``only_latest`` emits a correlated ``NOT EXISTS``; on a bulk-fenced store it
+    must execute without server error and return exactly the plain result set
+    (every row is a lineage root, so none are filtered)."""
+    plain, _ = _read_search(clickhouse_read_store)
+    plain_titles = sorted(item[0][0].title for item in plain)
+    assert plain_titles
+
+    latest = clickhouse_read_store.searcher(only_latest=True)
+    record = latest.variable(ReadRecord)
+    latest.output(record, "record")
+    assert sorted(item[0][0].title for item in latest) == plain_titles
+
+
+def test_clickhouse_variable_logical_id_filter_selects_exactly_that_row(clickhouse_read_store: SqlStore) -> None:
+    """``variable.logical_id`` resolves on the ClickHouse dialect in both a filter
+    and an output, returning the single row of the targeted lineage."""
+    ((sid, title),) = _read_rows(clickhouse_read_store, 'SELECT sid, title FROM "read_record" ORDER BY sid LIMIT 1')
+    searcher = clickhouse_read_store.searcher()
+    record = searcher.variable(ReadRecord)
+    searcher.add(record.logical_id == int(sid))
+    searcher.output(record.title, "title")
+    searcher.output(record.logical_id, "lid")
+    assert [(item[0][0], item[0][1]) for item in searcher] == [(title, int(sid))]
+
+
+def test_clickhouse_only_latest_with_as_of_composes_over_root_rows(clickhouse_read_store: SqlStore) -> None:
+    """``as_of`` + ``only_latest`` compose on the store-timestamped ClickHouse
+    fixture: a far-future cutoff admits every bulk root through both rewrites."""
+    searcher = clickhouse_read_store.searcher(as_of=4_000_000_000_000_000_000, only_latest=True)
+    record = searcher.variable(ReadRecord)
+    searcher.output(record, "record")
+    assert sorted(item[0][0].title for item in searcher) == ["50% Mg", "empty"]

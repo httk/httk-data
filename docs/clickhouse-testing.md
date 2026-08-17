@@ -16,7 +16,7 @@ embedded Keeper ports 29181/29234, the `/httk` KeeperMap prefix, and a
 4,500,000,000-byte ClickHouse allocator cap.  The server runs under a separate
 7 GiB memguard allowance.  Stop it with `make clickhouse-stop`.
 
-CI uses the pinned `clickhouse/clickhouse-server:26.8.1.1028` image and the
+CI uses the pinned `clickhouse/clickhouse-server:26.7.3.19` image and the
 same XML fragment.  Its validated client environment is committed in
 [`constraints/clickhouse-p5.txt`](../constraints/clickhouse-p5.txt):
 ClickHouse Connect 1.6.0, SQLAlchemy 2.0.48, PyArrow 25.0.0, and the recorded

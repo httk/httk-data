@@ -5,11 +5,73 @@ from typing import ClassVar
 
 import pytest
 import sqlalchemy
-from httk.core.storage import StorageInfo
+from httk.core import PropertyDefinition, load_entry_type_definition
+from httk.core.register import register_entry_family, register_entry_record
+from httk.core.storage import StorageInfo, StoredPropertyProjection
 
-from httk.store.db import Database, EntryReplacementError, SchemaError, SqlStore
+from httk.store.db import Database, EntryReplacementError, SchemaError, SqlStore, stored_property_sql_plan
 from httk.store.db.mapping import LOGICAL_ID_COLUMN, sqlalchemy_metadata
+from httk.store.db.optimade import optimade_filter_searcher
 from httk.store.db.schema import resolve_schema
+
+LOGICAL_ID_CALC_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
+
+
+class LogicalIdCalculation:
+    type = "calculations"
+    definition_id = LOGICAL_ID_CALC_DEFINITION
+
+    @staticmethod
+    def entry_type_definition():
+        return load_entry_type_definition(LOGICAL_ID_CALC_DEFINITION).extended(
+            {
+                "_httk_logical_id": PropertyDefinition.from_simple(
+                    "_httk_logical_id",
+                    description="The store-managed lineage id, served for tests.",
+                    fulltype="integer",
+                ),
+            }
+        )
+
+
+def _logical_id_query(context, operator, literal):
+    return context.compare(context.field("logical_id"), operator, context.constant(literal))
+
+
+@dataclass(frozen=True)
+class LogicalIdBacking:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="logical_id_backing")
+
+    label: str
+
+    __httk_stored_properties__: ClassVar = {
+        "immutable_id": StoredPropertyProjection(
+            response=lambda record: record.label,
+            query=lambda context, operator, literal: context.compare(
+                context.field("label"), operator, context.constant(literal)
+            ),
+            sort=lambda context: context.field("label"),
+        ),
+        # The store manages the value (response overridden by the plan), but the
+        # query and sort reach the lineage column through the query context.
+        "_httk_logical_id": StoredPropertyProjection(
+            response=lambda _record: None,
+            query=_logical_id_query,
+            sort=lambda context: context.field("logical_id"),
+        ),
+    }
+
+
+register_entry_family(
+    name="test-logical-id-calculations",
+    family=f"{__name__}:LogicalIdCalculation",
+    definition_id=LOGICAL_ID_CALC_DEFINITION,
+)
+register_entry_record(
+    name="test-logical-id-backing",
+    family="test-logical-id-calculations",
+    record=f"{__name__}:LogicalIdBacking",
+)
 
 
 @dataclass(frozen=True)
@@ -218,3 +280,71 @@ def test_logical_id_degraded_write_profile():
         # Idempotent re-replace on the degraded path deduplicates without a new row.
         assert store.replace(store.fetch(Widget, b), Widget(2)) == b
         assert len(_rows(store, "widget")) == 2
+
+
+def test_logical_id_searcher_output_filter_and_sort(store_factory):
+    store = store_factory()
+    _skip_non_sql(store)
+    first = Widget(1)
+    a = store.save(first)
+    b = store.replace(first, Widget(2))
+    store.save(Widget(100))  # an independent lineage; its logical_id is its own sid
+
+    # logical_id is projectable as a scalar output (the served value channel).
+    exposed = store.searcher()
+    variable = exposed.variable(Widget)
+    exposed.output(variable.sid, "sid")
+    exposed.output(variable.logical_id, "logical_id")
+    lineage = {int(row[0][0]): int(row[0][1]) for row in exposed}
+    assert lineage[a] == a
+    assert lineage[b] == a
+
+    # logical_id is filterable, selecting a whole lineage.
+    filtered = store.searcher()
+    filtered_variable = filtered.variable(Widget)
+    filtered.add(filtered_variable.logical_id == a)
+    filtered.output(filtered_variable, "record")
+    assert sorted(row[0][0].value for row in filtered) == [1, 2]
+
+    # logical_id is sortable; the independent, higher-sid lineage sorts last.
+    ascending = store.searcher()
+    asc = ascending.variable(Widget)
+    ascending.output(asc, "record")
+    ascending.add_sort(asc.logical_id)
+    assert [row[0][0].value for row in ascending][-1] == 100
+
+
+def test_optimade_filter_searcher_selects_lineage_by_logical_id(store_factory):
+    store = store_factory()
+    _skip_non_sql(store)
+    first = Widget(1)
+    a = store.save(first)
+    store.replace(first, Widget(2))
+    store.save(Widget(100))  # an independent lineage
+
+    searcher = optimade_filter_searcher(store, Widget, f"_httk_logical_id = {a}")
+    assert {item[0][0].value for item in searcher} == {1, 2}
+
+
+def test_stored_property_plan_serves_filters_and_sorts_logical_id(store_factory):
+    store = store_factory(entry_records={LogicalIdCalculation: (LogicalIdBacking,)})
+    _skip_non_sql(store)
+    first = LogicalIdBacking("first")
+    a = store.save(first)
+    store.replace(first, LogicalIdBacking("second"))
+    store.save(LogicalIdBacking("independent"))  # a separate lineage
+    plan = stored_property_sql_plan(store, LogicalIdCalculation)
+
+    # The served row carries the lineage id, unconditional and unscaled.
+    rows = {row["immutable_id"]: row["_httk_logical_id"] for row in plan.records()}
+    assert rows["first"] == a
+    assert rows["second"] == a
+    assert rows["independent"] != a
+
+    # Filtering by _httk_logical_id selects the whole lineage.
+    searchers = plan.filter_searchers(f"_httk_logical_id = {a}")
+    assert sorted(result[0][0].label for searcher in searchers for result in searcher) == ["first", "second"]
+
+    # Sorting by _httk_logical_id compiles and orders by the lineage id.
+    ordered = plan.filter_searchers("_httk_logical_id >= 0", sort=(("_httk_logical_id", False),))
+    assert [result[0][0].label for searcher in ordered for result in searcher][-1] == "independent"

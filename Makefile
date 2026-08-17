@@ -73,7 +73,7 @@ EXTENDED_TEST_TIMEOUT_SECONDS ?= 1200
 BENCHMARK_TIMEOUT_SECONDS ?= 1800
 
 # ClickHouse is an opt-in developer service, never part of test/check/ci.
-CLICKHOUSE_VERSION ?= 26.8.1.1028
+CLICKHOUSE_VERSION ?= 26.7.3.19
 CLICKHOUSE_STATIC_VERSION ?= 26.7.3.19
 CLICKHOUSE_DEV_ROOT ?= .clickhouse-dev
 CLICKHOUSE_DEV_DIR = $(CLICKHOUSE_DEV_ROOT)/$(CLICKHOUSE_STATIC_VERSION)
@@ -119,6 +119,14 @@ clickhouse-dev-server:
 	sed -i \
 		-e 's#<tcp_port replace="replace">29000</tcp_port>#<tcp_port replace="replace">$(CLICKHOUSE_DEV_NATIVE_PORT)</tcp_port>#' \
 		-e 's#<http_port replace="replace">28123</http_port>#<http_port replace="replace">$(CLICKHOUSE_DEV_HTTP_PORT)</http_port>#' \
+		-e "s#<path replace=\"replace\">/var/lib/clickhouse/</path>#<path replace=\"replace\">$$(pwd)/$(CLICKHOUSE_DEV_DIR)/data/</path>#" \
+		-e "s#<tmp_path replace=\"replace\">/var/lib/clickhouse/tmp/</tmp_path>#<tmp_path replace=\"replace\">$$(pwd)/$(CLICKHOUSE_DEV_DIR)/tmp/</tmp_path>#" \
+		-e "s#<user_files_path replace=\"replace\">/var/lib/clickhouse/user_files/</user_files_path>#<user_files_path replace=\"replace\">$$(pwd)/$(CLICKHOUSE_DEV_DIR)/user_files/</user_files_path>#" \
+		-e "s#<log>/var/log/clickhouse-server/server.log</log>#<log>$$(pwd)/$(CLICKHOUSE_DEV_LOG)</log>#" \
+		-e "s#<errorlog>/var/log/clickhouse-server/error.log</errorlog>#<errorlog>$$(pwd)/$(CLICKHOUSE_DEV_DIR)/error.log</errorlog>#" \
+		-e "s#<log_storage_path>/var/lib/clickhouse/keeper/log/</log_storage_path>#<log_storage_path>$$(pwd)/$(CLICKHOUSE_DEV_DIR)/keeper/log/</log_storage_path>#" \
+		-e "s#<snapshot_storage_path>/var/lib/clickhouse/keeper/snapshots/</snapshot_storage_path>#<snapshot_storage_path>$$(pwd)/$(CLICKHOUSE_DEV_DIR)/keeper/snapshots/</snapshot_storage_path>#" \
+		-e "s#</clickhouse>#<users_config replace=\"replace\">$$(pwd)/$(CLICKHOUSE_DEV_DIR)/users.xml</users_config></clickhouse>#" \
 		"$(CLICKHOUSE_DEV_CONFIG)"; \
 	cp tests/clickhouse/users.xml "$(CLICKHOUSE_DEV_DIR)/users.xml"; \
 	mkdir -p "$(CLICKHOUSE_DEV_DIR)/data" "$(CLICKHOUSE_DEV_DIR)/tmp" "$(CLICKHOUSE_DEV_DIR)/user_files" \
@@ -142,14 +150,6 @@ clickhouse-dev-server:
 	else \
 		"$$python_path" -m httk.core.memguard --max-rss-gb "$(CLICKHOUSE_SERVER_MEMGUARD_GB)" -- \
 			"$$binary_path" server --config-file "$$config_path" \
-			--path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/data/" \
-			--tmp_path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/tmp/" \
-			--user_files_path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/user_files/" \
-			--user_directories.users_xml.path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/users.xml" \
-			--logger.log="$$(pwd)/$(CLICKHOUSE_DEV_LOG)" \
-			--logger.errorlog="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/error.log" \
-			--keeper_server.log_storage_path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/keeper/log/" \
-			--keeper_server.snapshot_storage_path="$$(pwd)/$(CLICKHOUSE_DEV_DIR)/keeper/snapshots/" \
 			>"$(CLICKHOUSE_DEV_LOG)" 2>&1 & echo $$! > "$(CLICKHOUSE_DEV_PID)"; \
 	fi; \
 	client="$(CLICKHOUSE_DEV_BINARY)"; \

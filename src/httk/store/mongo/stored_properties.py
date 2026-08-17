@@ -160,6 +160,12 @@ class _MongoQueryContext:
             if scope.parent is not None:
                 raise MongoStoredPropertyConfigurationError("store_timestamp is only available on parent scopes")
             return MongoValue("store_timestamp", scope=scope, field=name)
+        if name == "logical_id":
+            # The store-managed lineage id: unconditional (no store_timestamps
+            # requirement) and unscaled. Parent-only, like store_timestamp.
+            if scope.parent is not None:
+                raise MongoStoredPropertyConfigurationError("logical_id is only available on parent scopes")
+            return MongoValue("logical_id", scope=scope, field=name)
         if scope.scalar_child:
             if scope.relationship is None or name not in {"value", scope.relationship.field}:
                 raise MongoStoredPropertyConfigurationError("scalar child scopes use field('value')")
@@ -405,6 +411,21 @@ class MongoStoredPropertyPlan:
                         value = None if found is None else found.get("store_timestamp")
                         result[name] = None if value is None else int(value) * self.store.store_timestamp_resolution
                     continue
+                if name == "_httk_logical_id":
+                    # Unconditional and unscaled: the store manages the lineage
+                    # id, so no backing projection can produce it. This re-reads
+                    # the document field (no candidate value is threaded here).
+                    sid = self.store.sid_of(record, as_record=backing)
+                    found = (
+                        None
+                        if sid is None
+                        else self.store._database.database[collection_name_for(resolve_schema(backing))].find_one(
+                            {"_id": sid}, {"logical_id": 1}, **self.store._session_kwargs()
+                        )
+                    )
+                    value = None if found is None else found.get("logical_id")
+                    result[name] = None if value is None else int(value)
+                    continue
                 projection = configured.projections.get(name)
                 result[name] = None if projection is None else _response_json_value(projection.response(record))
         return result
@@ -445,6 +466,7 @@ class MongoStoredPropertyPlan:
             def verify(document: dict[str, Any], p=predicate, cls=backing.backing) -> bool:
                 sid = int(document["_id"])
                 timestamp: dict[str, object] = {}
+                lineage: dict[str, object] = {}
 
                 def resolve_timestamp() -> object:
                     if "value" not in timestamp:
@@ -454,11 +476,20 @@ class MongoStoredPropertyPlan:
                         timestamp["value"] = None if found is None else found.get("store_timestamp")
                     return timestamp["value"]
 
+                def resolve_logical_id() -> object:
+                    if "value" not in lineage:
+                        found = self.store._database.database[collection_name_for(resolve_schema(cls))].find_one(
+                            {"_id": sid}, {"logical_id": 1}, **self.store._session_kwargs()
+                        )
+                        lineage["value"] = None if found is None else found.get("logical_id")
+                    return lineage["value"]
+
                 return (
                     evaluate(
                         p,
                         self.store.fetch(cls, sid),
                         store_timestamp_resolver=resolve_timestamp,
+                        logical_id_resolver=resolve_logical_id,
                     )
                     is True
                 )

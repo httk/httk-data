@@ -122,12 +122,12 @@ jobs:
             pyproject.toml
             constraints/clickhouse-p5.txt
 
-      - name: Start ClickHouse 26.8 with embedded Keeper
+      - name: Start ClickHouse 26.7 with embedded Keeper
         run: |
           docker run --detach --name httk-clickhouse --network host \
             --memory=7g --memory-swap=7g \
             --volume "$GITHUB_WORKSPACE/tests/clickhouse/config.d/httk.xml:/etc/clickhouse-server/config.d/httk.xml:ro" \
-            clickhouse/clickhouse-server:26.8.1.1028
+            clickhouse/clickhouse-server:26.7.3.19
 
       - name: Wait for ClickHouse native, Keeper, and bootstrap readiness
         shell: bash
