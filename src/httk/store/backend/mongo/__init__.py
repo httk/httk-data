@@ -9,6 +9,7 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from httk.store.store_common import EntryReplacementError
     from httk.store.store_timestamp import StoreClockRegressionError
 
     from .database import MongoDatabase, TransactionsUnavailableError
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "EntryReplacementError",
     "FsckCollectionSummary",
     "FsckSummary",
     "MongoDatabase",
@@ -52,6 +54,7 @@ __all__ = [
 ]
 
 _MONGO_EXPORTS = {
+    "EntryReplacementError": "...store_common",
     "FsckCollectionSummary": ".fsck",
     "FsckSummary": ".fsck",
     "MongoDatabase": ".database",

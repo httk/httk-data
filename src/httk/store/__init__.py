@@ -25,7 +25,8 @@ supplies *capabilities*:
 
 - the **database storage layer** (:mod:`httk.store.backend.sql`, requiring the
   ``httk-store[db]`` extra) — relational storage and querying of plain frozen
-  dataclasses (:class:`~httk.store.backend.sql.store.SqlStore` over SQLite or DuckDB),
+  dataclasses (:class:`~httk.store.backend.sql.store.SqlStore` over SQLite, DuckDB,
+  PostgreSQL, or ClickHouse),
   served through the provider contract by
   :class:`~httk.store.backend.sql.entry_provider.StoreEntryProvider`.
 

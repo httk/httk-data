@@ -1009,13 +1009,13 @@ class MongoStore:
 
         A replacement whose content deduplicates onto an existing document is an
         idempotent no-op when that document shares the predecessor's lineage, and
-        an :class:`~httk.store.backend.sql.store.EntryReplacementError` when it belongs to a
+        an :class:`~httk.store.store_common.EntryReplacementError` when it belongs to a
         different one.
 
         :param collection: The record collection holding the deduplicated document.
         :param hit_sid: The sid of the deduplicated document.
         :param predecessor_logical_id: The predecessor's lineage identity.
-        :raises ~httk.store.backend.sql.store.EntryReplacementError: If the hit belongs to a different lineage.
+        :raises ~httk.store.store_common.EntryReplacementError: If the hit belongs to a different lineage.
         """
         document = collection.find_one({"_id": hit_sid}, {"logical_id": 1}, **self._session_kwargs())
         if document is None:
@@ -1284,13 +1284,13 @@ class MongoStore:
         compared with ``predecessor``'s: an equal lineage (including ``obj``
         equalling ``predecessor`` itself) is an idempotent no-op returning the
         existing sid, while a different lineage raises
-        :class:`~httk.store.backend.sql.store.EntryReplacementError`.
+        :class:`~httk.store.store_common.EntryReplacementError`.
 
         :param predecessor: The stored instance being replaced; it must have been stored or fetched through this store.
         :param obj: The replacement object to store.
         :return: The stored replacement document's sid.
         :raises ValueError: If ``predecessor`` is not known to this store, or ``obj``'s record collection differs from ``predecessor``'s.
-        :raises ~httk.store.backend.sql.store.EntryReplacementError: If ``obj`` deduplicates onto a document from a different lineage.
+        :raises ~httk.store.store_common.EntryReplacementError: If ``obj`` deduplicates onto a document from a different lineage.
         """
         predecessor_sid = self.sid_of(predecessor)
         if predecessor_sid is None:

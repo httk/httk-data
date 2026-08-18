@@ -489,3 +489,23 @@ def test_mongo_store_export_imports_pymongo_but_not_sqlalchemy():
         "assert 'sqlalchemy' not in sys.modules, 'the MongoDB layer must not load sqlalchemy'\n"
     )
     subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
+
+
+def test_entry_replacement_error_is_importable_without_sqlalchemy():
+    """Both backend routes expose EntryReplacementError even with sqlalchemy blocked."""
+    code = (
+        "import sys\n"
+        "import importlib.abc\n"
+        "class Block(importlib.abc.MetaPathFinder):\n"
+        "    def find_spec(self, fullname, path=None, target=None):\n"
+        "        if fullname.partition('.')[0] == 'sqlalchemy':\n"
+        "            raise ModuleNotFoundError(f'No module named {fullname!r}', name=fullname)\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Block())\n"
+        "from httk.store.backend.mongo import EntryReplacementError as FromMongo\n"
+        "from httk.store.backend.sql import EntryReplacementError as FromSql\n"
+        "from httk.store.store_common import EntryReplacementError as FromCommon\n"
+        "assert FromMongo is FromCommon is FromSql\n"
+        "assert 'sqlalchemy' not in sys.modules, 'sqlalchemy must not load'\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())

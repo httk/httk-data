@@ -1,7 +1,8 @@
 """Backend engine lifecycle: :class:`Backend` wraps a SQLAlchemy engine behind an httk-facing API.
 
 A :class:`Backend` names *where* data lives — an SQLite file, an in-memory
-SQLite database, a DuckDB file — and owns the connection pool that reaches it.
+SQLite database, a DuckDB file, a PostgreSQL server, or a Keeper-backed
+ClickHouse cluster — and owns the connection pool that reaches it.
 It deliberately exposes no SQL surface of its own: the store layer
 (:class:`~httk.store.backend.sql.store.SqlStore`) asks it for connections internally, and
 user code only constructs one (usually via :meth:`Backend.sqlite` or
@@ -38,10 +39,10 @@ _DISPOSE_WAIT_WARNING_SECONDS = 60.0
 class Backend:
     """A relational database reachable through a wrapped SQLAlchemy engine.
 
-    Construct one with :meth:`sqlite`, :meth:`duckdb`, or :meth:`clickhouse` (or,
-    for other SQLAlchemy-supported backends, by passing a preconfigured engine
-    directly). The instance is a context manager; leaving the ``with`` block
-    disposes the engine's connection pool.
+    Construct one with :meth:`sqlite`, :meth:`duckdb`, :meth:`postgresql`, or
+    :meth:`clickhouse` (or, for other SQLAlchemy-supported backends, by passing a
+    preconfigured engine directly). The instance is a context manager; leaving
+    the ``with`` block disposes the engine's connection pool.
 
     :param engine: The configured SQLAlchemy engine to wrap.
     :param degraded: Open with autocommit isolation for degraded-mode access

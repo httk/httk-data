@@ -371,10 +371,11 @@ store = SqlStore(
 )
 ```
 
-The stored value is `time.time_ns() // store_timestamp_resolution`. The public
-query API accepts a canonical nanosecond integer or an RFC3339/ISO-8601
-timezone-aware value and converts it to the store's units. For example, this
-historic query returns rows present at `T`:
+The stored value is `time.time_ns() // store_timestamp_resolution`. The searcher
+API accepts a canonical nanosecond integer or an RFC3339/ISO-8601 timezone-aware
+string and converts it to the store's units; the OPTIMADE filter form accepts
+only the canonical nanosecond integer. For example, this historic query returns
+rows present at `T`:
 
 ```python
 searcher = store.searcher()
@@ -390,7 +391,7 @@ The equivalent OPTIMADE filter is:
 from httk.store.backend.sql import optimade_filter_searcher
 
 rows = optimade_filter_searcher(
-    store, StructureRecord, '_httk_store_timestamp <= "2026-01-01T00:00:00Z"'
+    store, StructureRecord, "_httk_store_timestamp <= 1767225600000000000"  # ns for 2026-01-01T00:00:00Z
 )
 ```
 

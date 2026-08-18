@@ -17,8 +17,8 @@ These modules import cleanly without sqlalchemy. The SQL layer proper builds
 on them and requires the ``httk-store[db]`` extra (sqlalchemy):
 
 - :class:`~httk.store.backend.sql.engine.Backend` — the engine wrapper naming where
-  data lives (``Backend.sqlite(...)``, ``Backend.duckdb(...)``, or the
-  Keeper-backed ``Backend.clickhouse(...)``);
+  data lives (``Backend.sqlite(...)``, ``Backend.duckdb(...)``,
+  ``Backend.postgresql(...)``, or the Keeper-backed ``Backend.clickhouse(...)``);
 - :class:`~httk.store.backend.sql.store.SqlStore` — save/fetch/dedup/transactions for
   storable instances, on top of the schema-to-table mapping in
   :mod:`httk.store.backend.sql.mapping`;
@@ -92,7 +92,7 @@ _SQL_EXPORTS = {
     "Backend": ".engine",
     "EntryDispatchIntegrityError": ".store",
     "EntryMetadataConflictError": ".store",
-    "EntryReplacementError": ".store",
+    "EntryReplacementError": "...store_common",
     "StoreClockRegressionError": ".store",
     "SqlStore": ".store",
     "SqlSearcher": ".searcher",
