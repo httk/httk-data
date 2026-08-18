@@ -11,7 +11,7 @@ from typing import Annotated, Any, Protocol, TypeVar, runtime_checkable
 from httk.core.storage import IdentitySkip, project_storage_record
 from httk.core.storage.identity import _trusted_content_id
 
-from httk.store.backend.sql.schema import FieldSpec, resolve_schema
+from httk.store.backend.schema import FieldSpec, resolve_schema
 from httk.store.storage_layout import EntryFamilyLayout
 
 __all__ = [

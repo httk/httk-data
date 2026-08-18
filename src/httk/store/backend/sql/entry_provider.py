@@ -10,7 +10,7 @@ other.
 For each served class the provider either passes through a supplied
 :class:`~httk.core.EntryTypeDefinition` (validated to describe every served
 property) or auto-generates one from the class's resolved
-:class:`~httk.store.backend.sql.schema.TableSchema`: the OPTIMADE core ``id``/``type``
+:class:`~httk.store.backend.schema.TableSchema`: the OPTIMADE core ``id``/``type``
 properties plus one :meth:`~httk.core.PropertyDefinition.from_simple`
 definition per servable stored field, each named with a registered
 database-specific ``prefix`` (default ``"_httk_"``) and merged in via
@@ -58,9 +58,9 @@ from httk.core import (
 )
 from httk.core.storage import RelationshipLink
 
-from httk.store.backend.sql.codecs import codec_named
+from httk.store.backend.codecs import codec_named
+from httk.store.backend.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import SID_COLUMN
-from httk.store.backend.sql.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.backend.sql.searcher import SqlColumn, _query_index
 from httk.store.backend.sql.store import SqlStore, _as_fixed_tensor
 from httk.store.query import ID_FIELD

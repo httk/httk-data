@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from httk.store.backend.sql.schema import TableSchema, resolve_schema
+from httk.store.backend.schema import TableSchema, resolve_schema
 from httk.store.store_timestamp import FUTURE_TIMESTAMP_SLACK_NS
 
 from .leases import acquire_fsck

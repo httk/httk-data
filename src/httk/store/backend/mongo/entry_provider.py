@@ -21,8 +21,8 @@ from httk.core import (
 )
 from httk.core.storage import RelationshipLink
 
-from httk.store.backend.sql.codecs import codec_named
-from httk.store.backend.sql.schema import FieldSpec, TableSchema, resolve_schema
+from httk.store.backend.codecs import codec_named
+from httk.store.backend.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.served_specs import served_specs
 
 from .documents import _as_fixed_tensor

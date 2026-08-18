@@ -97,7 +97,7 @@ class Backend:
             # preconfigured PostgreSQL engine passed straight to Backend(...) is
             # covered too — PostgreSQL has no per-connection UDF to fall back on.
             importlib.import_module("httk.store.backend.postgresql.compiler")
-        _install_exact_fraction_functions(engine)
+        _install_engine_functions(engine)
 
     @classmethod
     def sqlite(cls, path: str | os.PathLike[str] | None = None, *, degraded: bool = False) -> "Backend":
@@ -308,71 +308,83 @@ class Backend:
         return f"{type(self).__name__}({self._engine.url!r})"
 
 
+_DIALECT_HOOKS: dict[str, str] = {
+    "sqlite": "httk.store.backend.sqlite.hooks",
+    "duckdb": "httk.store.backend.duckdb.hooks",
+    "postgresql": "httk.store.backend.postgresql.hooks",
+}
+
+
+def _dialect_hooks(dialect_name: str) -> Any:
+    """Import the per-dialect hooks module, or return ``None`` when there is none.
+
+    :param dialect_name: The SQLAlchemy dialect name (``engine.dialect.name``).
+    :return: The imported ``<dialect>.hooks`` module, or ``None`` if the dialect
+        is not registered in :data:`_DIALECT_HOOKS`.
+    """
+    module_path = _DIALECT_HOOKS.get(dialect_name)
+    if module_path is None:
+        return None
+    return importlib.import_module(module_path)
+
+
+def _install_engine_functions(engine: sqlalchemy.Engine) -> None:
+    """Run the dialect's ``install_engine_functions`` hook, if it defines one.
+
+    A dialect with no hooks module, or a hooks module that defines no
+    ``install_engine_functions``, is a documented no-op: only SQLite and DuckDB
+    register the exact-fraction UDF, so PostgreSQL and ClickHouse install
+    nothing.  Called from :meth:`Backend.__init__` so a preconfigured engine
+    passed straight to :class:`Backend` is covered too.
+
+    :param engine: The SQLAlchemy engine to install dialect functions on.
+    :return: None.
+    """
+    hooks = _dialect_hooks(engine.dialect.name)
+    install = getattr(hooks, "install_engine_functions", None)
+    if install is not None:
+        install(engine)
+
+
 def connection_uses_autocommit(connection: sqlalchemy.Connection) -> bool:
     """Return the DBAPI connection's actual autocommit state.
 
     SQLAlchemy's execution options describe an engine's intent, but a caller
-    can wrap any preconfigured engine in :class:`Backend`.  Permanentization
-    must therefore inspect the live SQLite DBAPI connection rather than trust
-    ``Backend.degraded``.  ``sqlite3.Connection.isolation_level is None`` is
-    SQLite's documented autocommit mode; the SQLAlchemy checks cover alternate
-    DBAPI wrappers while still requiring the live connection to agree.
+    can wrap any preconfigured engine in :class:`Backend`, so permanentization
+    inspects the live DBAPI connection.  The check is dialect specific and
+    delegated to the dialect's ``connection_uses_autocommit`` hook; a dialect
+    with no hooks module (or no such function) is never in autocommit mode.
+
+    :param connection: The live SQLAlchemy connection to inspect.
+    :return: Whether the underlying DBAPI connection is in autocommit mode.
     """
-    if connection.dialect.name == "postgresql":
-        # psycopg 3 exposes the live autocommit flag on the DBAPI connection;
-        # the transactional-profile validator relies on this to reject a
-        # misconfigured AUTOCOMMIT Postgres engine.
-        return bool(getattr(connection.connection.driver_connection, "autocommit", False))
-    if connection.dialect.name != "sqlite":
+    hooks = _dialect_hooks(connection.dialect.name)
+    uses_autocommit = getattr(hooks, "connection_uses_autocommit", None)
+    if uses_autocommit is None:
         return False
-    raw = connection.connection.driver_connection
-    if getattr(raw, "isolation_level", object()) is None:
-        return True
-    execution_mode = connection.get_execution_options().get("isolation_level")
-    if isinstance(execution_mode, str) and execution_mode.upper() == "AUTOCOMMIT":
-        return True
-    try:
-        return str(connection.get_isolation_level()).upper() == "AUTOCOMMIT"
-    except (AttributeError, NotImplementedError):
-        return False
+    return bool(uses_autocommit(connection))
 
 
-def _install_exact_fraction_functions(engine: sqlalchemy.Engine) -> None:
-    """Install exact-fraction scalar functions on every SQLite/DuckDB connection.
+def _install_scalar_function(engine: sqlalchemy.Engine, register: Callable[[Any], None]) -> None:
+    """Register a per-connection scalar function on every connection of ``engine``.
 
-    Fraction values are persisted canonically as text because SQL integer
-    products can overflow long before a valid Python :class:`Fraction` does.
-    These functions preserve exact comparisons without touching presentation
-    float columns.
+    Neutral wiring shared by the SQLite and DuckDB hooks: ``register`` performs
+    the dialect-specific ``create_function`` call on a freshly-connected or
+    checked-out DBAPI connection.  The registration is idempotent per engine and
+    per connection, so wrapping an already-open engine in :class:`Backend` still
+    covers its pooled handles.
+
+    :param engine: The SQLAlchemy engine to install the function on.
+    :param register: Callback installing the function on one DBAPI connection.
+    :return: None.
     """
-
-    dialect = engine.dialect.name
-    if dialect not in {"sqlite", "duckdb"}:
-        return
     if getattr(engine, _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE, False):
         return
 
     def install(dbapi_connection: Any, connection_record: Any) -> None:
         if connection_record.info.get(_EXACT_FRACTION_FUNCTIONS_KEY):
             return
-        if dialect == "sqlite":
-            dbapi_connection.create_function("httk_fraction_scaled_equal", 4, _fraction_scaled_equal)
-        else:
-            duckdb = importlib.import_module("duckdb")
-            try:
-                dbapi_connection.create_function(
-                    "httk_fraction_scaled_equal",
-                    _fraction_scaled_equal,
-                    return_type=duckdb.sqltypes.BOOLEAN,
-                )
-            except Exception as error:
-                # DuckDB registers functions in the database catalog, rather
-                # than per DBAPI connection.  A simultaneous peer may already
-                # have installed it, in which case this connection can use the
-                # same catalog function immediately.  Never remove/recreate:
-                # doing so races an active peer's query.
-                if not _duckdb_duplicate_function_error(error):
-                    raise
+        register(dbapi_connection)
         connection_record.info[_EXACT_FRACTION_FUNCTIONS_KEY] = True
 
     def connect(dbapi_connection: Any, connection_record: Any) -> None:
@@ -387,12 +399,6 @@ def _install_exact_fraction_functions(engine: sqlalchemy.Engine) -> None:
     event.listen(engine, "connect", connect)
     event.listen(engine, "checkout", checkout)
     setattr(engine, _EXACT_FRACTION_FUNCTIONS_ATTRIBUTE, True)
-
-
-def _duckdb_duplicate_function_error(error: Exception) -> bool:
-    """Whether DuckDB reports a catalog function already installed by a peer."""
-    text = str(error).casefold()
-    return "already exists" in text or "already created" in text
 
 
 def _fraction(value: object) -> Fraction | None:

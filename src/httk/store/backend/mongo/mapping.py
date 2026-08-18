@@ -6,7 +6,7 @@ from typing import Any, Final
 
 from pymongo import ReturnDocument
 
-from httk.store.backend.sql.schema import FieldSpec, TableSchema
+from httk.store.backend.schema import FieldSpec, TableSchema
 from httk.store.storage_layout import EntryFamilyLayout
 
 __all__ = [

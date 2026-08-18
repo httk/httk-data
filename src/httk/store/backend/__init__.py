@@ -11,6 +11,14 @@ Each subpackage is a self-contained storage backend:
 - :mod:`httk.store.backend.mongo` — the MongoDB-backed layer
   (:class:`~httk.store.backend.mongo.store.MongoStore`).
 
+Two backend-neutral modules sit alongside the subpackages, driver-free and
+shared by every backend:
+
+- :mod:`httk.store.backend.schema` — :func:`~httk.store.backend.schema.resolve_schema`
+  and the schema IR that drives storage; and
+- :mod:`httk.store.backend.codecs` — the :class:`~httk.store.backend.codecs.ValueCodec`
+  registry with exact, round-trippable encodings.
+
 Importing this package pulls in neither ``sqlalchemy`` nor ``pymongo``; the
 driver-backed names load lazily on first use of the relevant subpackage.
 """

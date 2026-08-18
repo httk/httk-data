@@ -3,12 +3,13 @@
 This subpackage turns plain frozen dataclasses — declared storable with the
 stdlib-only marker vocabulary in httk-core (``Indexed``, ``Unique``, ``Skip``,
 ``Shape``, ``StorageInfo``, ``stored_property``) — into relational storage.
-The pure-Python foundation lives here:
+The driver-free, backend-neutral foundation lives one level up, in the
+:mod:`httk.store.backend` package, and is shared by every backend:
 
-- :mod:`httk.store.backend.sql.schema` — :func:`resolve_schema` reads a storable class
-  into a :class:`~httk.store.backend.sql.schema.TableSchema`, the single source of truth for DDL, inserts,
+- :mod:`httk.store.backend.schema` — :func:`~httk.store.backend.schema.resolve_schema` reads a storable class
+  into a :class:`~httk.store.backend.schema.TableSchema`, the single source of truth for DDL, inserts,
   selects, and reconstruction;
-- :mod:`httk.store.backend.sql.codecs` — the :class:`ValueCodec` registry with exact,
+- :mod:`httk.store.backend.codecs` — the :class:`~httk.store.backend.codecs.ValueCodec` registry with exact,
   round-trippable encodings for rationals, surds, and datetimes;
 - :mod:`httk.core.storage` — ``canonical_form`` and ``content_id``,
   the content identity used for deduplication.
@@ -44,8 +45,6 @@ import importlib
 from typing import Any
 
 from ...query import MultipleResultsError, NoResultError, ResultRow
-from .codecs import ValueCodec, register_value_codec
-from .schema import SchemaError, register_schema_override, resolve_schema
 
 __all__ = [
     "STORAGE_PROTOCOL_VERSION",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
@@ -64,7 +63,6 @@ __all__ = [
     "NoResultError",
     "ResultColumn",  # pyright: ignore[reportUnsupportedDunderAll]
     "ResultRow",  # pyright: ignore[reportUnsupportedDunderAll]
-    "SchemaError",
     "SqlResultSet",  # pyright: ignore[reportUnsupportedDunderAll]
     "SqlSearcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
@@ -76,11 +74,7 @@ __all__ = [
     "StoredEntryFederation",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredEntrySource",  # pyright: ignore[reportUnsupportedDunderAll]
     "StoredPropertySqlConfigurationError",  # pyright: ignore[reportUnsupportedDunderAll]
-    "ValueCodec",
     "optimade_filter_searcher",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
-    "register_schema_override",
-    "register_value_codec",
-    "resolve_schema",
     "stored_property_sql_plan",  # pyright: ignore[reportUnsupportedDunderAll]
 ]
 

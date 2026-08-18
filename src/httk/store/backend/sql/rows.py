@@ -12,9 +12,9 @@ from typing import Any
 import sqlalchemy
 from httk.core import FracVector
 
-from httk.store.backend.sql.codecs import codec_named, decode_fracvector_exact
+from httk.store.backend.codecs import codec_named, decode_fracvector_exact
+from httk.store.backend.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import SID_COLUMN
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 
 if typing.TYPE_CHECKING:
     from httk.store.backend.sql.store import SqlStore
@@ -310,7 +310,7 @@ class RowHydrator:
         :param sid: The row identifier.
         :return: The materialized storable instance.
         :raises KeyError: If ``sid`` is not in this hydrator's sequence.
-        :raises httk.store.backend.sql.schema.SchemaError: If eager hydration encounters a reference cycle.
+        :raises httk.store.backend.schema.SchemaError: If eager hydration encounters a reference cycle.
         :raises httk.store.backend.sql.rows.StaleResultError: If the row no longer exists.
         """
         sid = int(sid)
@@ -440,7 +440,7 @@ def row_class(cls: type) -> type:
 
     :param cls: The frozen storable dataclass to proxy.
     :return: The cached lazy row subclass.
-    :raises httk.store.backend.sql.schema.SchemaError: If the class uses unsupported slots or custom equality or hashing.
+    :raises httk.store.backend.schema.SchemaError: If the class uses unsupported slots or custom equality or hashing.
     """
     if "__slots__" in cls.__dict__:
         raise SchemaError(f"{cls.__name__}: lazy storage rows do not support slots dataclasses")

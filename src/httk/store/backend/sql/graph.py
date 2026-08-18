@@ -11,8 +11,8 @@ import dataclasses
 from collections.abc import Iterable, Sequence
 from typing import Literal
 
+from httk.store.backend.schema import TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import backing_dispatch_column_name, entry_dispatch_table_name
-from httk.store.backend.sql.schema import TableSchema, resolve_schema
 
 __all__ = ["EdgeKind", "LogicalEdge", "LogicalEdgeGraph"]
 

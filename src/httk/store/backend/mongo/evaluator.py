@@ -16,8 +16,8 @@ from typing import Any, Literal, cast
 
 from httk.core.storage import QueryLiteralError, content_id
 
-from httk.store.backend.sql.codecs import ValueCodec, codec_named
-from httk.store.backend.sql.schema import FieldSpec, TableSchema
+from httk.store.backend.codecs import ValueCodec, codec_named
+from httk.store.backend.schema import FieldSpec, TableSchema
 
 __all__ = ["MongoPredicate", "MongoScope", "MongoValue", "canonical_predicate", "evaluate"]
 

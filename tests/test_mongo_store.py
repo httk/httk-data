@@ -9,9 +9,9 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import Skip, StorageInfo, content_id, stored_property
 
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.backend.mongo import MongoDatabase, MongoStore, RecordTooLargeError
 from httk.store.backend.mongo.mapping import collection_name_for, entry_dispatch_table_name
+from httk.store.backend.schema import resolve_schema
 from httk.store.store_common import EntryDispatchIntegrityError
 
 

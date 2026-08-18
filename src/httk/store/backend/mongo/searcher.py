@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from httk.store.backend.sql.codecs import ValueCodec, codec_named
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
+from httk.store.backend.codecs import ValueCodec, codec_named
+from httk.store.backend.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult, UnsupportedQueryError
 from httk.store.store_timestamp import ns_operand_to_store_units
 

@@ -10,7 +10,8 @@ import pytest
 import sqlalchemy
 from httk.core.storage import Skip, StorageInfo, content_id
 
-from httk.store.backend.sql import Backend, SchemaError, SqlStore, StaleResultError, resolve_schema
+from httk.store.backend.schema import SchemaError, resolve_schema
+from httk.store.backend.sql import Backend, SqlStore, StaleResultError
 from httk.store.backend.sql.rows import ExpiredLazyRecordError, RowHydrator, is_lazy_row, row_class
 
 

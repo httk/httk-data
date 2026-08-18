@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy
 
+from httk.store.backend.schema import TableSchema, resolve_schema
 from httk.store.backend.sql.graph import LogicalEdgeGraph
 from httk.store.backend.sql.layout import METADATA_TABLE_NAME, actual_table_names
 from httk.store.backend.sql.mapping import (
@@ -20,7 +21,6 @@ from httk.store.backend.sql.mapping import (
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
-from httk.store.backend.sql.schema import TableSchema, resolve_schema
 from httk.store.store_timestamp import FUTURE_TIMESTAMP_SLACK_NS
 
 if TYPE_CHECKING:

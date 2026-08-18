@@ -14,7 +14,7 @@ from httk.core.optimade import FilterAst
 
 from httk.store.backend.mongo.searcher import MongoExpression, MongoField, MongoReference, MongoSearcher, MongoVariable
 from httk.store.backend.mongo.store import MongoStore
-from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.schema import resolve_schema
 from httk.store.query import Searcher
 from httk.store.query.optimade_filters import (
     FilterTranslationError,

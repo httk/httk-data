@@ -11,7 +11,8 @@ from httk.core import FracVector
 from httk.core.storage import Shape, StorageInfo
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.backend.sql import Backend, SchemaError, SqlStore
+from httk.store.backend.schema import SchemaError
+from httk.store.backend.sql import Backend, SqlStore
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 

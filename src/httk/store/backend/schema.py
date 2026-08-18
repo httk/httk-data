@@ -8,7 +8,7 @@ marker vocabulary from httk-core (:class:`~httk.core.storage.Indexed`,
 :func:`resolve_schema` reads the class once — dataclass fields, ``Annotated``
 markers, stored properties, and the optional class-level or externally
 registered :class:`~httk.core.storage.StorageInfo` — and produces a
-:class:`~httk.store.backend.sql.schema.TableSchema`, the single source of truth from which the SQL layer
+:class:`~httk.store.backend.schema.TableSchema`, the single source of truth from which the SQL layer
 derives DDL, inserts, selects, and reconstruction alike.
 
 Resolution rules (field annotation, then the resulting relational shape):
@@ -18,7 +18,7 @@ Resolution rules (field annotation, then the resulting relational shape):
   a query ``DOUBLE`` plus an exact ``*_exact`` hexadecimal text column so
   signed zero and every other finite binary64 value round-trip unchanged.
 - ``X | None`` — the field is optional; all of its columns become nullable.
-- a type with a registered :class:`~httk.store.backend.sql.codecs.ValueCodec`
+- a type with a registered :class:`~httk.store.backend.codecs.ValueCodec`
   (:class:`fractions.Fraction`, :class:`~httk.core.FracScalar`,
   :class:`~httk.core.SurdScalar`, :class:`datetime.datetime`, ...) — the
   codec's columns, named by appending each suffix to the field name.
@@ -76,7 +76,7 @@ from httk.core.storage import (
     stored_property,
 )
 
-from httk.store.backend.sql.codecs import ScalarKind, codec_for, codec_named
+from httk.store.backend.codecs import ScalarKind, codec_for, codec_named
 
 __all__ = [
     "ChildTableSpec",
@@ -248,7 +248,7 @@ class TableSchema:
 
         :param name: The stored field or property name.
         :return: The matching field specification.
-        :raises httk.store.backend.sql.schema.SchemaError: If no stored field has that name.
+        :raises httk.store.backend.schema.SchemaError: If no stored field has that name.
         """
         for spec in self.fields:
             if spec.field == name:
@@ -308,20 +308,20 @@ def register_schema_override(cls: type, info: StorageInfo) -> None:
 
 
 def resolve_schema(cls: type, *, override: StorageInfo | None = None) -> TableSchema:
-    """Resolve (and cache) the :class:`~httk.store.backend.sql.schema.TableSchema` of a storable dataclass.
+    """Resolve (and cache) the :class:`~httk.store.backend.schema.TableSchema` of a storable dataclass.
 
     The effective :class:`~httk.core.storage.StorageInfo` is, in order of precedence:
     the explicit ``override`` argument, an info registered via
     :func:`register_schema_override`, the class's own ``__httk_storage__``
     attribute, or defaults. Results are cached per ``(class, effective
-    override)``, so repeated calls return the same :class:`~httk.store.backend.sql.schema.TableSchema` object.
+    override)``, so repeated calls return the same :class:`~httk.store.backend.schema.TableSchema` object.
     Reference cycles (a class referencing itself, or mutually referencing
     classes) are allowed and resolve without recursion loops.
 
     :param cls: The storable class to resolve.
     :param override: External storage information taking precedence over declarations.
     :return: The cached resolved table schema.
-    :raises httk.store.backend.sql.schema.SchemaError: If the class is not a frozen dataclass or one of its
+    :raises httk.store.backend.schema.SchemaError: If the class is not a frozen dataclass or one of its
         fields cannot be resolved; the diagnostic names the class and field.
     """
     row_base = getattr(cls, "__httk_row_base__", None)

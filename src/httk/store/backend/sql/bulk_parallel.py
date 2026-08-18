@@ -61,6 +61,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from httk.core.storage import StorageProjectionCycleError, resolve_storage_record
 
+from httk.store.backend.schema import TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
@@ -71,7 +72,6 @@ from httk.store.backend.sql.mapping import (
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
-from httk.store.backend.sql.schema import TableSchema, resolve_schema
 from httk.store.backend.sql.store import (
     SqlStore,
     _encode_child_rows,

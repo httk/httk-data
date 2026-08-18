@@ -99,7 +99,7 @@ def _expected_table_counts(stream: list[object]) -> dict[str, int]:
     """Return expected unique content-ID rows by physical table."""
     from httk.core.storage import content_id
 
-    from httk.store.backend.sql.schema import resolve_schema
+    from httk.store.backend.schema import resolve_schema
 
     expected: dict[str, set[str]] = {}
     for value in stream:

@@ -106,6 +106,7 @@ from httk.core.storage import (
     resolve_storage_record,
 )
 
+from httk.store.backend.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.backend.sql.graph import LogicalEdgeGraph
 from httk.store.backend.sql.layout import METADATA_TABLE_NAME, actual_schema_objects, backend_facts_for_dialect
 from httk.store.backend.sql.mapping import (
@@ -118,7 +119,6 @@ from httk.store.backend.sql.mapping import (
     backing_dispatch_column_name,
     entry_dispatch_table_name,
 )
-from httk.store.backend.sql.schema import FieldSpec, TableSchema, resolve_schema
 from httk.store.backend.sql.store import (
     SqlStore,
     _encode_child_rows,

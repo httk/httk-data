@@ -14,10 +14,10 @@ import pytest
 from httk.core.storage import StorageInfo
 from test_db_stored_properties import FIRST, CalculationEntry
 
-from httk.store.backend.sql.schema import resolve_schema
-from httk.store.store_common import EntryReplacementError
 from httk.store.backend.mongo import MongoStore
 from httk.store.backend.mongo.mapping import collection_name_for
+from httk.store.backend.schema import resolve_schema
+from httk.store.store_common import EntryReplacementError
 
 
 @dataclass(frozen=True)

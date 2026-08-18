@@ -74,7 +74,8 @@ from typing import Annotated, ClassVar
 from httk.core import FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, content_id, stored_property
 
-from httk.store.backend.sql import Backend, SqlStore, resolve_schema
+from httk.store.backend.schema import resolve_schema
+from httk.store.backend.sql import Backend, SqlStore
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
 

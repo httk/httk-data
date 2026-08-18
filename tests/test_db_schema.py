@@ -1,4 +1,4 @@
-"""Tests for the schema IR (httk.store.backend.sql.schema): one test per resolution rule."""
+"""Tests for the schema IR (httk.store.backend.schema): one test per resolution rule."""
 
 import datetime
 from dataclasses import dataclass
@@ -18,8 +18,7 @@ from httk.core.storage import (
     stored_property,
 )
 
-from httk.store.backend.sql import SchemaError, register_schema_override, resolve_schema
-from httk.store.backend.sql.schema import snake_case
+from httk.store.backend.schema import SchemaError, register_schema_override, resolve_schema, snake_case
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 """The SQL store: save and fetch storable frozen dataclasses through a :class:`~httk.store.backend.sql.engine.Backend`.
 
 :class:`SqlStore` is the object-level storage API on top of the schema IR
-(:mod:`httk.store.backend.sql.schema`), the value codecs (:mod:`httk.store.backend.sql.codecs`),
+(:mod:`httk.store.backend.schema`), the value codecs (:mod:`httk.store.backend.codecs`),
 the content identity (:mod:`httk.core.storage`), and the SQLAlchemy table
 mapping (:mod:`httk.store.backend.sql.mapping`):
 
@@ -53,12 +53,13 @@ from httk.core.storage import (
 )
 from sqlalchemy.exc import SQLAlchemyError
 
-from httk.store.backend.sql.codecs import (
+from httk.store.backend.codecs import (
     codec_named,
     decode_fracvector_exact,
     encode_fracvector_exact,
     encode_fracvector_floats,
 )
+from httk.store.backend.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.engine import Backend, connection_uses_autocommit
 from httk.store.backend.sql.graph import LogicalEdgeGraph
 from httk.store.backend.sql.layout import (
@@ -93,7 +94,6 @@ from httk.store.backend.sql.mapping import (
     table_for,
 )
 from httk.store.backend.sql.rows import RowHydrator, StaleResultError, decode_field, is_lazy_row, lazy_row_identity
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.searcher import SqlSearcher
 from httk.store.storage_layout import (
     ADDITIVE_UPGRADE_HINT,
@@ -1941,7 +1941,7 @@ class SqlStore:
         """Return the ``cls`` instance whose content identity is ``key``, or None if not stored.
 
         Only classes with the ``"content_id"`` dedup policy carry a content
-        identity column; :class:`~httk.store.backend.sql.schema.SchemaError` is raised
+        identity column; :class:`~httk.store.backend.schema.SchemaError` is raised
         for any other class. A lazy row is returned by default; pass
         ``eager=True`` to fully materialize it.
 
@@ -1949,7 +1949,7 @@ class SqlStore:
         :param key: The content identity to find.
         :param eager: Whether to fully materialize the record instead of returning a lazy row.
         :return: The stored instance, or ``None`` when no row matches.
-        :raises httk.store.backend.sql.schema.SchemaError: If the class does not use content-id deduplication.
+        :raises httk.store.backend.schema.SchemaError: If the class does not use content-id deduplication.
         """
         schema = resolve_schema(cls)
         if schema.dedup != "content_id":
@@ -2131,7 +2131,7 @@ class SqlStore:
         """Return all stored ``cls`` instances whose reference field ``field`` points at ``to``.
 
         ``field`` must be a reference field of ``cls`` targeting ``to``'s class
-        (:class:`~httk.store.backend.sql.schema.SchemaError` otherwise), and ``to`` must
+        (:class:`~httk.store.backend.schema.SchemaError` otherwise), and ``to`` must
         be known to this store — saved or fetched through it — else
         :class:`ValueError` is raised. Results are ordered by sid. Lazy rows are
         returned by default (batched over the matched sids); pass ``eager=True``
@@ -2142,7 +2142,7 @@ class SqlStore:
         :param to: The stored target instance.
         :param eager: Whether to fully materialize the records instead of returning lazy rows.
         :return: The referring stored instances ordered by sid.
-        :raises httk.store.backend.sql.schema.SchemaError: If ``field`` is not a compatible reference field.
+        :raises httk.store.backend.schema.SchemaError: If ``field`` is not a compatible reference field.
         :raises ValueError: If ``to`` is not known to this store.
         """
         schema = resolve_schema(cls)

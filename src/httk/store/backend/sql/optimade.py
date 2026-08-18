@@ -3,7 +3,7 @@
 :func:`optimade_filter_searcher` builds a :class:`~httk.store.backend.sql.searcher.SqlSearcher`
 over a storable class directly from an OPTIMADE filter string, deriving the
 recognized property names and their types from the class's resolved
-:class:`~httk.store.backend.sql.schema.TableSchema` — the same derivation
+:class:`~httk.store.backend.schema.TableSchema` — the same derivation
 :class:`~httk.store.backend.sql.entry_provider.StoreEntryProvider` uses to serve the
 class (via the shared :func:`~httk.store.backend.sql.entry_provider.served_specs` /
 :func:`~httk.store.backend.sql.entry_provider.auto_definition` helpers), so a filter
@@ -24,7 +24,7 @@ from typing import Any
 from httk.core import EntryTypeDefinition
 from httk.core.optimade import FilterAst
 
-from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.schema import resolve_schema
 from httk.store.backend.sql.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable
 from httk.store.backend.sql.store import SqlStore
 from httk.store.query import Searcher, SearchExpression, SearchVariable

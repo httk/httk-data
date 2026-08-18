@@ -25,7 +25,7 @@ from httk.core import (
 from httk.core.optimade import FilterAst, parse_optimade_filter
 from httk.core.storage import QueryLiteralError, StoredPropertyProjection, content_id, stored_property_projections
 
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, resolve_schema
+from httk.store.backend.schema import FieldSpec, SchemaError, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.query.optimade_filters import FilterTranslationError, HandlerTable, translate_filter_ast
 from httk.store.store_timestamp import ns_operand_to_store_units

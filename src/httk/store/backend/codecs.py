@@ -43,7 +43,7 @@ from httk.core.storage import register_canonical_encoder
 from httk.core.storage.rational_text import fraction_to_text
 
 if TYPE_CHECKING:
-    import httk.store.backend.sql.codecs
+    import httk.store.backend.codecs
 
 __all__ = [
     "FRACTION_EXACT_FORMAT",
@@ -101,7 +101,7 @@ class ValueCodec:
     python_type: type
     """The Python type this codec stores; matched exactly first, then by subclass."""
 
-    columns: "tuple[tuple[str, httk.store.backend.sql.codecs.ScalarKind], ...]"
+    columns: "tuple[tuple[str, httk.store.backend.codecs.ScalarKind], ...]"
     """The ``(column name suffix, scalar kind)`` pairs the codec encodes into."""
 
     encode: Callable[[Any], tuple[Any, ...]]

@@ -16,7 +16,8 @@ from httk.core import FracScalar, FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.backend.sql import Backend, SqlStore, resolve_schema
+from httk.store.backend.schema import resolve_schema
+from httk.store.backend.sql import Backend, SqlStore
 from httk.store.backend.sql.mapping import sqlalchemy_metadata, table_for
 
 

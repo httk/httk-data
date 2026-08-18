@@ -8,8 +8,6 @@ from httk.core import FracVector
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import Indexed, Shape, StorageInfo, Unique
 
-from httk.store.backend.sql.mapping import entry_dispatch_table_name as sql_dispatch_name
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.backend.mongo.mapping import (
     DocumentFieldSpec,
     collection_name_for,
@@ -20,6 +18,8 @@ from httk.store.backend.mongo.mapping import (
     index_specs_for,
     validator_for,
 )
+from httk.store.backend.schema import resolve_schema
+from httk.store.backend.sql.mapping import entry_dispatch_table_name as sql_dispatch_name
 from httk.store.storage_layout import normalize_entry_records
 
 

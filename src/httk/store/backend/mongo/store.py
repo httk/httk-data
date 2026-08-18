@@ -16,8 +16,8 @@ from pymongo.errors import CollectionInvalid, DuplicateKeyError, PyMongoError
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
-from httk.store.backend.sql.codecs import codec_named, decode_fracvector_exact
-from httk.store.backend.sql.schema import SchemaError, resolve_schema
+from httk.store.backend.codecs import codec_named, decode_fracvector_exact
+from httk.store.backend.schema import SchemaError, resolve_schema
 from httk.store.storage_layout import (
     ADDITIVE_UPGRADE_HINT,
     DECLARATION_PROTOCOL_VERSION,
@@ -1161,7 +1161,7 @@ class MongoStore:
         :param key: The content identity.
         :param eager: Accepted for interface parity; a materialized record is always returned.
         :return: The hydrated record or ``None``.
-        :raises ~httk.store.backend.sql.schema.SchemaError: If ``cls`` is not content-id deduplicated.
+        :raises ~httk.store.backend.schema.SchemaError: If ``cls`` is not content-id deduplicated.
         """
         schema = resolve_schema(cls)
         if schema.dedup != "content_id":
@@ -1386,7 +1386,7 @@ class MongoStore:
         :param to: The stored target instance.
         :param eager: Accepted for interface parity; materialized records are always returned.
         :return: Matching records ordered by sid.
-        :raises ~httk.store.backend.sql.schema.SchemaError: If the field or target class is incompatible.
+        :raises ~httk.store.backend.schema.SchemaError: If the field or target class is incompatible.
         :raises ValueError: If ``to`` is not stored or fetched here.
         """
         schema = resolve_schema(cls)

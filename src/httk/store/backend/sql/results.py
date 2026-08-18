@@ -10,9 +10,9 @@ from typing import Any, Final, Literal, cast
 import sqlalchemy
 from httk.core import FracScalar, FracVector
 
+from httk.store.backend.schema import FieldSpec, resolve_schema
 from httk.store.backend.sql.mapping import SID_COLUMN
 from httk.store.backend.sql.rows import RowHydrator
-from httk.store.backend.sql.schema import FieldSpec, resolve_schema
 from httk.store.backend.sql.searcher import SqlSearcher, _Output
 from httk.store.query import (
     ContinuationToken,
@@ -879,7 +879,7 @@ def _cursor_guard(generation: _Generation, current: int) -> None:
 
 
 def _decode_fixed(text: str, spec: FieldSpec) -> FracVector:
-    from httk.store.backend.sql.codecs import decode_fracvector_exact
+    from httk.store.backend.codecs import decode_fracvector_exact
 
     assert spec.shape is not None
     return decode_fracvector_exact(text, spec.shape.rows, spec.shape.cols)

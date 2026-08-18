@@ -10,7 +10,7 @@ searchers onto SQLAlchemy Core:
 - :meth:`SqlSearcher.variable` binds a storable class to a **fresh alias** of
   its table; two variables of the same class therefore make a self-join.
 - Attribute access on a :class:`SqlVariable` follows the class's resolved
-  :class:`~httk.store.backend.sql.schema.TableSchema`: scalar and encoded fields yield a
+  :class:`~httk.store.backend.schema.TableSchema`: scalar and encoded fields yield a
   :class:`SqlColumn` over the field's query column; reference fields yield a
   chainable :class:`SqlReference` that compares by foreign key
   (``v.ref == other_variable`` / ``== stored_object`` / ``== None``) and, on
@@ -74,9 +74,9 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import sqlalchemy
 
-from httk.store.backend.sql.codecs import ValueCodec, codec_named, decode_fracvector_exact
+from httk.store.backend.codecs import ValueCodec, codec_named, decode_fracvector_exact
+from httk.store.backend.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import LOGICAL_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.query import SearchResult
 from httk.store.store_timestamp import ns_operand_to_store_units
 
@@ -580,12 +580,12 @@ class SqlVariable:
 
     Attribute access resolves stored fields (including stored properties) into
     :class:`SqlColumn` / :class:`SqlReference` objects per the class's
-    :class:`~httk.store.backend.sql.schema.TableSchema`; ``sid`` (a reserved field name)
+    :class:`~httk.store.backend.schema.TableSchema`; ``sid`` (a reserved field name)
     yields the store-managed integer primary key column; accessing a
     variable-length (child-table) field registers a LEFT OUTER JOIN and
     switches the searcher into grouped mode. Unknown names raise
     :class:`AttributeError`;
-    fixed-shape tensor fields raise :class:`~httk.store.backend.sql.schema.SchemaError`
+    fixed-shape tensor fields raise :class:`~httk.store.backend.schema.SchemaError`
     (they are not queryable as a whole).
 
     :meth:`always_true` and :meth:`always_false` are — like ``sid`` — reserved

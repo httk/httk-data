@@ -9,13 +9,13 @@ from bson import encode as bson_encode
 from httk.core import FracVector
 from httk.core.storage import Shape
 
-from httk.store.backend.sql.codecs import (
+from httk.store.backend.codecs import (
     codec_named,
     decode_fracvector_exact,
     encode_fracvector_exact,
     encode_fracvector_floats,
 )
-from httk.store.backend.sql.schema import FieldSpec, TableSchema
+from httk.store.backend.schema import FieldSpec, TableSchema
 
 from .mapping import document_fields_for
 

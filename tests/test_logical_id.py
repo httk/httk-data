@@ -9,10 +9,10 @@ from httk.core import PropertyDefinition, load_entry_type_definition
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, StoredPropertyProjection
 
-from httk.store.backend.sql import Backend, EntryReplacementError, SchemaError, SqlStore, stored_property_sql_plan
+from httk.store.backend.schema import SchemaError, resolve_schema
+from httk.store.backend.sql import Backend, EntryReplacementError, SqlStore, stored_property_sql_plan
 from httk.store.backend.sql.mapping import LOGICAL_ID_COLUMN, sqlalchemy_metadata
 from httk.store.backend.sql.optimade import optimade_filter_searcher
-from httk.store.backend.sql.schema import resolve_schema
 
 LOGICAL_ID_CALC_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 

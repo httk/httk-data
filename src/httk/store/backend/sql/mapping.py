@@ -1,4 +1,4 @@
-"""Schema-to-SQL mapping: build SQLAlchemy Core tables from resolved :class:`~httk.store.backend.sql.schema.TableSchema` IR.
+"""Schema-to-SQL mapping: build SQLAlchemy Core tables from resolved :class:`~httk.store.backend.schema.TableSchema` IR.
 
 :func:`table_for` turns one resolved schema into a :class:`sqlalchemy.Table`
 registered in a :class:`sqlalchemy.MetaData` (idempotently: an already-built
@@ -30,8 +30,8 @@ from typing import Any, Final
 
 import sqlalchemy
 
-from httk.store.backend.sql.codecs import ScalarKind
-from httk.store.backend.sql.schema import (
+from httk.store.backend.codecs import ScalarKind
+from httk.store.backend.schema import (
     ChildTableSpec,
     ColumnSpec,
     FieldSpec,

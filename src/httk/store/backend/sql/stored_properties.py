@@ -41,10 +41,10 @@ from sqlalchemy.sql.elements import Null
 from sqlalchemy.sql.selectable import Exists, ScalarSelect
 from sqlalchemy.sql.visitors import replacement_traverse
 
-from httk.store.backend.sql.codecs import ValueCodec, codec_named
+from httk.store.backend.codecs import ValueCodec, codec_named
+from httk.store.backend.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import CONTENT_ID_COLUMN, LOGICAL_ID_COLUMN, SID_COLUMN, STORE_TIMESTAMP_COLUMN
 from httk.store.backend.sql.rows import RowHydrator
-from httk.store.backend.sql.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.backend.sql.searcher import SqlColumn, SqlExpression, SqlSearcher, SqlVariable, _bool_clause
 from httk.store.backend.sql.store import SqlStore
 from httk.store.query.optimade_filters import (

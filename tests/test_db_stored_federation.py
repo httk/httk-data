@@ -14,6 +14,7 @@ from httk.core import (
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, StoredPropertyProjection, content_id
 
+from httk.store.backend.schema import resolve_schema
 from httk.store.backend.sql import (
     Backend,
     DuplicateEntryIdError,
@@ -22,7 +23,6 @@ from httk.store.backend.sql import (
     StoredEntryFederation,
     StoredEntrySource,
 )
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.query.optimade_filters import FilterTranslationError
 from httk.store.store_common import EntryStore
 

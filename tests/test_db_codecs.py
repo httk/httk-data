@@ -1,4 +1,4 @@
-"""Tests for the value-codec registry and exact text formats (httk.store.backend.sql.codecs)."""
+"""Tests for the value-codec registry and exact text formats (httk.store.backend.codecs)."""
 
 import datetime
 import math
@@ -10,14 +10,8 @@ import pytest
 from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
 from httk.core.storage import content_id, register_canonical_encoder
 
-from httk.store.backend.sql import (
-    Backend,
-    SchemaError,
-    SqlStore,
+from httk.store.backend.codecs import (
     ValueCodec,
-    register_value_codec,
-)
-from httk.store.backend.sql.codecs import (
     codec_for,
     codec_named,
     decode_fraction_exact,
@@ -28,7 +22,10 @@ from httk.store.backend.sql.codecs import (
     encode_fracvector_floats,
     encode_surdscalar_exact,
     known_value_codecs,
+    register_value_codec,
 )
+from httk.store.backend.schema import SchemaError
+from httk.store.backend.sql import Backend, SqlStore
 
 
 def test_builtin_codecs_are_registered():

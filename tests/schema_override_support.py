@@ -5,8 +5,8 @@ from contextlib import contextmanager
 
 from httk.core.storage import StorageInfo
 
-from httk.store.backend.sql import schema as schema_module
-from httk.store.backend.sql.schema import register_schema_override
+from httk.store.backend import schema as schema_module
+from httk.store.backend.schema import register_schema_override
 
 
 @contextmanager

@@ -7,8 +7,8 @@ from typing import Final, Literal
 
 import sqlalchemy
 
+from httk.store.backend.schema import TableSchema, resolve_schema
 from httk.store.backend.sql.mapping import dispatch_table_for, entry_dispatch_table_name, table_for
-from httk.store.backend.sql.schema import TableSchema, resolve_schema
 from httk.store.storage_layout import (
     EntryFamilyDeclaration,
     EntryFamilyLayout,

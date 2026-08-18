@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.schema import resolve_schema
 from httk.store.query import (
     ContinuationToken,
     MultipleResultsError,

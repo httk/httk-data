@@ -7,10 +7,10 @@ import pytest
 import sqlalchemy
 from httk.core.storage import StorageInfo
 
+from httk.store.backend.schema import resolve_schema
 from httk.store.backend.sql import Backend, SqlStore, StorageLayoutUpgradeRequiredError, StoreClockRegressionError
 from httk.store.backend.sql.mapping import STORE_TIMESTAMP_COLUMN, sqlalchemy_metadata
 from httk.store.backend.sql.optimade import optimade_filter_searcher
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.store_timestamp import (
     encode_store_timestamp_state,
     ns_operand_to_store_units,

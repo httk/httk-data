@@ -9,7 +9,6 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.backend.mongo import MongoDatabase, MongoStore
 from httk.store.backend.mongo.mapping import (
     COUNTERS_COLLECTION,
@@ -18,6 +17,7 @@ from httk.store.backend.mongo.mapping import (
     counter_next,
     entry_dispatch_table_name,
 )
+from httk.store.backend.schema import resolve_schema
 
 
 @dataclass(frozen=True)

@@ -8,10 +8,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from httk.store.backend.sql import Backend, SqlStore
 from httk.store.backend.mongo import MongoSearcher
-from httk.store.query import MultipleResultsError, NoResultError, PageOrder, PaginationCursorError, UnsupportedQueryError
-from httk.store.query.paging_tokens import _decode_continuation, _encode_continuation, _encode_payload, _plan_fingerprint
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.query import (
+    MultipleResultsError,
+    NoResultError,
+    PageOrder,
+    PaginationCursorError,
+    UnsupportedQueryError,
+)
+from httk.store.query.paging_tokens import (
+    _decode_continuation,
+    _encode_continuation,
+    _encode_payload,
+    _plan_fingerprint,
+)
 
 
 @dataclass(frozen=True)
@@ -503,9 +514,9 @@ def test_type_tampered_anchor_is_a_clean_cursor_error(mongo_test_database):
 
 def test_page_anchor_python_type_derives_from_the_order_column_kind():
     """The Mongo anchor-type helper maps a key's stored column kind (no server needed)."""
-    from httk.store.backend.sql.codecs import codec_named
-    from httk.store.backend.sql.schema import resolve_schema
+    from httk.store.backend.codecs import codec_named
     from httk.store.backend.mongo.results import _anchor_python_type
+    from httk.store.backend.schema import resolve_schema
 
     schema = resolve_schema(MongoQueryRecord)
     rank = schema.field("rank")  # int | None -> scalar int column

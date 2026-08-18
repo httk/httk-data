@@ -10,7 +10,6 @@ import sqlalchemy
 from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
-from httk.store.backend.sql import Backend, SqlStore
 from httk.store.backend.clickhouse import support as clickhouse_adapter
 from httk.store.backend.clickhouse.support import (
     actual_columns,
@@ -21,9 +20,10 @@ from httk.store.backend.clickhouse.support import (
     validate_metadata_table,
     verify_clickhouse_connection,
 )
+from httk.store.backend.schema import resolve_schema
+from httk.store.backend.sql import Backend, SqlStore
 from httk.store.backend.sql.layout import STORAGE_PROTOCOL_VERSION, actual_schema_objects
 from httk.store.backend.sql.mapping import table_for
-from httk.store.backend.sql.schema import resolve_schema
 from httk.store.backend.sql.store import StorageLayoutUpgradeRequiredError
 
 
