@@ -84,6 +84,12 @@ store = MongoStore(
 )
 ```
 
+Beyond the declaration, reopen also verifies the same per-table
+[schema fingerprint](db.md#vocabulary) as `SqlStore`: a record
+class whose resolved on-disk shape or content identity changed since creation is
+rejected up front with `StorageLayoutUpgradeRequiredError`, whose diff names the
+offending collections (`{"schema": {collection: {"expected", "actual"}}}`).
+
 Application-private families can instead use the same explicit
 `EntryFamilyDeclaration`/`EntryRecordDeclaration` and `entry_families=` API as
 `SqlStore`. Such declarations bypass global discovery and must be supplied

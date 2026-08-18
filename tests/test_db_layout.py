@@ -6,7 +6,6 @@ import subprocess
 import sys
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -15,6 +14,7 @@ import pytest
 import sqlalchemy
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
+from schema_override_support import schema_override
 
 from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration, storage_layout
 from httk.store.db import (
@@ -25,7 +25,6 @@ from httk.store.db import (
     StorageLayoutUpgradeRequiredError,
     StoreUnderConstructionError,
 )
-from httk.store.db import schema as schema_module
 from httk.store.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
@@ -35,11 +34,9 @@ from httk.store.db.layout import (
     declaration_json,
     expected_metadata,
     normalize_entry_records,
-    schema_fingerprint_diff,
-    schema_fingerprint_json,
 )
 from httk.store.db.mapping import entry_dispatch_table_name
-from httk.store.db.schema import register_schema_override
+from httk.store.storage_layout import schema_fingerprint_diff, schema_fingerprint_json
 
 
 class LayoutFamily:
@@ -440,23 +437,11 @@ def test_reopen_with_changed_record_schema_is_rejected(database: Database) -> No
     assert set(schema_diff) == {"layout_single"}
 
 
-@contextmanager
-def _schema_override(cls: type, info: StorageInfo) -> Iterator[None]:
-    """Register a schema override and evict it (and its cache entries) afterwards."""
-    register_schema_override(cls, info)
-    try:
-        yield
-    finally:
-        schema_module._schema_overrides.pop(cls, None)
-        for key in [key for key in schema_module._schema_cache if key[0] is cls]:
-            del schema_module._schema_cache[key]
-
-
 def test_reopen_detects_dedup_change_on_referenced_class(database: Database) -> None:
     SqlStore(database, entry_records={RefFamily: RefParent})
     # A real resolution-path change: the referenced child's dedup policy differs
     # from what was stamped, moving its fingerprint without hand-editing JSON.
-    with _schema_override(RefChild, StorageInfo(storage_name="layout_ref_child", dedup="by_value")):
+    with schema_override(RefChild, StorageInfo(storage_name="layout_ref_child", dedup="by_value")):
         with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
             SqlStore(database)
         # The offending table is the referenced child, not the declared parent.

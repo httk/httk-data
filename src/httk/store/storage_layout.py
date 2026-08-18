@@ -8,9 +8,10 @@ layout validation belong to each storage backend.
 import dataclasses
 import json
 import sys
-from collections.abc import Mapping, Sequence
+import typing
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import Final, cast
+from typing import Any, Final, cast
 
 from httk.core.register import (
     entry_family_info,
@@ -20,8 +21,9 @@ from httk.core.register import (
     resolve_entry_family,
     resolve_entry_record,
 )
+from httk.core.storage import storage_identity_name
 
-from httk.store.db.schema import resolve_schema
+from httk.store.db.schema import ChildTableSpec, ColumnSpec, FieldSpec, TableSchema, resolve_schema
 
 __all__ = [
     "DECLARATION_PROTOCOL_VERSION",
@@ -34,6 +36,8 @@ __all__ = [
     "declaration_json",
     "normalize_entry_families",
     "normalize_entry_records",
+    "schema_fingerprint_diff",
+    "schema_fingerprint_json",
 ]
 
 DECLARATION_PROTOCOL_VERSION: Final = "v2.2.0"
@@ -55,7 +59,7 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
         categories = ", ".join(frozen) or "unknown layout difference"
         details = frozen.get("declaration")
         detail_names = f": {', '.join(details)}" if isinstance(details, Mapping) else ""
-        super().__init__(f"SqlStore layout upgrade is required ({categories}{detail_names})")
+        super().__init__(f"Store layout upgrade is required ({categories}{detail_names})")
 
 
 class EntryLayoutBindingError(ValueError):
@@ -285,6 +289,151 @@ def declaration_json(layout: StorageLayout) -> str:
         "format": 2,
     }
     return json.dumps(document, sort_keys=True, separators=(",", ":"))
+
+
+def _walk_closure(layout: StorageLayout, visit: Callable[[TableSchema], None]) -> None:
+    """Invoke ``visit`` once per resolved schema across the declared closure.
+
+    Each declared record class and the transitive closure of its referenced
+    storable classes is resolved and passed to ``visit`` exactly once.
+
+    :param layout: The normalized storage layout to walk.
+    :param visit: The callback invoked with each distinct resolved schema.
+    :return: None.
+    """
+    seen: set[type] = set()
+
+    def descend(record: type) -> None:
+        if record in seen:
+            return
+        seen.add(record)
+        schema = resolve_schema(record)
+        visit(schema)
+        for target in schema.referenced_classes():
+            descend(target)
+
+    for family in layout.families:
+        for record in family.records:
+            descend(record)
+
+
+def schema_fingerprint_json(layout: StorageLayout) -> str:
+    """Serialize the resolved per-table schema of ``layout`` in deterministic form.
+
+    The fingerprint covers every declared record class plus the transitive
+    closure of referenced storable classes, resolved through
+    :func:`~httk.store.db.schema.resolve_schema`.  It captures what determines
+    the on-disk layout, the stored value encoding, and the *content identity* of
+    each table — the logical identity name, dedup policy, composite indexes,
+    relationship links, and per-field roles, codecs, shapes, columns, child
+    tables, identity participation, and list-vs-tuple container — so that
+    reopening a store whose record classes changed is rejected up front.
+
+    A code move or rename is safe only when the record pins an explicit
+    :attr:`~httk.core.storage.StorageInfo.identity_name` (every shipped httk
+    record does); without a pin the qualified class name *is* the content
+    identity, so the move changes ``content_id`` and the store correctly
+    refuses to open.  ``cls`` and ``python_type`` themselves are excluded — the
+    identity name and resolved columns capture everything the store depends on.
+
+    :param layout: The normalized storage layout to fingerprint.
+    :return: A deterministic ``sort_keys`` JSON document ``{"tables": {...}}``.
+    """
+    # Duplicate physical table names across the closure are already rejected by
+    # each backend's physical-name validation, which walks the identical
+    # closure; keying by table_name here needs no second collision guard.
+    schemas: dict[str, TableSchema] = {}
+
+    def collect(schema: TableSchema) -> None:
+        schemas.setdefault(schema.table_name, schema)
+
+    _walk_closure(layout, collect)
+    document = {"tables": {name: _table_fingerprint(schema) for name, schema in schemas.items()}}
+    return json.dumps(document, sort_keys=True, separators=(",", ":"))
+
+
+def schema_fingerprint_diff(stored: str | None, current: str) -> dict[str, object]:
+    """Diff a stored fingerprint against the current one, per differing table.
+
+    The persisted fingerprint shape is versioned by the store protocol, so this
+    only needs to survive a corrupt stored value gracefully.
+
+    :param stored: The persisted fingerprint JSON, or ``None`` when absent.
+    :param current: The fingerprint recomputed from the persisted layout.
+    :return: A mapping of table name to ``{"expected", "actual"}`` for each table
+        that differs; ``{}`` when the two fingerprints are byte-equal.  A stored
+        value that is not a parseable fingerprint yields a single
+        ``"<fingerprint>"`` entry.
+    """
+    current_tables = json.loads(current)["tables"]
+    try:
+        stored_tables = json.loads(stored)["tables"] if stored is not None else None
+    except (TypeError, KeyError, json.JSONDecodeError):
+        stored_tables = None
+    if not isinstance(stored_tables, dict):
+        return {"<fingerprint>": {"expected": "schema fingerprint", "actual": stored}}
+    diff: dict[str, object] = {}
+    for name in sorted(set(stored_tables) | set(current_tables)):
+        stored_table = stored_tables.get(name)
+        current_table = current_tables.get(name)
+        if stored_table != current_table:
+            diff[name] = {"expected": stored_table, "actual": current_table}
+    return diff
+
+
+def _table_fingerprint(schema: TableSchema) -> dict[str, Any]:
+    """Render the identity- and layout-determining attributes of one resolved table schema."""
+    hints = typing.get_type_hints(schema.cls, include_extras=True)
+    return {
+        "identity_name": storage_identity_name(schema.cls),
+        "dedup": schema.dedup,
+        "composite_indexes": [list(index) for index in schema.composite_indexes],
+        "links": [dataclasses.asdict(link) for link in schema.links],
+        # Keyed by field name so a pure dataclass field reorder (no column,
+        # value, or identity change) does not force a store rebuild.
+        "fields": {spec.field: _field_fingerprint(spec, hints.get(spec.field)) for spec in schema.fields},
+    }
+
+
+def _field_fingerprint(spec: FieldSpec, annotation: Any) -> dict[str, Any]:
+    # Local import: store_common imports EntryFamilyLayout from this module, so a
+    # module-level import would form a cycle. The helper is a pure annotation
+    # inspector; importing it lazily here is order-independent.
+    from httk.store.store_common import _has_identity_skip
+
+    origin = typing.get_origin(spec.python_type)
+    return {
+        "role": spec.role,
+        "codec_name": spec.codec_name,
+        "shape": None if spec.shape is None else [spec.shape.rows, spec.shape.cols],
+        "optional": spec.optional,
+        "derived": spec.derived,
+        # list-vs-tuple and identity participation both change content_id.
+        "container": origin.__name__ if origin in (list, tuple) else None,
+        "identity_skipped": _has_identity_skip(annotation),
+        "columns": [_column_fingerprint(column) for column in spec.columns],
+        "child": None if spec.child is None else _child_fingerprint(spec.child),
+        "target": None if spec.target is None else resolve_schema(spec.target).table_name,
+        "related": None if spec.related is None else dataclasses.asdict(spec.related),
+    }
+
+
+def _child_fingerprint(child: ChildTableSpec) -> dict[str, Any]:
+    return {
+        "table_name": child.table_name,
+        "element_columns": [_column_fingerprint(column) for column in child.element_columns],
+        "target": None if child.target is None else resolve_schema(child.target).table_name,
+    }
+
+
+def _column_fingerprint(column: ColumnSpec) -> dict[str, Any]:
+    return {
+        "name": column.name,
+        "kind": column.kind,
+        "nullable": column.nullable,
+        "indexed": column.indexed,
+        "unique": column.unique,
+    }
 
 
 def _layout_from_declaration(value: str) -> StorageLayout:

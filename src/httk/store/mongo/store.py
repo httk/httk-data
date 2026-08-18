@@ -31,6 +31,8 @@ from httk.store.storage_layout import (
     declaration_json,
     normalize_entry_families,
     normalize_entry_records,
+    schema_fingerprint_diff,
+    schema_fingerprint_json,
 )
 from httk.store.store_common import (
     EntryDispatchIntegrityError,
@@ -71,7 +73,7 @@ __all__ = ["MongoStore", "StoreClockRegressionError"]
 _DOCUMENT_LAYOUT = "mongo-v2"
 _RESERVED_PREFIX = "_httk_"
 _METADATA_KEYS = frozenset(
-    {"_id", "protocol", "entry_declaration", "document_layout", "generation", "store_timestamps"}
+    {"_id", "protocol", "entry_declaration", "entry_schemas", "document_layout", "generation", "store_timestamps"}
 )
 _LOGGER = logging.getLogger("httk.store.mongo")
 _TRANSACTION_ATTEMPTS = 5
@@ -225,6 +227,7 @@ class MongoStore:
                 "_id": "layout",
                 "protocol": DECLARATION_PROTOCOL_VERSION,
                 "entry_declaration": declaration_json(supplied),
+                "entry_schemas": schema_fingerprint_json(supplied),
                 "document_layout": _DOCUMENT_LAYOUT,
                 "generation": 0,
                 "store_timestamps": self._store_timestamp_state,
@@ -298,6 +301,11 @@ class MongoStore:
                     "actual": declaration,
                     "error": str(error),
                 }
+        if persisted is not None and "entry_schemas" in stored:
+            # Absence of the key is already reported by the exact key-set check.
+            schema_diff = schema_fingerprint_diff(stored["entry_schemas"], schema_fingerprint_json(persisted))
+            if schema_diff:
+                diff["schema"] = schema_diff
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None

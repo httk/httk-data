@@ -77,8 +77,6 @@ from httk.store.db.layout import (
     metadata_table_for,
     normalize_entry_declaration,
     read_store_metadata,
-    schema_fingerprint_diff,
-    schema_fingerprint_json,
 )
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
@@ -95,7 +93,12 @@ from httk.store.db.mapping import (
 from httk.store.db.rows import RowHydrator, StaleResultError, decode_field, is_lazy_row, lazy_row_identity
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlSearcher
-from httk.store.storage_layout import EntryFamilyDeclaration, EntryLayoutBindingError
+from httk.store.storage_layout import (
+    EntryFamilyDeclaration,
+    EntryLayoutBindingError,
+    schema_fingerprint_diff,
+    schema_fingerprint_json,
+)
 from httk.store.store_common import (
     _MISSING_METADATA,
     EntryDispatchIntegrityError,

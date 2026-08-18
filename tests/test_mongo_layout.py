@@ -1,11 +1,13 @@
 """Live stamp, trust, and collection-preparation coverage for MongoStore."""
 
+import json
 from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo
+from schema_override_support import schema_override
 
 from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration
 from httk.store.mongo import MongoStore
@@ -63,7 +65,30 @@ register_entry_record(
 )
 
 
-def test_first_open_stamps_six_keys_and_reopen_trusts(mongo_test_database) -> None:
+class MongoRefFamily:
+    """Registered Mongo family whose record references another storable class."""
+
+
+@dataclass(frozen=True)
+class MongoRefChild:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="mongo_ref_child")
+
+    tag: str
+
+
+@dataclass(frozen=True)
+class MongoRefParent:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="mongo_ref_parent")
+
+    child: MongoRefChild
+    value: str
+
+
+register_entry_family(name="test-mongo-ref-family", family=f"{__name__}:MongoRefFamily")
+register_entry_record(name="test-mongo-ref-record", family="test-mongo-ref-family", record=f"{__name__}:MongoRefParent")
+
+
+def test_first_open_stamps_seven_keys_and_reopen_trusts(mongo_test_database) -> None:
     """The single layout document is canonical and byte-stable."""
     store = MongoStore(mongo_test_database, entry_records={})
     document = mongo_test_database.database[METADATA_COLLECTION].find_one({"_id": "layout"})
@@ -72,6 +97,7 @@ def test_first_open_stamps_six_keys_and_reopen_trusts(mongo_test_database) -> No
         "_id",
         "protocol",
         "entry_declaration",
+        "entry_schemas",
         "document_layout",
         "generation",
         "store_timestamps",
@@ -130,6 +156,56 @@ def test_unversioned_database_is_refused_with_reserved_and_unversioned_entries(m
     schema = error.value.diff["schema"]
     assert schema["ordinary_collection"]["unversioned"] is True
     assert schema["_httk_foreign"]["reserved"] is True
+
+
+def test_reopen_with_unchanged_schema_succeeds(mongo_test_database) -> None:
+    """A store whose record classes are unchanged reopens on the trusted fingerprint."""
+    MongoStore(mongo_test_database, entry_records={MongoRefFamily: MongoRefParent})
+    reopened = MongoStore(mongo_test_database)
+    assert {family.name for family in reopened.entry_layout} == {"test-mongo-ref-family"}
+
+
+def test_reopen_with_changed_referenced_schema_is_rejected(mongo_test_database) -> None:
+    """A real resolution change on a referenced class is rejected, naming its collection."""
+    MongoStore(mongo_test_database, entry_records={MongoRefFamily: MongoRefParent})
+    # A real resolution-path change: the referenced child's dedup policy differs
+    # from what was stamped, moving its fingerprint without hand-editing JSON.
+    with (
+        schema_override(MongoRefChild, StorageInfo(storage_name="mongo_ref_child", dedup="by_value")),
+        pytest.raises(StorageLayoutUpgradeRequiredError) as error,
+    ):
+        MongoStore(mongo_test_database)
+    # The offending table is the referenced child, not the declared parent.
+    assert set(error.value.diff["schema"]) == {"mongo_ref_child"}
+
+
+def test_reopen_with_hand_edited_fingerprint_names_the_table(mongo_test_database) -> None:
+    """A hand-edited stored fingerprint produces a per-table schema diff."""
+    MongoStore(mongo_test_database, entry_records={MongoLayoutFamily: MongoLayoutRecord})
+    document = mongo_test_database.database[METADATA_COLLECTION].find_one({"_id": "layout"})
+    assert document is not None
+    stored = json.loads(document["entry_schemas"])
+    # Simulate the record's stored column type having changed since creation.
+    stored["tables"]["mongo_layout_record"]["fields"]["value"]["columns"][0]["kind"] = "int"
+    mongo_test_database.database[METADATA_COLLECTION].update_one(
+        {"_id": "layout"},
+        {"$set": {"entry_schemas": json.dumps(stored, sort_keys=True, separators=(",", ":"))}},
+    )
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        MongoStore(mongo_test_database)
+    # Only the changed table is named, not the unrelated ones.
+    assert set(error.value.diff["schema"]) == {"mongo_layout_record"}
+
+
+def test_reopen_with_corrupt_fingerprint_reports_sentinel(mongo_test_database) -> None:
+    """A stored fingerprint that is not parseable yields the single sentinel diff."""
+    MongoStore(mongo_test_database, entry_records={MongoLayoutFamily: MongoLayoutRecord})
+    mongo_test_database.database[METADATA_COLLECTION].update_one(
+        {"_id": "layout"}, {"$set": {"entry_schemas": "not a fingerprint"}}
+    )
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        MongoStore(mongo_test_database)
+    assert set(error.value.diff["schema"]) == {"<fingerprint>"}
 
 
 def test_ensure_collections_is_idempotent_and_installs_validator(mongo_test_database) -> None:
