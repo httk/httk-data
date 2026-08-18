@@ -231,7 +231,7 @@ def _verify_counts(store: object, database: object, stream: list[object], materi
             ).first()
             if duplicate is not None:
                 raise SystemExit(f"verification failed: duplicate content id in {name}")
-    structure_count = expected_counts.get("atomistic_unitcell_structure_v2", 0)
+    structure_count = expected_counts.get("atomistic_unitcell_structure", 0)
     print(f"verified {len(expected_counts)} tables (structures={structure_count})")
 
 
