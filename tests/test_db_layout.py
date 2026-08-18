@@ -551,6 +551,19 @@ def test_unknown_metadata_key_is_rejected(database: Database) -> None:
         SqlStore(database)
 
 
+def test_independent_declaration_mismatches_accumulate(database: Database) -> None:
+    # Two unrelated declaration problems at once: an unknown metadata key and a
+    # flipped store_timestamps state. Both aspects must survive into the diff
+    # instead of the later check silently overwriting the earlier one's report.
+    SqlStore(database, entry_records={})
+    with database.engine.begin() as connection:
+        connection.execute(sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('mystery', 'value')"))
+    _write_metadata_value(database, "store_timestamps", "off")
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        SqlStore(database)
+    assert set(error.value.diff["declaration"]) == {"metadata_keys", "store_timestamps"}
+
+
 def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: Database) -> None:
     with database.engine.begin() as connection:
         connection.execute(sqlalchemy.text("CREATE TABLE _httk_unknown (value INTEGER)"))

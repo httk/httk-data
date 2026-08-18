@@ -531,18 +531,22 @@ class SqlStore:
         recognized_runtime_keys = {"ingest_state", "lease"}
         allowed_keys = required_keys | persistent_optional_keys | recognized_runtime_keys
         diff: dict[str, object] = {}
+
+        def declaration_diff() -> dict[str, object]:
+            # Each check contributes one named aspect; independent mismatches
+            # accumulate instead of overwriting a single "declaration" payload.
+            return cast("dict[str, object]", diff.setdefault("declaration", {}))
+
         unknown_keys = {
             key
             for key in stored
             if key not in allowed_keys and not (key.startswith("dirty:") and len(key) > len("dirty:"))
         }
         if unknown_keys or not required_keys <= set(stored):
-            diff["declaration"] = {
-                "metadata_keys": {
-                    "expected": tuple(sorted(required_keys)),
-                    "recognized_runtime": tuple(sorted(recognized_runtime_keys)),
-                    "actual": tuple(sorted(stored)),
-                }
+            declaration_diff()["metadata_keys"] = {
+                "expected": tuple(sorted(required_keys)),
+                "recognized_runtime": tuple(sorted(recognized_runtime_keys)),
+                "actual": tuple(sorted(stored)),
             }
         if stored.get("protocol") != STORAGE_PROTOCOL_VERSION:
             diff["protocol"] = {"expected": STORAGE_PROTOCOL_VERSION, "actual": stored.get("protocol")}
@@ -551,33 +555,27 @@ class SqlStore:
         effective_timestamps = None if parsed_timestamps is None else parsed_timestamps[0]
         effective_resolution = None if parsed_timestamps is None else parsed_timestamps[1]
         if persisted_timestamps not in (None, "off") and parsed_timestamps is None:
-            diff["declaration"] = {
-                "store_timestamps": {
-                    "expected": self._store_timestamp_state,
-                    "actual": persisted_timestamps,
-                }
+            declaration_diff()["store_timestamps"] = {
+                "expected": self._store_timestamp_state,
+                "actual": persisted_timestamps,
             }
         elif persisted_timestamps is None:
-            diff["declaration"] = {"store_timestamps": {"expected": self._store_timestamp_state, "actual": None}}
+            declaration_diff()["store_timestamps"] = {"expected": self._store_timestamp_state, "actual": None}
         elif effective_timestamps != self._store_timestamps or (
             effective_timestamps and effective_resolution != self._store_timestamp_resolution
         ):
-            diff["declaration"] = {
-                "store_timestamps": {
-                    "expected": self._store_timestamp_state,
-                    "actual": persisted_timestamps,
-                }
+            declaration_diff()["store_timestamps"] = {
+                "expected": self._store_timestamp_state,
+                "actual": persisted_timestamps,
             }
         persisted_profile = stored.get("write_profile", "transactional")
         if persisted_profile not in {"transactional", "degraded", "bulk-fenced"}:
-            diff["declaration"] = {"write_profile": {"actual": persisted_profile}}
+            declaration_diff()["write_profile"] = {"actual": persisted_profile}
         elif persisted_profile != self._write_profile:
-            diff["declaration"] = {
-                "write_profile": {
-                    "expected": self._write_profile,
-                    "actual": persisted_profile,
-                    "message": "open the store with a Database selecting the persisted write profile",
-                }
+            declaration_diff()["write_profile"] = {
+                "expected": self._write_profile,
+                "actual": persisted_profile,
+                "message": "open the store with a Database selecting the persisted write profile",
             }
         persisted: StorageLayout | None = None
         stored_declaration = stored.get("entry_declaration")
@@ -585,7 +583,7 @@ class SqlStore:
             if stored_declaration == declaration_json(supplied):
                 persisted = supplied
             else:
-                diff["declaration"] = {
+                declaration_diff()["entry_declaration"] = {
                     "expected": stored_declaration,
                     "actual": declaration_json(supplied),
                 }
@@ -595,7 +593,7 @@ class SqlStore:
             except EntryLayoutBindingError:
                 raise
             except (TypeError, ValueError) as error:
-                diff["declaration"] = {
+                declaration_diff()["entry_declaration"] = {
                     "expected": "canonical registered declaration or explicit entry_families binding",
                     "actual": stored_declaration,
                     "error": str(error),

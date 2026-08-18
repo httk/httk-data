@@ -50,7 +50,11 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
     ``diff`` is immutable and JSON-shaped.  Its top-level keys are stable
     categories (currently ``protocol``, ``declaration`` and ``schema``), so a
     caller can present a precise upgrade diagnostic without parsing
-    the human-readable exception message.
+    the human-readable exception message.  The ``declaration`` category maps
+    named aspect keys (``metadata_keys``, ``store_timestamps``,
+    ``write_profile``, ``entry_declaration``) to their own diagnostics, so
+    several independent declaration mismatches are reported together; the
+    exception message names the mismatched aspects.
     """
 
     def __init__(self, diff: Mapping[str, object]) -> None:

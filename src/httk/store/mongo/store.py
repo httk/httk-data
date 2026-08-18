@@ -253,9 +253,16 @@ class MongoStore:
         collection_names: set[str],
     ) -> None:
         diff: dict[str, object] = {}
+
+        def declaration_diff() -> dict[str, object]:
+            # Each check contributes one named aspect; independent mismatches
+            # accumulate instead of overwriting a single "declaration" payload.
+            return typing.cast("dict[str, object]", diff.setdefault("declaration", {}))
+
         if set(stored) != _METADATA_KEYS:
-            diff["declaration"] = {
-                "metadata_keys": {"expected": tuple(sorted(_METADATA_KEYS)), "actual": tuple(sorted(stored))}
+            declaration_diff()["metadata_keys"] = {
+                "expected": tuple(sorted(_METADATA_KEYS)),
+                "actual": tuple(sorted(stored)),
             }
         protocol_actual = stored.get("protocol")
         document_layout_actual = stored.get("document_layout")
@@ -272,8 +279,9 @@ class MongoStore:
             or parsed_timestamps[0] != self._store_timestamps
             or (parsed_timestamps[0] and parsed_timestamps[1] != self._store_timestamp_resolution)
         ):
-            diff["declaration"] = {
-                "store_timestamps": {"expected": self._store_timestamp_state, "actual": persisted_timestamps}
+            declaration_diff()["store_timestamps"] = {
+                "expected": self._store_timestamp_state,
+                "actual": persisted_timestamps,
             }
 
         persisted: StorageLayout | None = None
@@ -282,7 +290,7 @@ class MongoStore:
             if declaration == declaration_json(supplied):
                 persisted = supplied
             else:
-                diff["declaration"] = {
+                declaration_diff()["entry_declaration"] = {
                     "expected": declaration,
                     "actual": declaration_json(supplied),
                 }
@@ -296,7 +304,7 @@ class MongoStore:
             except EntryLayoutBindingError:
                 raise
             except (TypeError, ValueError) as error:
-                diff["declaration"] = {
+                declaration_diff()["entry_declaration"] = {
                     "expected": "canonical registered declaration or explicit entry_families binding",
                     "actual": declaration,
                     "error": str(error),

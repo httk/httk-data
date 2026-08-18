@@ -134,7 +134,8 @@ def test_supplied_declaration_mismatch_has_structured_diff(mongo_test_database) 
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         MongoStore(mongo_test_database, entry_records={MongoOtherFamily: MongoOtherRecord})
     assert "declaration" in error.value.diff
-    assert error.value.diff["declaration"]["expected"] != error.value.diff["declaration"]["actual"]
+    entry_declaration = error.value.diff["declaration"]["entry_declaration"]
+    assert entry_declaration["expected"] != entry_declaration["actual"]
 
 
 def test_application_owned_declaration_rebinds_without_registration(mongo_test_database) -> None:

@@ -542,7 +542,7 @@ def test_clickhouse_partial_metadata_stamp_is_rejected(clickhouse_database: Data
         )
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(clickhouse_database, entry_records={})
-    assert error.value.diff["declaration"]["actual"] is None
+    assert error.value.diff["declaration"]["entry_declaration"]["actual"] is None
 
 
 def test_clickhouse_bootstrap_wrong_engine_and_absence_refuse(clickhouse_database: Database) -> None:
