@@ -712,6 +712,7 @@ class DeferredFinalizer:
             )
             return
         grouped: dict[str, list[Any]] = {}
+        dispatches: Iterable[tuple[str, list[Any] | None]]
         if payload_stage is None:
             # SQLite/DuckDB-native serial stages retain this list because the
             # serial duplicate-return contract needs their in-memory indexes.

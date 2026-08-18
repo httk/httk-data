@@ -77,7 +77,9 @@ class Database:
             raise ValueError(f"write profile {write_profile!r} is not supported by the {engine.dialect.name!r} backend")
         if degraded and write_profile != "degraded":
             raise ValueError("degraded=True requires the degraded write profile")
-        self._write_profile = write_profile
+        # Explicit annotation: the constructor above guarantees membership in the
+        # literal set, but an inferred attribute type would widen back to ``str``.
+        self._write_profile: Literal["transactional", "degraded", "bulk-fenced"] = write_profile
         self._server_version: str | None = None
         self._dispose_callbacks: list[Callable[[], None]] = []
         self._dispose_lock = threading.RLock()

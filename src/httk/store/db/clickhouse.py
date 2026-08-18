@@ -11,11 +11,12 @@ import functools
 import json
 import threading
 import uuid
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from typing import Any, ClassVar
+from typing import Any
 
 import sqlalchemy
+import sqlalchemy.util
 from sqlalchemy import event
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators
@@ -112,8 +113,8 @@ def _install_binary_query_format_hook() -> None:
             self.names = query_result.column_names
             self.types = [item.name for item in query_result.column_types]
 
-    clickhouse_cursor.Cursor.execute = execute
-    clickhouse_cursor.Cursor._httk_binary_query_formats = True
+    clickhouse_cursor.Cursor.execute = execute  # type: ignore[method-assign]  # deliberate driver monkeypatch
+    clickhouse_cursor.Cursor._httk_binary_query_formats = True  # type: ignore[attr-defined]  # our install marker on the driver Cursor
 
 
 def _statement_selects_binary(statement: Any) -> bool:
@@ -556,9 +557,9 @@ def _keeper_engine(path: str, *, primary_key: str = "key") -> Any:
     from clickhouse_connect.cc_sqlalchemy.ddl.tableengine import TableEngine
 
     class KeeperMap(TableEngine):
-        arg_names: ClassVar[list[str]] = ["path"]
-        quoted_args: ClassVar[set[str]] = {"path"}
-        eng_params: ClassVar[list[str]] = ["primary_key"]
+        arg_names: Sequence[str] = ["path"]
+        quoted_args: set[str] = {"path"}  # noqa: RUF012 — must match TableEngine's set[str] instance-var type exactly (ClassVar breaks the override for mypy/pyright)
+        eng_params: Sequence[str] = ["primary_key"]
 
         def __init__(self, keeper_path: str, key: str) -> None:
             super().__init__({"path": keeper_path, "primary_key": key})
@@ -616,7 +617,7 @@ def _ch_type(column: sqlalchemy.Column[Any]) -> Any:
     elif isinstance(generic, (sqlalchemy.LargeBinary, sqlalchemy.Text, sqlalchemy.String)):
         result = types.String()
     else:
-        if isinstance(generic, sqlalchemy.NullType):
+        if isinstance(generic, sqlalchemy.types.NullType):
             raise TypeError(f"ClickHouse DDL cannot compile untyped column {column.name!r}")
         raise TypeError(f"ClickHouse DDL has no P1 type mapping for {type(generic).__name__}")
     return types.Nullable(result) if column.nullable else result
@@ -664,11 +665,11 @@ def decorate_table(
         identity = database_uuid or clone.info.get("httk_clickhouse_database_uuid")
         if identity is None:
             raise RuntimeError("ClickHouse metadata DDL requires the current database UUID")
-        clone.engine = _keeper_engine(keeper_metadata_path(str(identity)))
+        clone.engine = _keeper_engine(keeper_metadata_path(str(identity)))  # type: ignore[attr-defined]  # clickhouse-connect dialect reads Table.engine
     else:
         from clickhouse_connect.cc_sqlalchemy.ddl.tableengine import MergeTree
 
-        clone.engine = MergeTree(order_by=_order_by(clone))
+        clone.engine = MergeTree(order_by=_order_by(clone))  # type: ignore[attr-defined]  # clickhouse-connect dialect reads Table.engine
     clone.info["_httk_clickhouse_decorated"] = True
     return clone
 

@@ -153,3 +153,19 @@ disable_error_code = ["import-untyped"]
 module = ["httk.serve.optimade", "httk.serve.optimade.*"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+# pyarrow (an optional ClickHouse bulk-ingest dependency) ships no py.typed
+# marker and we do not vendor its stubs, so treat its imports as untyped.
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+# clickhouse-connect's SQLAlchemy type module re-exports its type vocabulary
+# through `from ... import *` with a dynamically computed __all__, so the type
+# names (Bool, Int64, Nullable, ...) are invisible to static import following.
+# Skip following it and treat the module as untyped rather than annotate every
+# access site; pyright resolves the star-import independently and is unaffected.
+module = ["clickhouse_connect.cc_sqlalchemy.types"]
+follow_imports = "skip"

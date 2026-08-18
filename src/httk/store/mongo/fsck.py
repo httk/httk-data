@@ -115,6 +115,9 @@ def _check_future_timestamps(
         return
     now_ns = store._clock()
     resolution = store.store_timestamp_resolution
+    # Invariant: store_timestamp_resolution is None only when store_timestamps is
+    # falsy, which the guard above already returned on.
+    assert resolution is not None
     limit_units = (now_ns + FUTURE_TIMESTAMP_SLACK_NS) // resolution
     now_units = now_ns // resolution
     repaired_any = False

@@ -73,6 +73,7 @@ class _Chunk:
         if store._missing_tables_for_read((hydrator._cls,)):
             raise StaleResultError(f"{schema.cls.__name__} table is not present")
         table = store._table(schema.table_name)
+        result: Sequence[Any]
         with store._read_connection() as connection:
             result = connection.execute(sqlalchemy.select(table).where(table.c[SID_COLUMN].in_(sids))).fetchall()
         if connection.dialect.name == "clickhousedb":
@@ -97,6 +98,7 @@ class _Chunk:
         table = self.hydrator._store._table(spec.child.table_name)
         parent_column = f"{self.hydrator._schema.table_name}_sid"
         index_column = f"{spec.field}_index"
+        result: Sequence[Any]
         with self.hydrator._store._read_connection() as connection:
             result = connection.execute(
                 sqlalchemy.select(table)
