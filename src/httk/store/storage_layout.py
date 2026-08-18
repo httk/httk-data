@@ -26,13 +26,16 @@ from httk.core.storage import storage_identity_name
 from httk.store.db.schema import ChildTableSpec, ColumnSpec, FieldSpec, TableSchema, resolve_schema
 
 __all__ = [
+    "ADDITIVE_UPGRADE_HINT",
     "DECLARATION_PROTOCOL_VERSION",
+    "AdditiveUpgradePlan",
     "EntryFamilyDeclaration",
     "EntryFamilyLayout",
     "EntryLayoutBindingError",
     "EntryRecordDeclaration",
     "StorageLayout",
     "StorageLayoutUpgradeRequiredError",
+    "classify_schema_upgrade",
     "declaration_json",
     "normalize_entry_families",
     "normalize_entry_records",
@@ -42,6 +45,12 @@ __all__ = [
 
 DECLARATION_PROTOCOL_VERSION: Final = "v2.2.0"
 """The current backend-neutral declaration protocol."""
+
+ADDITIVE_UPGRADE_HINT: Final = (
+    "the schema difference is purely additive (new nullable columns / lazily created tables); "
+    "reopen with upgrade=True to apply it"
+)
+"""The reopen hint appended when an additive-only schema mismatch is not applied."""
 
 
 class StorageLayoutUpgradeRequiredError(RuntimeError):
@@ -55,15 +64,22 @@ class StorageLayoutUpgradeRequiredError(RuntimeError):
     ``write_profile``, ``entry_declaration``) to their own diagnostics, so
     several independent declaration mismatches are reported together; the
     exception message names the mismatched aspects.
+
+    :param diff: The immutable JSON-shaped category-keyed difference.
+    :param hint: An optional remediation appended to the message and exposed as
+        :attr:`hint` (e.g. that a purely additive schema change can be applied
+        with ``upgrade=True``).
     """
 
-    def __init__(self, diff: Mapping[str, object]) -> None:
+    def __init__(self, diff: Mapping[str, object], *, hint: str | None = None) -> None:
         frozen = _freeze_mapping(diff)
         self.diff: Mapping[str, object] = frozen
+        self.hint: str | None = hint
         categories = ", ".join(frozen) or "unknown layout difference"
         details = frozen.get("declaration")
         detail_names = f": {', '.join(details)}" if isinstance(details, Mapping) else ""
-        super().__init__(f"Store layout upgrade is required ({categories}{detail_names})")
+        hint_text = f"; {hint}" if hint else ""
+        super().__init__(f"Store layout upgrade is required ({categories}{detail_names}){hint_text}")
 
 
 class EntryLayoutBindingError(ValueError):
@@ -438,6 +454,126 @@ def _column_fingerprint(column: ColumnSpec) -> dict[str, Any]:
         "indexed": column.indexed,
         "unique": column.unique,
     }
+
+
+# The immutable value keys of one fingerprinted table besides its fields; an
+# additive upgrade requires every one of these to stay byte-equal.
+_TABLE_INVARIANT_KEYS: Final = ("identity_name", "dedup", "composite_indexes", "links")
+# Every top-level key a fingerprinted table doc is allowed to carry; a table
+# growing an unrecognized key can no longer be trusted as additive.
+_KNOWN_TABLE_KEYS: Final = frozenset({*_TABLE_INVARIANT_KEYS, "fields"})
+
+
+@dataclasses.dataclass(frozen=True)
+class AdditiveUpgradePlan:
+    """The nullable parent columns an additive fingerprint upgrade must add per table.
+
+    :param added_columns: Physical table name mapped to the ordered
+        :class:`~httk.store.db.schema.ColumnSpec` values newly present in the
+        current fingerprint.  New tables carry no entry (they are created whole);
+        a table appears only when it already exists in the stored fingerprint
+        and gained one or more nullable parent columns.
+    """
+
+    added_columns: Mapping[str, tuple[ColumnSpec, ...]]
+
+
+def classify_schema_upgrade(stored: str | None, current: str) -> AdditiveUpgradePlan | str:
+    """Classify a fingerprint mismatch as an additive upgrade plan or a rejection.
+
+    The whole diff must be additive.  A table present only in the current
+    fingerprint is a new table (additive; it is created whole).  A table present
+    in both is additive only when its ``identity_name``, ``dedup``,
+    ``composite_indexes`` and ``links`` are byte-equal, it carries no
+    unrecognized top-level key, every stored field is present and byte-equal in
+    the current fingerprint, and every added field is a non-child, non-derived,
+    content-identity-excluded (``IdentitySkip``) field whose parent columns are
+    all nullable.  Identity participation is required so a pre-existing row's
+    ``content_id`` (and therefore dedup, dispatch, and federation identity) is
+    unchanged by the upgrade.
+
+    :param stored: The persisted fingerprint JSON, or ``None`` when absent.
+    :param current: The fingerprint recomputed from the persisted layout.
+    :return: An :class:`AdditiveUpgradePlan` when fully additive, otherwise a
+        human-readable rejection reason naming the offending table/field/column.
+    """
+    current_tables = json.loads(current)["tables"]
+    try:
+        stored_tables = json.loads(stored)["tables"] if stored is not None else None
+    except (TypeError, KeyError, json.JSONDecodeError):
+        stored_tables = None
+    if not isinstance(stored_tables, dict):
+        return "stored schema fingerprint is not parseable"
+    added: dict[str, tuple[ColumnSpec, ...]] = {}
+    for name in sorted(set(stored_tables) | set(current_tables)):
+        stored_table = stored_tables.get(name)
+        current_table = current_tables.get(name)
+        if stored_table == current_table:
+            continue
+        if stored_table is None:
+            continue  # new table: additive, created whole by the upgrade
+        if current_table is None:
+            return f"table {name!r} was removed"
+        if not _KNOWN_TABLE_KEYS >= set(stored_table) or not _KNOWN_TABLE_KEYS >= set(current_table):
+            return f"table {name!r} has an unrecognized fingerprint key"
+        for key in _TABLE_INVARIANT_KEYS:
+            if stored_table.get(key) != current_table.get(key):
+                return f"table {name!r} changed {key}"
+        stored_fields = stored_table["fields"]
+        current_fields = current_table["fields"]
+        columns: list[ColumnSpec] = []
+        for field, field_doc in stored_fields.items():
+            if field not in current_fields:
+                return f"table {name!r} dropped field {field!r}"
+            if current_fields[field] != field_doc:
+                return f"table {name!r} changed field {field!r}"
+        for field, field_doc in current_fields.items():
+            if field in stored_fields:
+                continue
+            reason, field_columns = _added_parent_columns(name, field, field_doc)
+            if reason is not None:
+                return reason
+            columns.extend(field_columns)
+        if columns:
+            added[name] = tuple(columns)
+    return AdditiveUpgradePlan(added)
+
+
+def _added_parent_columns(table: str, field: str, field_doc: Mapping[str, Any]) -> tuple[str | None, list[ColumnSpec]]:
+    """Return the nullable parent columns an added field contributes, or a rejection reason."""
+    if field_doc["role"] == "child":
+        # A child field reconstructs old rows to an empty/absent collection that
+        # ignores the declared type and defaults; there is no safe backfill.
+        return (
+            f"table {table!r} adds child field {field!r}; child-field backfill is unsupported, rebuild the store",
+            [],
+        )
+    if field_doc["derived"]:
+        # Old rows hold NULL where the true computed value differs, so queries
+        # would silently under-report until every row is rewritten.
+        return (
+            f"table {table!r} adds derived field {field!r}; stored-property backfill is unimplemented, rebuild the store",
+            [],
+        )
+    if not field_doc["identity_skipped"]:
+        reason = (
+            f"table {table!r} adds field {field!r} that participates in content identity; "
+            f"mark it IdentitySkip or rebuild the store"
+        )
+        return reason, []
+    for column in field_doc["columns"]:
+        if not column["nullable"]:
+            return f"table {table!r} adds field {field!r} with non-nullable column {column['name']!r}", []
+    return None, [
+        ColumnSpec(
+            name=column["name"],
+            kind=column["kind"],
+            nullable=column["nullable"],
+            indexed=column["indexed"],
+            unique=column["unique"],
+        )
+        for column in field_doc["columns"]
+    ]
 
 
 def _layout_from_declaration(value: str) -> StorageLayout:

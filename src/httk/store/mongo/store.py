@@ -20,7 +20,9 @@ from httk.store.db.codecs import codec_named, decode_fracvector_exact
 from httk.store.db.schema import SchemaError, resolve_schema
 from httk.store.db.store import EntryReplacementError
 from httk.store.storage_layout import (
+    ADDITIVE_UPGRADE_HINT,
     DECLARATION_PROTOCOL_VERSION,
+    AdditiveUpgradePlan,
     EntryFamilyDeclaration,
     EntryFamilyLayout,
     EntryLayoutBindingError,
@@ -28,6 +30,7 @@ from httk.store.storage_layout import (
     StorageLayoutUpgradeRequiredError,
     _layout_from_declaration,
     _merge_storage_layouts,
+    classify_schema_upgrade,
     declaration_json,
     normalize_entry_families,
     normalize_entry_records,
@@ -113,6 +116,10 @@ class MongoStore:
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
+    :param upgrade: Whether to apply a purely additive schema-fingerprint change
+        on reopen instead of raising.  Documents are schemaless, so the physical
+        apply is a no-op and only the stored fingerprint is re-stamped;
+        non-additive or non-schema differences still raise.
     :raises TypeError: If the first open omits both declaration forms.
     :raises ~httk.store.storage_layout.StorageLayoutUpgradeRequiredError: If the
         persisted layout is not trusted by this implementation.
@@ -131,6 +138,7 @@ class MongoStore:
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
         clock_regression_grace: bool = True,
+        upgrade: bool = False,
     ) -> None:
         if (
             not isinstance(store_timestamp_resolution, int)
@@ -139,6 +147,7 @@ class MongoStore:
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
         self._database = database
+        self._upgrade = upgrade
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
         self._allow_clock_regression = allow_clock_regression
@@ -314,6 +323,18 @@ class MongoStore:
             schema_diff = schema_fingerprint_diff(stored["entry_schemas"], schema_fingerprint_json(persisted))
             if schema_diff:
                 diff["schema"] = schema_diff
+        upgrade_pending = False
+        if set(diff) == {"schema"}:
+            assert persisted is not None
+            plan = classify_schema_upgrade(stored["entry_schemas"], schema_fingerprint_json(persisted))
+            if isinstance(plan, AdditiveUpgradePlan):
+                if not self._upgrade:
+                    raise StorageLayoutUpgradeRequiredError(diff, hint=ADDITIVE_UPGRADE_HINT)
+                # Documents are schemaless, so the only physical effect is the
+                # fingerprint re-stamp — deferred until every check below passes,
+                # since Mongo has no transaction to roll a bad open back.
+                upgrade_pending = True
+                diff = {}
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None
@@ -332,6 +353,8 @@ class MongoStore:
                 }
         if problems:
             raise StorageLayoutUpgradeRequiredError({"schema": problems})
+        if upgrade_pending:
+            self._restamp_entry_schemas(persisted)
         self._install_layout(persisted)
 
     def _raise_unversioned(self, collection_names: set[str]) -> None:
@@ -396,6 +419,12 @@ class MongoStore:
 
     def _install_layout(self, layout: StorageLayout) -> None:
         self._layout = layout
+
+    def _restamp_entry_schemas(self, layout: StorageLayout) -> None:
+        """Re-stamp the metadata layout document's fingerprint after an additive upgrade."""
+        self._database.database[METADATA_COLLECTION].update_one(
+            {"_id": "layout"}, {"$set": {"entry_schemas": schema_fingerprint_json(layout)}}
+        )
 
     def ensure_collections(self, *classes: type) -> None:
         r"""Synchronously create or update record collections and their indexes.

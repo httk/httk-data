@@ -243,7 +243,43 @@ identity, so the move changes `content_id` and the store correctly refuses to
 open. Tables are still created lazily on the first write; reads never issue DDL.
 Old, unversioned, or incompatible layouts raise
 `StorageLayoutUpgradeRequiredError`; this redesign does not migrate old stores,
-so rebuild them explicitly — automatic migration paths may come later.
+so rebuild them explicitly — with one exception below.
+
+#### Applying a purely additive change with `upgrade=True`
+
+When the *only* difference is additive, the reopen is applied instead of
+rejected by passing `SqlStore(db, ..., upgrade=True)`. Additive means: new
+tables, plus new fields that are each **non-child, non-derived, marked
+`IdentitySkip`, and whose columns are all nullable** — with every pre-existing
+table attribute and field byte-identical. The `IdentitySkip` requirement is the
+key one: a field that participates in content identity would change the
+`content_id` of byte-identical pre-existing rows, silently diverging dedup,
+dispatch, and federation identity, so such an added field is rejected (the error
+names the field and tells you to mark it `IdentitySkip` or rebuild). Added child,
+derived (`stored_property`), non-nullable, removed, or retyped fields, changed
+table attributes, and any protocol or declaration difference all still raise;
+`upgrade=True` never widens or drops.
+
+The apply creates every not-yet-created declared table whole (so a pre-existing
+row that references a *new* table no longer reads as absent), adds each new
+nullable column to the tables that already exist via `ALTER TABLE ... ADD
+COLUMN` (plus any declared single-column index), then re-stamps the stored
+fingerprint last. Old rows read back with the new fields as `None`, and their
+`content_id` is unchanged. Every step is idempotent — already-present columns
+are skipped and the index create is `IF NOT EXISTS` — and the re-stamp runs only
+after all other verification passes, so a store interrupted mid-upgrade (SQLite
+DDL escapes the open transaction) heals cleanly when you retry the same
+`upgrade=True` open. When `upgrade` is left `False` and the difference is exactly
+additive, the raised error carries a `hint` pointing at `upgrade=True`. Additive
+upgrade is not offered on the ClickHouse bulk-fenced backend.
+
+Because an added field must be `IdentitySkip`, it is identity-excluded metadata:
+the store's metadata-agreement check means the new field can only carry a
+non-`None` value on content first saved *after* the upgrade. Re-saving content
+that already exists in order to populate the new field on it raises
+`EntryMetadataConflictError` (the existing, correct guard against silently
+mutating stored metadata), so plan to backfill by rebuilding rather than by
+re-saving old content.
 
 A source object with an exact `__httk_storage_record__` can be saved directly;
 `save(source, as_record=OtherRecord)` selects another declared projection.

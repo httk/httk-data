@@ -34,6 +34,7 @@ __all__ = [
     "StorageLayout",
     "StorageLayoutUpgradeRequiredError",
     "StoreUnderConstructionError",
+    "actual_columns",
     "actual_schema_objects",
     "actual_table_names",
     "backend_facts_for_dialect",
@@ -296,6 +297,38 @@ def actual_schema_objects(connection: sqlalchemy.Connection) -> Mapping[str, fro
 def actual_table_names(connection: sqlalchemy.Connection) -> frozenset[str]:
     """Return application base-table names without SQLAlchemy reflection."""
     return frozenset(name for name, kinds in actual_schema_objects(connection).items() if "table" in kinds)
+
+
+def actual_columns(connection: sqlalchemy.Connection, table_name: str) -> frozenset[str]:
+    """Return the physical column names of ``table_name`` without SQLAlchemy reflection.
+
+    The DuckDB SQLAlchemy inspector routes column inspection through a
+    PostgreSQL catalogue relation DuckDB does not expose (see
+    :func:`actual_schema_objects`), so this reads the dialect catalogues directly.
+
+    :param connection: The open connection whose dialect selects the catalogue.
+    :param table_name: The table whose columns are read.
+    :return: The set of physical column names, empty when the table is absent.
+    """
+    facts = backend_facts_for_dialect(connection.dialect.name)
+    if facts.system_catalog == "sqlite":
+        # PRAGMA cannot bind parameters, so the name is quoted, not bound.
+        quoted = connection.dialect.identifier_preparer.quote(table_name)
+        pragma_rows = connection.execute(sqlalchemy.text(f"PRAGMA table_info({quoted})")).mappings().all()
+        return frozenset(str(row["name"]) for row in pragma_rows)
+    if facts.system_catalog in ("duckdb", "postgresql"):
+        rows = connection.execute(
+            sqlalchemy.text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_catalog = current_database() AND table_schema = current_schema() "
+                "AND table_name = :name"
+            ),
+            {"name": table_name},
+        ).all()
+        return frozenset(str(row[0]) for row in rows)
+    from httk.store.db.clickhouse import actual_columns as clickhouse_actual_columns
+
+    return frozenset(clickhouse_actual_columns(connection, table_name))
 
 
 def read_store_metadata(connection: sqlalchemy.Connection) -> Mapping[str, str] | None:

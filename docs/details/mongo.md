@@ -89,6 +89,16 @@ Beyond the declaration, reopen also verifies the same per-table
 class whose resolved on-disk shape or content identity changed since creation is
 rejected up front with `StorageLayoutUpgradeRequiredError`, whose diff names the
 offending collections (`{"schema": {collection: {"expected", "actual"}}}`).
+`MongoStore(database, ..., upgrade=True)` applies a purely additive change under
+the same rule as
+[`SqlStore`](db.md#applying-a-purely-additive-change-with-upgradetrue) — new
+tables plus new non-child, non-derived, `IdentitySkip` fields whose columns are
+all nullable. Documents are schemaless, so the apply is only the fingerprint
+re-stamp (done last, after every other check passes, since Mongo has no
+transaction to roll a bad open back); old documents read back with the new
+fields as `None` and keep their `content_id`. Non-additive or non-schema
+differences still raise, and a hint points at `upgrade=True` when the difference
+is exactly additive.
 
 Application-private families can instead use the same explicit
 `EntryFamilyDeclaration`/`EntryRecordDeclaration` and `entry_families=` API as

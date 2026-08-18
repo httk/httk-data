@@ -46,6 +46,7 @@ __all__ = [
     "ROLE_COLUMN",
     "SID_COLUMN",
     "STORE_TIMESTAMP_COLUMN",
+    "added_column_ddl",
     "backing_dispatch_column_name",
     "dispatch_table_for",
     "entry_dispatch_table_name",
@@ -188,6 +189,34 @@ def _index_name(prefix: str, table_name: str, columns: Sequence[str]) -> str:
 
 def _column(spec: ColumnSpec) -> sqlalchemy.Column[Any]:
     return sqlalchemy.Column(spec.name, _TYPE_FOR_KIND[spec.kind](), nullable=spec.nullable)
+
+
+def added_column_ddl(table_name: str, spec: ColumnSpec, connection: sqlalchemy.Connection) -> list[str]:
+    """The DDL statements adding one nullable column (and its declared index) to an existing table.
+
+    The column type and the deterministic index name reuse the same mappings
+    :func:`table_for` builds tables with, so an additively upgraded table is
+    physically identical to one that lazy DDL would build from scratch.
+
+    :param table_name: The existing parent table being altered.
+    :param spec: The nullable column to add (an additive upgrade only adds nullable columns).
+    :param connection: The live connection whose dialect renders types and quotes identifiers.
+    :return: One ``ALTER TABLE ... ADD COLUMN`` statement, plus an idempotent
+        ``CREATE INDEX IF NOT EXISTS`` statement when the column declares an index.
+    """
+    assert spec.nullable, "additive upgrade columns must be nullable"
+    dialect = connection.dialect
+    quote = dialect.identifier_preparer.quote
+    type_sql = _TYPE_FOR_KIND[spec.kind]().compile(dialect=dialect)
+    statements = [f"ALTER TABLE {quote(table_name)} ADD COLUMN {quote(spec.name)} {type_sql}"]
+    if spec.unique or spec.indexed:
+        prefix = "uq" if spec.unique else "ix"
+        index_name = _index_name(prefix, table_name, (spec.name,))
+        unique = "UNIQUE " if spec.unique else ""
+        statements.append(
+            f"CREATE {unique}INDEX IF NOT EXISTS {quote(index_name)} ON {quote(table_name)} ({quote(spec.name)})"
+        )
+    return statements
 
 
 def _column_index(table_name: str, spec: ColumnSpec) -> sqlalchemy.Index | None:

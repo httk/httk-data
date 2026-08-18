@@ -2,11 +2,11 @@
 
 import json
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Annotated, ClassVar
 
 import pytest
 from httk.core.register import register_entry_family, register_entry_record
-from httk.core.storage import StorageInfo
+from httk.core.storage import IdentitySkip, StorageInfo
 from schema_override_support import schema_override
 
 from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration
@@ -86,6 +86,47 @@ class MongoRefParent:
 
 register_entry_family(name="test-mongo-ref-family", family=f"{__name__}:MongoRefFamily")
 register_entry_record(name="test-mongo-ref-record", family="test-mongo-ref-family", record=f"{__name__}:MongoRefParent")
+
+
+class MongoUpgradeFamily:
+    """Application-owned Mongo family used by the additive-upgrade tests."""
+
+
+@dataclass(frozen=True)
+class MongoRecOld:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="mongo_upgrade_rec", identity_name="mongo-upgrade-rec"
+    )
+
+    value: str
+
+
+@dataclass(frozen=True)
+class MongoRecNew:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="mongo_upgrade_rec", identity_name="mongo-upgrade-rec"
+    )
+
+    value: str
+    note: Annotated[str | None, IdentitySkip()] = None
+
+
+@dataclass(frozen=True)
+class MongoRecNewRequired:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(
+        storage_name="mongo_upgrade_rec", identity_name="mongo-upgrade-rec"
+    )
+
+    value: str
+    tag: Annotated[str, IdentitySkip()] = "x"
+
+
+def _upgrade_decl(record: type) -> EntryFamilyDeclaration:
+    return EntryFamilyDeclaration(
+        name="test-mongo-upgrade-family",
+        family=MongoUpgradeFamily,
+        records=(EntryRecordDeclaration(name="test-mongo-upgrade-record", record=record),),
+    )
 
 
 def test_first_open_stamps_seven_keys_and_reopen_trusts(mongo_test_database) -> None:
@@ -207,6 +248,39 @@ def test_reopen_with_corrupt_fingerprint_reports_sentinel(mongo_test_database) -
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         MongoStore(mongo_test_database)
     assert set(error.value.diff["schema"]) == {"<fingerprint>"}
+
+
+def test_additive_reopen_without_upgrade_raises_with_hint(mongo_test_database) -> None:
+    """A purely additive Mongo mismatch points at upgrade=True instead of applying it."""
+    MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecOld),))
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecNew),))
+    assert "upgrade=True" in str(error.value)
+    assert error.value.hint is not None
+    assert set(error.value.diff["schema"]) == {"mongo_upgrade_rec"}
+
+
+def test_additive_reopen_with_upgrade_restamps_and_reads_old_rows(mongo_test_database) -> None:
+    """Documents are schemaless: upgrade re-stamps the fingerprint and old rows read with the new field None."""
+    store = MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecOld),))
+    sid = store.save(MongoRecOld("kept"))
+
+    upgraded = MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecNew),), upgrade=True)
+    assert upgraded.fetch(MongoRecNew, sid) == MongoRecNew("kept", None)
+    new_sid = upgraded.save(MongoRecNew("fresh", "annotated"))
+    assert upgraded.fetch(MongoRecNew, new_sid) == MongoRecNew("fresh", "annotated")
+
+    # A plain reopen now trusts the re-stamped fingerprint.
+    reopened = MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecNew),))
+    assert reopened.fetch(MongoRecNew, sid) == MongoRecNew("kept", None)
+
+
+def test_additive_upgrade_rejects_non_nullable_added_field(mongo_test_database) -> None:
+    """A non-additive change still raises under upgrade=True, without re-stamping."""
+    MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecOld),))
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        MongoStore(mongo_test_database, entry_families=(_upgrade_decl(MongoRecNewRequired),), upgrade=True)
+    assert set(error.value.diff["schema"]) == {"mongo_upgrade_rec"}
 
 
 def test_ensure_collections_is_idempotent_and_installs_validator(mongo_test_database) -> None:

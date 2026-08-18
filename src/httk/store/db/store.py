@@ -69,6 +69,7 @@ from httk.store.db.layout import (
     StorageLayout,
     StorageLayoutUpgradeRequiredError,
     StoreUnderConstructionError,
+    actual_columns,
     actual_schema_objects,
     actual_table_names,
     backend_facts_for_dialect,
@@ -85,6 +86,7 @@ from httk.store.db.mapping import (
     ROLE_COLUMN,
     SID_COLUMN,
     STORE_TIMESTAMP_COLUMN,
+    added_column_ddl,
     backing_dispatch_column_name,
     dispatch_table_for,
     entry_dispatch_table_name,
@@ -94,8 +96,11 @@ from httk.store.db.rows import RowHydrator, StaleResultError, decode_field, is_l
 from httk.store.db.schema import FieldSpec, SchemaError, TableSchema, resolve_schema
 from httk.store.db.searcher import SqlSearcher
 from httk.store.storage_layout import (
+    ADDITIVE_UPGRADE_HINT,
+    AdditiveUpgradePlan,
     EntryFamilyDeclaration,
     EntryLayoutBindingError,
+    classify_schema_upgrade,
     schema_fingerprint_diff,
     schema_fingerprint_json,
 )
@@ -200,6 +205,9 @@ class SqlStore:
     :param store_timestamp_resolution: Nanoseconds represented by one stored unit.
     :param allow_clock_regression: Whether to disable the process-local clock guard.
     :param clock_regression_grace: Whether to wait briefly for sub-millisecond regressions.
+    :param upgrade: Whether to apply a purely additive schema-fingerprint change
+        (new nullable columns, new lazily created tables) on reopen instead of
+        raising; non-additive or non-schema differences still raise.
     :raises TypeError: If the first open omits both declaration forms.
     :raises httk.store.db.layout.StorageLayoutUpgradeRequiredError: If the trusted declaration or protocol does not match.
     """
@@ -220,6 +228,7 @@ class SqlStore:
         store_timestamp_resolution: int = 1000,
         allow_clock_regression: bool = False,
         clock_regression_grace: bool = True,
+        upgrade: bool = False,
     ) -> None:
         if (
             not isinstance(store_timestamp_resolution, int)
@@ -228,6 +237,7 @@ class SqlStore:
         ):
             raise ValueError("store_timestamp_resolution must be a positive integer")
         self._database = database
+        self._upgrade = upgrade
         self._store_timestamps = store_timestamps
         self._store_timestamp_resolution = store_timestamp_resolution
         self._allow_clock_regression = allow_clock_regression
@@ -603,6 +613,22 @@ class SqlStore:
             schema_diff = schema_fingerprint_diff(stored["entry_schemas"], schema_fingerprint_json(persisted))
             if schema_diff:
                 diff["schema"] = schema_diff
+        upgrade_plan: AdditiveUpgradePlan | None = None
+        if set(diff) == {"schema"}:
+            assert persisted is not None
+            plan = classify_schema_upgrade(stored["entry_schemas"], schema_fingerprint_json(persisted))
+            if isinstance(plan, AdditiveUpgradePlan):
+                if self.backend_facts.metadata_backend == "keepermap":
+                    raise StorageLayoutUpgradeRequiredError(
+                        diff, hint="additive schema upgrade is not supported on the ClickHouse bulk-fenced backend"
+                    )
+                if not self._upgrade:
+                    raise StorageLayoutUpgradeRequiredError(diff, hint=ADDITIVE_UPGRADE_HINT)
+                # The apply is deferred until every other verification below has
+                # passed: SQLite DDL escapes the open transaction, so a later
+                # failing check must not be able to strand a half-applied upgrade.
+                upgrade_plan = plan
+                diff = {}
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None
@@ -633,6 +659,9 @@ class SqlStore:
                 }
         if object_problems:
             raise StorageLayoutUpgradeRequiredError({"schema": object_problems})
+        if upgrade_plan is not None:
+            self._apply_additive_upgrade(connection, persisted, upgrade_plan)
+            names_before = actual_table_names(connection)
         self._install_layout(
             persisted,
             expected_metadata(persisted, store_timestamps=self._store_timestamps),
@@ -674,6 +703,40 @@ class SqlStore:
         connection.execute(
             sqlalchemy.insert(table),
             tuple({"key": key, "value": value} for key, value in rows.items()),
+        )
+
+    def _apply_additive_upgrade(
+        self, connection: sqlalchemy.Connection, layout: StorageLayout, plan: AdditiveUpgradePlan
+    ) -> None:
+        """Create newly declared tables, add the plan's nullable columns, and re-stamp the fingerprint.
+
+        New tables are created whole (checkfirst) so a pre-existing row whose
+        closure references them stops reading as absent; pre-existing tables gain
+        their new nullable columns.  Every step is idempotent — live columns are
+        reflected and already-present ones skipped, and the index create is
+        ``IF NOT EXISTS`` — so a crash mid-upgrade (SQLite DDL escapes the
+        transaction) self-heals on retry and a concurrent ``upgrade=True`` loser
+        is benign.  The re-stamp is last so a failure leaves the store repeatable.
+
+        :param connection: The open initialization connection/transaction.
+        :param layout: The persisted layout whose current fingerprint is re-stamped.
+        :param plan: The additive upgrade plan of per-table added parent columns.
+        :return: None.
+        """
+        expected_metadata(layout, store_timestamps=self._store_timestamps).create_all(connection, checkfirst=True)
+        for table_name, columns in plan.added_columns.items():
+            present_columns = actual_columns(connection, table_name)
+            for spec in columns:
+                statements = added_column_ddl(table_name, spec, connection)
+                if spec.name in present_columns:
+                    # Column already added by a prior (possibly crashed) run; only
+                    # the idempotent IF NOT EXISTS index statement remains to run.
+                    statements = statements[1:]
+                for statement in statements:
+                    connection.execute(sqlalchemy.text(statement))
+        table = metadata_table_for(sqlalchemy.MetaData())
+        connection.execute(
+            sqlalchemy.update(table).where(table.c.key == "entry_schemas").values(value=schema_fingerprint_json(layout))
         )
 
     def _initialize_store_timestamp_mark(self, connection: sqlalchemy.Connection) -> None:
