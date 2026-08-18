@@ -7,8 +7,8 @@ import pytest
 from httk.core.storage import content_id
 from test_db_stored_federation import FederatedCalculation, FederationFirst, FederationSecond, _record
 
-from httk.store.db import Database, DuplicateEntryIdError, SqlStore, StoredEntryFederation, StoredEntrySource
-from httk.store.mongo import MongoDatabase, MongoStore
+from httk.store.backend.sql import Backend, DuplicateEntryIdError, SqlStore, StoredEntryFederation, StoredEntrySource
+from httk.store.backend.mongo import MongoDatabase, MongoStore
 
 
 def _mongo_store(database):
@@ -83,7 +83,7 @@ def test_mongo_only_federation_probes_cross_source_prefix_collisions(mongo_store
 
 
 def test_mixed_sql_mongo_federation_pages_audits_and_probes_prefix_collisions(mongo_test_database):
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sql_store = SqlStore(
             database,
             entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},

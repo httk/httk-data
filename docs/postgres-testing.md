@@ -22,7 +22,7 @@ Any reachable PostgreSQL server works; only the URI matters.
 
 ## The driver requirement
 
-`Database.postgres()` supports the psycopg 3 driver only.  A bare
+`Backend.postgresql()` supports the psycopg 3 driver only.  A bare
 `postgresql://` URL is normalized to `postgresql+psycopg://` (SQLAlchemy 2.0
 would otherwise select psycopg2), and any other explicit driver is rejected.
 Install the client with the `postgresql` extra, which pins psycopg 3:

@@ -1,14 +1,14 @@
-# Database storage
+# Backend storage
 
-`httk.store.db` stores **plain frozen dataclasses** in a relational database
+`httk.store.backend.sql` stores **plain frozen dataclasses** in a relational database
 (SQLite, DuckDB, or PostgreSQL), makes them queryable through a
 backend-agnostic search DSL, and serves them through the neutral `httk.core.EntryProvider` contract —
 no SQLAlchemy types in the public API, no base class to inherit:
 
 ```python
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
-db = Database.sqlite("results.sqlite")
+db = Backend.sqlite("results.sqlite")
 store = SqlStore(db, entry_records={})   # first open declares the store
 # reopen later with just: SqlStore(db)
 

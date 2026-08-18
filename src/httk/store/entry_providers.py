@@ -12,8 +12,8 @@ OPTIMADE standard definition loaded from httk-core via
 The record *models* live in httk-core (contracts and models); these *providers*
 live in httk-store (the capability layer built on those models), together with
 property-definition validation. The database storage layer in
-:mod:`httk.store.db` complements them with a database-backed provider
-(:class:`~httk.store.db.entry_provider.StoreEntryProvider`) serving stored
+:mod:`httk.store.backend.sql` complements them with a database-backed provider
+(:class:`~httk.store.backend.sql.entry_provider.StoreEntryProvider`) serving stored
 dataclasses the same way.
 """
 

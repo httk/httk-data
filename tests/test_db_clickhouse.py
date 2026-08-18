@@ -10,9 +10,9 @@ import sqlalchemy
 from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
-from httk.store.db import Database, SqlStore
-from httk.store.db import clickhouse as clickhouse_adapter
-from httk.store.db.clickhouse import (
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.clickhouse import support as clickhouse_adapter
+from httk.store.backend.clickhouse.support import (
     actual_columns,
     bootstrap_fence,
     ensure_bootstrap_table,
@@ -21,10 +21,10 @@ from httk.store.db.clickhouse import (
     validate_metadata_table,
     verify_clickhouse_connection,
 )
-from httk.store.db.layout import STORAGE_PROTOCOL_VERSION, actual_schema_objects
-from httk.store.db.mapping import table_for
-from httk.store.db.schema import resolve_schema
-from httk.store.db.store import StorageLayoutUpgradeRequiredError
+from httk.store.backend.sql.layout import STORAGE_PROTOCOL_VERSION, actual_schema_objects
+from httk.store.backend.sql.mapping import table_for
+from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.sql.store import StorageLayoutUpgradeRequiredError
 
 
 class _RecordingConnection:
@@ -89,7 +89,7 @@ def clickhouse_database():
                 )
         finally:
             target_admin.dispose()
-        database = Database.clickhouse(source_url, database=database_name)
+        database = Backend.clickhouse(source_url, database=database_name)
         yield database
     finally:
         if database is not None:
@@ -99,7 +99,7 @@ def clickhouse_database():
         admin.dispose()
 
 
-def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -> None:
+def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Backend) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     assert store.write_profile == "bulk-fenced"
     assert store.backend_facts.write_profiles == ("bulk-fenced",)
@@ -127,7 +127,7 @@ def test_clickhouse_facts_and_keeper_round_trip(clickhouse_database: Database) -
     assert reopened.layout == store.layout
 
 
-def test_clickhouse_catalog_and_ddl_decoration(clickhouse_database: Database) -> None:
+def test_clickhouse_catalog_and_ddl_decoration(clickhouse_database: Backend) -> None:
     metadata = sqlalchemy.MetaData()
     table = table_for(resolve_schema(ClickHouseProbe), metadata)
     with clickhouse_database.engine.begin() as connection:
@@ -182,7 +182,7 @@ def test_clickhouse_ddl_decoration_is_dialect_local() -> None:
     assert not table.info.get("_httk_clickhouse_decorated")
 
 
-def test_clickhouse_child_dispatch_order_and_index_absence(clickhouse_database: Database) -> None:
+def test_clickhouse_child_dispatch_order_and_index_absence(clickhouse_database: Backend) -> None:
     metadata = sqlalchemy.MetaData()
     parent = sqlalchemy.Table(
         "ddl_parent",
@@ -235,7 +235,7 @@ def test_clickhouse_child_dispatch_order_and_index_absence(clickhouse_database: 
         )
 
 
-def test_clickhouse_metadata_wrong_path_refuses_before_read(clickhouse_database: Database) -> None:
+def test_clickhouse_metadata_wrong_path_refuses_before_read(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.begin() as connection:
         connection.execute(
             text(
@@ -247,7 +247,7 @@ def test_clickhouse_metadata_wrong_path_refuses_before_read(clickhouse_database:
         SqlStore(clickhouse_database, entry_records={})
 
 
-def test_clickhouse_metadata_merge_tree_imposter_refuses_before_read(clickhouse_database: Database) -> None:
+def test_clickhouse_metadata_merge_tree_imposter_refuses_before_read(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.begin() as connection:
         connection.execute(
             text("CREATE TABLE _httk_store_metadata (key String, value String) ENGINE=MergeTree ORDER BY key")
@@ -256,9 +256,9 @@ def test_clickhouse_metadata_merge_tree_imposter_refuses_before_read(clickhouse_
         SqlStore(clickhouse_database, entry_records={})
 
 
-def test_clickhouse_url_settings_merge_and_failed_open_verification(clickhouse_database: Database) -> None:
+def test_clickhouse_url_settings_merge_and_failed_open_verification(clickhouse_database: Backend) -> None:
     url = clickhouse_database.engine.url.update_query_dict({"max_execution_time": "60"})
-    opened = Database.clickhouse(url, database=url.database)
+    opened = Backend.clickhouse(url, database=url.database)
     try:
         assert opened.engine.url.query["max_execution_time"] == "60"
         assert opened.engine.url.query["join_use_nulls"] == "1"
@@ -267,13 +267,13 @@ def test_clickhouse_url_settings_merge_and_failed_open_verification(clickhouse_d
     bad_engine = sqlalchemy.create_engine(clickhouse_database.engine.url.update_query_dict({"join_use_nulls": "0"}))
     try:
         with pytest.raises(RuntimeError, match="join_use_nulls"):
-            Database(bad_engine)
+            Backend(bad_engine)
     finally:
         bad_engine.dispose()
 
 
-def test_clickhouse_pool_checkout_rechecks_poisoned_connection(clickhouse_database: Database, monkeypatch) -> None:
-    import httk.store.db.clickhouse as clickhouse_adapter
+def test_clickhouse_pool_checkout_rechecks_poisoned_connection(clickhouse_database: Backend, monkeypatch) -> None:
+    import httk.store.backend.clickhouse.support as clickhouse_adapter
 
     original_verify = clickhouse_adapter._raw_verify
     monkeypatch.setattr(clickhouse_adapter, "_raw_verify", lambda _: ("26.7.3.19", 0))
@@ -286,12 +286,12 @@ def test_clickhouse_pool_checkout_rechecks_poisoned_connection(clickhouse_databa
 
 def test_database_rejects_unknown_and_backend_absent_profiles() -> None:
     with pytest.raises(ValueError, match="unknown storage write profile"):
-        Database(sqlalchemy.create_engine("sqlite://"), write_profile="bogus")  # type: ignore[arg-type]
+        Backend(sqlalchemy.create_engine("sqlite://"), write_profile="bogus")  # type: ignore[arg-type]
     pytest.importorskip("duckdb_engine")
     duckdb = sqlalchemy.create_engine("duckdb:///:memory:")
     try:
         with pytest.raises(ValueError, match="not supported"):
-            Database(duckdb, write_profile="bulk-fenced")
+            Backend(duckdb, write_profile="bulk-fenced")
     finally:
         duckdb.dispose()
 
@@ -310,9 +310,9 @@ def test_clickhouse_rejects_missing_nil_and_malformed_database_uuid(value: str |
         keeper_database_uuid(FakeConnection())  # type: ignore[arg-type]
 
 
-def test_clickhouse_pool_size_one_fence_uses_caller_connection(clickhouse_database: Database) -> None:
+def test_clickhouse_pool_size_one_fence_uses_caller_connection(clickhouse_database: Backend) -> None:
     engine = sqlalchemy.create_engine(clickhouse_database.engine.url, pool_size=1, max_overflow=0)
-    database = Database(engine, write_profile="bulk-fenced")
+    database = Backend(engine, write_profile="bulk-fenced")
     try:
         SqlStore(database, entry_records={})
     finally:
@@ -320,9 +320,9 @@ def test_clickhouse_pool_size_one_fence_uses_caller_connection(clickhouse_databa
 
 
 def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
-    clickhouse_database: Database, monkeypatch
+    clickhouse_database: Backend, monkeypatch
 ) -> None:
-    import httk.store.db.clickhouse as clickhouse_adapter
+    import httk.store.backend.clickhouse.support as clickhouse_adapter
 
     source_url = clickhouse_database.engine.url
     admin = sqlalchemy.create_engine(source_url.set(database="default"))
@@ -354,14 +354,14 @@ def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
                         )
                 finally:
                     target_admin.dispose()
-                first_database = Database.clickhouse(source_url, database=database_name)
-                second_database = Database.clickhouse(source_url, database=database_name)
+                first_database = Backend.clickhouse(source_url, database=database_name)
+                second_database = Backend.clickhouse(source_url, database=database_name)
                 barrier_holder.append(threading.Barrier(2))
                 results: list[BaseException | None] = []
                 results_lock = threading.Lock()
 
                 def open_store(
-                    database: Database,
+                    database: Backend,
                     iteration_results: list[BaseException | None],
                     iteration_lock,
                 ) -> None:
@@ -410,7 +410,7 @@ def test_clickhouse_concurrent_first_open_converges_without_raw_table_exists(
         admin.dispose()
 
 
-def test_clickhouse_drop_recreate_scopes_keeper_metadata_by_new_uuid(clickhouse_database: Database) -> None:
+def test_clickhouse_drop_recreate_scopes_keeper_metadata_by_new_uuid(clickhouse_database: Backend) -> None:
     SqlStore(clickhouse_database, entry_records={})
     old_url = clickhouse_database.engine.url
     with clickhouse_database.engine.connect() as connection:
@@ -432,7 +432,7 @@ def test_clickhouse_drop_recreate_scopes_keeper_metadata_by_new_uuid(clickhouse_
                 )
         finally:
             target_admin.dispose()
-        recreated = Database.clickhouse(old_url, database=old_url.database)
+        recreated = Backend.clickhouse(old_url, database=old_url.database)
         try:
             with recreated.engine.connect() as connection:
                 new_uuid = keeper_database_uuid(connection)
@@ -445,8 +445,8 @@ def test_clickhouse_drop_recreate_scopes_keeper_metadata_by_new_uuid(clickhouse_
         admin.dispose()
 
 
-def test_clickhouse_stale_release_cannot_delete_replacement_token(clickhouse_database: Database) -> None:
-    import httk.store.db.clickhouse as clickhouse_adapter
+def test_clickhouse_stale_release_cannot_delete_replacement_token(clickhouse_database: Backend) -> None:
+    import httk.store.backend.clickhouse.support as clickhouse_adapter
 
     bootstrap = clickhouse_adapter._bootstrap_table()
     with clickhouse_database.engine.begin() as connection:
@@ -481,7 +481,7 @@ def test_clickhouse_stale_release_cannot_delete_replacement_token(clickhouse_dat
         )
 
 
-def test_clickhouse_bootstrap_contention_and_exact_release(clickhouse_database: Database) -> None:
+def test_clickhouse_bootstrap_contention_and_exact_release(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.connect() as first, clickhouse_database.engine.connect() as second:
         database_uuid = keeper_database_uuid(first)
         with (
@@ -499,8 +499,8 @@ def test_clickhouse_bootstrap_contention_and_exact_release(clickhouse_database: 
             )
 
 
-def test_clickhouse_stale_bootstrap_residue_has_manual_recovery(clickhouse_database: Database) -> None:
-    import httk.store.db.clickhouse as clickhouse_adapter
+def test_clickhouse_stale_bootstrap_residue_has_manual_recovery(clickhouse_database: Backend) -> None:
+    import httk.store.backend.clickhouse.support as clickhouse_adapter
 
     bootstrap = clickhouse_adapter._bootstrap_table()
     with clickhouse_database.engine.begin() as connection:
@@ -526,7 +526,7 @@ def test_clickhouse_stale_bootstrap_residue_has_manual_recovery(clickhouse_datab
             )
 
 
-def test_clickhouse_partial_metadata_stamp_is_rejected(clickhouse_database: Database) -> None:
+def test_clickhouse_partial_metadata_stamp_is_rejected(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.begin() as connection:
         database_uuid = keeper_database_uuid(connection)
         path = keeper_metadata_path(database_uuid)
@@ -545,7 +545,7 @@ def test_clickhouse_partial_metadata_stamp_is_rejected(clickhouse_database: Data
     assert error.value.diff["declaration"]["entry_declaration"]["actual"] is None
 
 
-def test_clickhouse_bootstrap_wrong_engine_and_absence_refuse(clickhouse_database: Database) -> None:
+def test_clickhouse_bootstrap_wrong_engine_and_absence_refuse(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.begin() as connection:
         connection.execute(text("DROP TABLE _httk_bootstrap"))
         connection.execute(
@@ -579,7 +579,7 @@ def test_clickhouse_old_version_rejected() -> None:
 
 
 @pytest.mark.parametrize("operation", ["save", "ensure_tables", "transaction", "steal_lease"])
-def test_clickhouse_mutation_policy_refuses_public_operations(clickhouse_database: Database, operation: str) -> None:
+def test_clickhouse_mutation_policy_refuses_public_operations(clickhouse_database: Backend, operation: str) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     with pytest.raises(RuntimeError, match="clickhousedb.*bulk-fenced"):
         if operation == "save":
@@ -598,7 +598,7 @@ def test_clickhouse_mutation_policy_refuses_public_operations(clickhouse_databas
     [(False, False), (False, True), (True, False), (True, True)],
 )
 def test_clickhouse_fsck_is_refused_in_every_mode(
-    clickhouse_database: Database, repair: bool, collect_garbage: bool
+    clickhouse_database: Backend, repair: bool, collect_garbage: bool
 ) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     with pytest.raises(RuntimeError, match="fsck.*clickhousedb.*bulk-fenced"):
@@ -606,7 +606,7 @@ def test_clickhouse_fsck_is_refused_in_every_mode(
 
 
 @pytest.mark.parametrize("finalize", ["parity", "auto", "deferred"])
-def test_clickhouse_bulk_profile_selection(clickhouse_database: Database, finalize: str) -> None:
+def test_clickhouse_bulk_profile_selection(clickhouse_database: Backend, finalize: str) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     if finalize == "parity":
         with pytest.raises(RuntimeError, match="deferred-only"):
@@ -616,7 +616,7 @@ def test_clickhouse_bulk_profile_selection(clickhouse_database: Database, finali
             assert bulk._finalize_profile == "deferred"
 
 
-def test_clickhouse_bulk_into_nonempty_store_is_refused(clickhouse_database: Database) -> None:
+def test_clickhouse_bulk_into_nonempty_store_is_refused(clickhouse_database: Backend) -> None:
     store = SqlStore(clickhouse_database, entry_records={})
     with clickhouse_database.engine.begin() as connection:
         connection.execute(text("CREATE TABLE nonempty (value Int64) ENGINE=MergeTree ORDER BY value"))
@@ -628,7 +628,7 @@ def test_clickhouse_bulk_into_nonempty_store_is_refused(clickhouse_database: Dat
         pass
 
 
-def test_clickhouse_unversioned_database_is_rejected(clickhouse_database: Database) -> None:
+def test_clickhouse_unversioned_database_is_rejected(clickhouse_database: Backend) -> None:
     with clickhouse_database.engine.begin() as connection:
         connection.execute(text("CREATE TABLE unversioned (value Int64) ENGINE=MergeTree ORDER BY value"))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:

@@ -17,8 +17,8 @@ from httk.core import (
 )
 
 from httk.store import DataRecordEntryProvider, RunEntryProvider, product_relationships, validate_record
-from httk.store.db import Database, EntryMetadataConflictError, SqlStore
-from httk.store.db.schema import resolve_schema
+from httk.store.backend.sql import Backend, EntryMetadataConflictError, SqlStore
+from httk.store.backend.sql.schema import resolve_schema
 
 UTC = datetime.UTC
 ENERGY_ID = "https://schemas.example.org/properties/energy"
@@ -160,7 +160,7 @@ def test_data_record_provider_serves_product_relationships() -> None:
 
 
 def test_sql_store_round_trips_provenance_records_and_stored_number() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={RunEntry: Run, DataRecordEntry: DataRecord})
         run = _run()
         store.save(run)
@@ -193,7 +193,7 @@ def test_sql_store_round_trips_provenance_records_and_stored_number() -> None:
 
 
 def test_product_link_storage_deduplicates_by_value() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         link = ProductLink("runs", "r-1", "records", "d-1", "energy")
         sid = store.save(link)

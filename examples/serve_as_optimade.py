@@ -59,7 +59,7 @@ from typing import Annotated, Any
 from httk.core.optimade import parse_optimade_filter
 from httk.core.storage import Related, stored_property
 
-from httk.store.db import Database, SqlStore, StoreEntryProvider
+from httk.store.backend.sql import Backend, SqlStore, StoreEntryProvider
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy", "httk.serve.optimade"]
 
@@ -133,7 +133,7 @@ QUERIES: list[tuple[str, list[str], str]] = [
 
 
 def populate() -> SqlStore:
-    store = SqlStore(Database.sqlite(), entry_records={})
+    store = SqlStore(Backend.sqlite(), entry_records={})
     with store.transaction():
         for writer in (ADA, BOOLE, CARA):  # saved first, so their sids are 1, 2, 3
             store.save(writer)

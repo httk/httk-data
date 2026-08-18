@@ -12,8 +12,8 @@ from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import QueryLiteralError, StorageInfo, StoredPropertyProjection
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.db import (
-    Database,
+from httk.store.backend.sql import (
+    Backend,
     SqlStore,
     StoredPropertySqlConfigurationError,
     stored_property_sql_plan,
@@ -288,9 +288,9 @@ def plan(request):
         return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        database = Database.duckdb()
+        database = Backend.duckdb()
     else:
-        database = Database.sqlite()
+        database = Backend.sqlite()
     with database:
         store = SqlStore(
             database,
@@ -380,12 +380,12 @@ def test_exact_fraction_function_installs_on_existing_connections_once(dialect):
     else:
         engine = sqlalchemy.create_engine("sqlite://")
     try:
-        # Populate the pool before it is wrapped. ``Database`` must install on
+        # Populate the pool before it is wrapped. ``Backend`` must install on
         # the subsequent checkout, and a second wrapper must stay idempotent.
         with engine.connect() as connection:
             connection.execute(sqlalchemy.text("SELECT 1"))
-        Database(engine)
-        Database(engine)
+        Backend(engine)
+        Backend(engine)
         with engine.connect() as connection:
             value = connection.execute(
                 sqlalchemy.text("SELECT httk_fraction_scaled_equal('1/3', '2', '2/3', '1')")
@@ -403,7 +403,7 @@ def test_exact_fraction_function_is_safe_across_simultaneous_and_reconnected_poo
     else:
         engine = sqlalchemy.create_engine(f"sqlite:///{tmp_path / 'fractions.sqlite'}", pool_size=2, max_overflow=0)
     try:
-        Database(engine)
+        Backend(engine)
         query = sqlalchemy.text("SELECT httk_fraction_scaled_equal('1/3', '2', '2/3', '1')")
         with engine.connect() as first:
             assert bool(first.execute(query).scalar_one())
@@ -434,19 +434,19 @@ def test_timestamp_filters_reject_non_rfc3339_iso_forms(plan, literal):
 
 
 def test_unconfigured_family_and_missing_nonnullable_response_are_configuration_errors():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         unconfigured = SqlStore(database, entry_records={})
         with pytest.raises(StoredPropertySqlConfigurationError, match="not configured"):
             stored_property_sql_plan(unconfigured, CalculationEntry)
 
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={FileEntry: IncompleteFile})
         with pytest.raises(StoredPropertySqlConfigurationError, match="name"):
             stored_property_sql_plan(store, FileEntry)
 
 
 def test_backings_cannot_override_intrinsic_id_or_type():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={BadFamily: BadCalculation})
         with pytest.raises(StoredPropertySqlConfigurationError, match="intrinsic"):
             stored_property_sql_plan(store, BadFamily)

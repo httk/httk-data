@@ -152,7 +152,7 @@ def test_comparison_operators_reachable_by_getattr_convention():
 
 
 def test_query_errors_are_neutral_and_sql_compatibility_exports_are_identical():
-    from httk.store import db
+    from httk.store.backend import sql as db
 
     assert db.NoResultError is NoResultError
     assert db.MultipleResultsError is MultipleResultsError

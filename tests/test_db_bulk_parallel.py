@@ -52,8 +52,8 @@ from test_db_bulk import (
 # These modules fork their own worker processes; the loadgroup scheduler
 # keeps them on one xdist worker so their memory use never stacks.
 pytestmark = pytest.mark.xdist_group("bulk-heavy")
-from httk.store.db import Database, SqlStore
-from httk.store.db.layout import METADATA_TABLE_NAME, actual_schema_objects
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.sql.layout import METADATA_TABLE_NAME, actual_schema_objects
 from httk.store.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
 
 CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
@@ -67,7 +67,7 @@ CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 @pytest.mark.parametrize("track_sids", [True, False])
 def test_bulk_promotes_nested_entry_records(finalize, workers, track_sids) -> None:
     """A named nested record becomes an entry even after its private occurrence was flushed."""
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records=CALC_FAMILY)
         structure = BulkCalcA("alpha", 1)
@@ -88,7 +88,7 @@ def test_bulk_promotes_nested_entry_records(finalize, workers, track_sids) -> No
 
 def test_bulk_rejects_unreachable_promoted_record() -> None:
     """A misspelled or unrelated promotion cannot silently do nothing."""
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records=CALC_FAMILY)
         with store.bulk_ingest(finalize="parity") as bulk, pytest.raises(ValueError, match="not reachable"):
@@ -266,7 +266,7 @@ def test_parallel_returned_token_resolves_and_dedups(store_factory):
 
 def test_parallel_sqlite_track_sids_false(monkeypatch) -> None:
     """Untracked parallel ingestion validates task count without retaining public tokens."""
-    from httk.store.db.bulk_parallel import ParallelController
+    from httk.store.backend.sql.bulk_parallel import ParallelController
 
     captured = []
     original_finish = ParallelController.finish
@@ -277,7 +277,7 @@ def test_parallel_sqlite_track_sids_false(monkeypatch) -> None:
         return manifests
 
     monkeypatch.setattr(ParallelController, "finish", finish)
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records={})
         with store.bulk_ingest(workers=2, track_sids=False) as bulk:
@@ -295,7 +295,7 @@ def test_parallel_sqlite_track_sids_false(monkeypatch) -> None:
 
 def test_parallel_sqlite_track_sids_false_detects_lost_count(monkeypatch) -> None:
     """Untracked parallel ingestion aborts when worker occurrence counts are short."""
-    from httk.store.db.bulk_parallel import ParallelController
+    from httk.store.backend.sql.bulk_parallel import ParallelController
 
     original_finish = ParallelController.finish
 
@@ -305,7 +305,7 @@ def test_parallel_sqlite_track_sids_false_detects_lost_count(monkeypatch) -> Non
         return manifests
 
     monkeypatch.setattr(ParallelController, "finish", finish)
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records={})
         with (
@@ -322,7 +322,7 @@ def test_parallel_sqlite_track_sids_false_detects_lost_count(monkeypatch) -> Non
 @pytest.mark.parametrize("finalize", ["parity", "deferred"])
 def test_parallel_sqlite_untracked_dispatch_is_set_wise(finalize, monkeypatch) -> None:
     """Untracked multi-record dispatch derives from final rows without worker payloads."""
-    from httk.store.db.bulk_parallel import ParallelController
+    from httk.store.backend.sql.bulk_parallel import ParallelController
 
     captured = []
     original_finish = ParallelController.finish
@@ -333,7 +333,7 @@ def test_parallel_sqlite_untracked_dispatch_is_set_wise(finalize, monkeypatch) -
         return manifests
 
     monkeypatch.setattr(ParallelController, "finish", finish)
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records=CALC_FAMILY)
         with store.bulk_ingest(workers=2, finalize=finalize, track_sids=False) as bulk:
@@ -349,7 +349,7 @@ def test_parallel_sqlite_untracked_dispatch_is_set_wise(finalize, monkeypatch) -
 @pytest.mark.parametrize("finalize", ["parity", "deferred"])
 def test_parallel_sqlite_untracked_dispatch_conflict(finalize, monkeypatch) -> None:
     """Set-wise untracked dispatch rejects two backing types claiming one content id."""
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records=CALC_FAMILY)
         shared = content_id(BulkCalcA("alpha", 1))
@@ -367,7 +367,7 @@ def test_parallel_sqlite_untracked_dispatch_conflict(finalize, monkeypatch) -> N
 
 def test_parallel_sqlite_more_than_ten_workers() -> None:
     """Automatic parallel merging is independent of SQLite's ATTACH ceiling."""
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records={})
         with store.bulk_ingest(workers=11) as bulk:
@@ -613,9 +613,9 @@ def test_parallel_nan_metadata_conflicts(store_factory):
 def test_parquet_untracked_worker_does_not_retain_dedup_indexes(worker_index):
     """Untracked Parquet staging delegates all deduplication to the set-wise finalizer."""
     pytest.importorskip("pyarrow")
-    from httk.store.db.bulk_parallel import _WorkerConfig, _WorkerEncoder
+    from httk.store.backend.sql.bulk_parallel import _WorkerConfig, _WorkerEncoder
 
-    database = Database.duckdb()
+    database = Backend.duckdb()
     try:
         store = SqlStore(database, entry_records={})
         with tempfile.TemporaryDirectory() as shard_dir:
@@ -671,7 +671,7 @@ def test_parallel_child_values_and_references_match_serial(store_factory):
 def test_parallel_sqlite_file_store_cleans_shards(tmp_path):
     """A parallel build on a pooled file-backed SQLite store removes its shard directory."""
     path = tmp_path / "store.sqlite"
-    database = Database.sqlite(path)
+    database = Backend.sqlite(path)
     try:
         store = SqlStore(database, entry_records={})
         with store.bulk_ingest(workers=3) as bulk:
@@ -687,7 +687,7 @@ def test_parallel_sqlite_file_store_cleans_shards(tmp_path):
         assert store.fetch(Author, 1) == Author("A0", 1900)
     finally:
         database.dispose()
-    reopened_database = Database.sqlite(path)
+    reopened_database = Backend.sqlite(path)
     try:
         assert SqlStore(reopened_database).fetch(Author, 1) == Author("A0", 1900)
     finally:
@@ -698,7 +698,7 @@ def test_parallel_shard_path_with_quote(tmp_path):
     """A database (hence shard) path containing a single quote must not break or inject the merge SQL."""
     directory = tmp_path / "o'brien"
     directory.mkdir()
-    for backend, factory in (("sqlite", Database.sqlite), ("duckdb", Database.duckdb)):
+    for backend, factory in (("sqlite", Backend.sqlite), ("duckdb", Backend.duckdb)):
         if backend == "duckdb":
             pytest.importorskip("duckdb_engine")
         database = factory(directory / f"store.{backend}")
@@ -761,7 +761,7 @@ def test_parallel_equal_fraction_metadata_deduplicates(store_factory):
 
 def test_parallel_finish_aborts_on_dead_worker_with_full_queue(store_factory, monkeypatch):
     """A worker killed with a saturated queue cannot deadlock the stop-sentinel send; the ingest aborts."""
-    from httk.store.db import bulk_parallel
+    from httk.store.backend.sql import bulk_parallel
 
     monkeypatch.setattr(bulk_parallel, "_QUEUE_MAXSIZE", 2)
     store = store_factory()
@@ -791,7 +791,7 @@ def test_parallel_sqlite_works_with_foreign_key_enforcement_enabled(tmp_path):
     """The FK-free physical schema makes parallel merge independent of PRAGMA foreign_keys."""
     from sqlalchemy import event
 
-    database = Database.sqlite(tmp_path / "fk.sqlite")
+    database = Backend.sqlite(tmp_path / "fk.sqlite")
 
     @event.listens_for(database.engine, "connect")
     def _enable_foreign_keys(dbapi_connection, _record):
@@ -811,7 +811,7 @@ def test_parallel_healthy_manifest_survives_full_queue_health_poll(store_factory
     """A worker that reported and exited during sentinel delivery keeps its manifest (not discarded nor read as a crash)."""
     import time
 
-    from httk.store.db import bulk_parallel
+    from httk.store.backend.sql import bulk_parallel
 
     store = store_factory()
     _require_bulk(store)

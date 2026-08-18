@@ -1,7 +1,7 @@
 # Migrating from httk v1 in detail
 
 The database layer of httk v1 (`httk.db`, with `httk.db.backend.Sqlite` and
-`httk.db.store.SqlStore`) and the storage layer of *httk₂* (`httk.store.db`, see
+`httk.db.store.SqlStore`) and the storage layer of *httk₂* (`httk.store.backend.sql`, see
 {doc}`db`) solve the same problem, and the shape of a query survives the port
 almost unchanged: open a searcher, bind classes to variables, add conditions,
 declare outputs, iterate. What changed is how a class is declared storable, and
@@ -62,8 +62,8 @@ Against records `NaCl`, `CaTiO3` and `NaTiO2`, `has_any` matches `NaCl` and
 
 | httk v1 | *httk₂* |
 | --- | --- |
-| `httk.db.backend.Sqlite(path)` then `httk.db.store.SqlStore(backend)` | `Database.sqlite(path)` then `SqlStore(database, entry_records={})` for first use, `SqlStore(database)` when reopening |
-| `httk.db.backend.Duckdb(path)` | `Database.duckdb(path)` |
+| `httk.db.backend.Sqlite(path)` then `httk.db.store.SqlStore(backend)` | `Backend.sqlite(path)` then `SqlStore(database, entry_records={})` for first use, `SqlStore(database)` when reopening |
+| `httk.db.backend.Duckdb(path)` | `Backend.duckdb(path)` |
 | `store.delay_commit()` … `store.commit()` | `with store.transaction():` |
 | subclass `httk.HttkObject`, `@httk.httk_typed_init({...}, index=[...], skip=[...])` | plain frozen dataclass with `Annotated` markers (`Indexed`, `Unique`, `Skip`, `Shape`, `Related`) and an optional `__httk_storage__: ClassVar[StorageInfo]` |
 | `@httk_typed_property(t)` | `@stored_property` (value type read from the return annotation) |
@@ -124,7 +124,7 @@ from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
 from httk.core.storage import Indexed, StorageInfo
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -142,7 +142,7 @@ class StructureTag:
     value: str
 
 
-store = SqlStore(Database.sqlite("example.sqlite"), entry_records={})
+store = SqlStore(Backend.sqlite("example.sqlite"), entry_records={})
 
 tablesalt = Structure("NaCl", ("Na", "Cl"))
 arsenic = Structure("As", ("As",))
@@ -210,7 +210,7 @@ from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
 from httk.core.storage import Indexed, StorageInfo, stored_property
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -238,7 +238,7 @@ class TotalEnergyResult:
     total_energy: float
 
 
-store = SqlStore(Database.sqlite("results.sqlite"), entry_records={})
+store = SqlStore(Backend.sqlite("results.sqlite"), entry_records={})
 
 vasp = Computation("VASP", "5.4.4")
 runs = [

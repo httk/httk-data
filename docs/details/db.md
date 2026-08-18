@@ -1,6 +1,6 @@
-# Database storage in detail
+# Backend storage in detail
 
-`httk.store.db` is the database storage layer of *httk₂*: it stores **plain
+`httk.store.backend.sql` is the database storage layer of *httk₂*: it stores **plain
 frozen dataclasses** in a relational database, makes them queryable through a
 backend-agnostic search DSL, and serves them through the neutral
 `httk.core.EntryProvider` contract (e.g. as an OPTIMADE API via
@@ -18,7 +18,7 @@ python -m pip install "httk-store[postgresql]"  # PostgreSQL backend (psycopg 3)
 python -m pip install "httk-store[clickhouse]"  # ClickHouse backend
 ```
 
-`Database.postgres(url)` opens a PostgreSQL store from a `postgresql://` URL.
+`Backend.postgresql(url)` opens a PostgreSQL store from a `postgresql://` URL.
 It is fully transactional and rides the ordinary `transactional` write profile
 with no special-casing, and it supports bulk ingestion (`store.bulk_ingest()`)
 with the same parity/deferred/parallel behavior as SQLite and DuckDB. Only the
@@ -26,7 +26,7 @@ psycopg 3 driver is supported: a bare `postgresql://` URL is normalized to
 `postgresql+psycopg://` and any other explicit driver is rejected. See the
 [PostgreSQL testing guide](../postgres-testing.md) for local setup.
 
-Touching a SQL-backed name (such as `httk.store.db.Database`) without the extra
+Touching a SQL-backed name (such as `httk.store.backend.sql.Backend`) without the extra
 installed raises an `ImportError` naming it.
 
 ## Declaring a storable class
@@ -79,15 +79,15 @@ recursively first). Classes you cannot modify can be described externally with
 
 ## Storing and fetching
 
-`Database` names where data lives; `SqlStore` saves and reconstructs
+`Backend` names where data lives; `SqlStore` saves and reconstructs
 instances. Saving deduplicates per the class's `StorageInfo.dedup` policy
 (by content identity by default), and `transaction()` scopes several
 operations into one database transaction:
 
 ```python
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
-db = Database.sqlite("example.sqlite")  # or Database.sqlite() in memory,
+db = Backend.sqlite("example.sqlite")  # or Backend.sqlite() in memory,
 store = SqlStore(db, entry_records={})  # first-time custom-record store
 # Reopen an initialized database with: SqlStore(db)
 
@@ -311,7 +311,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from httk.core.storage import Indexed
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -320,7 +320,7 @@ class Note:
     text: str
 
 
-store = SqlStore(Database.sqlite(), entry_records={})
+store = SqlStore(Backend.sqlite(), entry_records={})
 with store.transaction():
     first = Note("n", "first")
     store.save(first)
@@ -387,7 +387,7 @@ rows = searcher.results(record=record)
 The equivalent OPTIMADE filter is:
 
 ```python
-from httk.store.db import optimade_filter_searcher
+from httk.store.backend.sql import optimade_filter_searcher
 
 rows = optimade_filter_searcher(
     store, StructureRecord, '_httk_store_timestamp <= "2026-01-01T00:00:00Z"'
@@ -435,13 +435,13 @@ encoding, hydrated records, or query results. Saving a dependency again at the
 top level promotes its existing row to main; bulk canonicalization likewise
 keeps the maximum role of all collapsed occurrences.
 
-The usual `Database.sqlite(...)` and `Database.duckdb(...)` stores have the
+The usual `Backend.sqlite(...)` and `Backend.duckdb(...)` stores have the
 persisted `transactional` write profile (the absent metadata value means the
 same thing). SQLite additionally exposes an explicitly opt-in, artificial
 transactionless conformance vehicle:
 
 ```python
-db = Database.sqlite("recovery-test.sqlite", degraded=True)
+db = Backend.sqlite("recovery-test.sqlite", degraded=True)
 store = SqlStore(db, entry_records={})
 ```
 
@@ -451,7 +451,7 @@ autocommit state, not just the construction flag; a transactional profile also
 rejects an autocommit engine. It is SQLite-only in this release: it uses DB-API
 autocommit to model SQL-like backends that cannot provide transaction rollback.
 The profile is deliberately single-writer. A database-visible writer lease is
-acquired on mutation and held until `Database.dispose()`; another instance can
+acquired on mutation and held until `Backend.dispose()`; another instance can
 inspect the holder/age and explicitly call `store.steal_lease()` when recovery
 authority is clear.
 
@@ -487,7 +487,7 @@ ClickHouse uses KeeperMap metadata and the persisted `bulk-fenced` profile.
 Reads do not acquire a lease. A bulk writer acquires a fresh, never-reused
 token with a strict insert, verifies that exact value during the P2 bulk-entry
 and marker operations, and releases it with an exact-value delete when
-`Database.dispose()` runs. P3 adds verification around its durable phases. The
+`Backend.dispose()` runs. P3 adds verification around its durable phases. The
 `ingest_state` marker is also a strict insert and carries the lease token plus
 a fresh per-ingest nonce; it is cleared only by an exact-value delete after a
 successful ingest.
@@ -524,7 +524,7 @@ Do not delete values belonging to a live writer or use broad key-only deletes.
 For SQLite, DuckDB, and PostgreSQL, `store.bulk_ingest()` is a faster path than
 a `save()` loop for **building a store from scratch or appending a large
 increment** to one. It returns a
-`httk.store.db.bulk.BulkIngest` context manager that mirrors `save()` but buffers
+`httk.store.backend.sql.bulk.BulkIngest` context manager that mirrors `save()` but buffers
 encoded rows with pre-assigned sids and appends them in `executemany` batches
 inside one transaction, instead of one statement round-trip and an in-database
 deduplication protocol per record. It is a near drop-in for the save loop:
@@ -563,7 +563,7 @@ Reach for it when the increment is large; for a handful of records the ordinary
 
 **Exclusive write ownership.** While a `bulk_ingest()` context is open the
 store's ordinary write path belongs to it: `save()`, `ensure_tables()`, and
-`transaction()` on the same `httk.store.db.SqlStore` raise `RuntimeError`, and a
+`transaction()` on the same `httk.store.backend.sql.SqlStore` raise `RuntimeError`, and a
 second `bulk_ingest()` context on the same store is refused. Reads from an
 already-open store remain available; a new open is rejected while an
 empty-store ingest marker is present.
@@ -601,7 +601,7 @@ to the deduplicated existing sid.
 `save()`, but it is provisional while the context is open: a record that
 deduplicates against a row the store already held is remapped to that existing
 sid at flush. After the context exits cleanly,
-`httk.store.db.bulk.BulkIngest.resolved_sid` maps any returned sid — provisional
+`httk.store.backend.sql.bulk.BulkIngest.resolved_sid` maps any returned sid — provisional
 or final — to its durable stored sid. It keys on the bare sid value, so resolve
 a returned sid against the type it was saved as (sids are allocated per table,
 and one value can recur across tables).
@@ -708,7 +708,7 @@ while column types, keys, checks, and indexes are unchanged.
 **Provisional tokens.** Because a worker encodes each object asynchronously, the
 sid is not known when `save` returns; in parallel mode `save` returns an opaque
 token instead. After the context exits cleanly,
-`httk.store.db.bulk.BulkIngest.resolved_sid` maps each returned token to its
+`httk.store.backend.sql.bulk.BulkIngest.resolved_sid` maps each returned token to its
 durable stored sid, exactly as it maps a provisional sid on the serial path. A
 lost task (an unpicklable object, or a worker that crashed or was killed) aborts
 the ingest rather than committing a partial store, and `on_progress` is rejected
@@ -955,7 +955,7 @@ database-specific prefix, `_httk_` by default), yields JSON-able records, and
 declares relationships for reference fields whose target class is also served:
 
 ```python
-from httk.store.db import StoreEntryProvider
+from httk.store.backend.sql import StoreEntryProvider
 
 provider = StoreEntryProvider(store, {"structures": StructureRecord, "authors": Author})
 ```

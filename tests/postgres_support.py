@@ -17,7 +17,7 @@ import pytest
 import sqlalchemy
 from sqlalchemy.engine import make_url
 
-from httk.store.db import Database
+from httk.store.backend.sql import Backend
 
 
 def postgres_admin_uri() -> str:
@@ -34,8 +34,8 @@ POSTGRES_PARAM = pytest.param("postgresql", marks=pytest.mark.xdist_group("postg
 class IsolatedPostgresDatabase:
     """A uniquely named PostgreSQL database, created on construction.
 
-    ``uri`` is the per-database URL callers turn into ``Database.postgres(uri)``.
-    Dispose any ``Database`` pools you opened, then call :meth:`drop`; the drop
+    ``uri`` is the per-database URL callers turn into ``Backend.postgresql(uri)``.
+    Dispose any ``Backend`` pools you opened, then call :meth:`drop`; the drop
     uses ``WITH (FORCE)`` so a leftover backend connection cannot block it.
     """
 
@@ -55,10 +55,10 @@ class IsolatedPostgresDatabase:
 
 
 @contextmanager
-def postgres_database() -> Iterator[Database]:
-    """Yield one ``Database.postgres`` over a fresh isolated database, dropped on exit."""
+def postgres_database() -> Iterator[Backend]:
+    """Yield one ``Backend.postgresql`` over a fresh isolated database, dropped on exit."""
     isolated = IsolatedPostgresDatabase()
-    database = Database.postgres(isolated.uri)
+    database = Backend.postgresql(isolated.uri)
     try:
         yield database
     finally:

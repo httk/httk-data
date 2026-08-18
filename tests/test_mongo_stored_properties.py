@@ -14,9 +14,9 @@ from test_db_stored_properties import (
     GenericCalculationSecond,
 )
 
-from httk.store.mongo import MongoStore
-from httk.store.mongo.evaluator import canonical_predicate, evaluate
-from httk.store.mongo.stored_properties import (
+from httk.store.backend.mongo import MongoStore
+from httk.store.backend.mongo.evaluator import canonical_predicate, evaluate
+from httk.store.backend.mongo.stored_properties import (
     MongoStoredPropertyConfigurationError,
     _MongoQueryContext,
     _response_json_value,

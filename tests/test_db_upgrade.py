@@ -10,7 +10,7 @@ import sqlalchemy
 from httk.core.storage import IdentitySkip, Indexed, StorageInfo, content_id, stored_property
 
 from httk.store import EntryFamilyDeclaration, EntryRecordDeclaration
-from httk.store.db import Database, SqlStore, StorageLayoutUpgradeRequiredError
+from httk.store.backend.sql import Backend, SqlStore, StorageLayoutUpgradeRequiredError
 from httk.store.storage_layout import (
     AdditiveUpgradePlan,
     classify_schema_upgrade,
@@ -247,17 +247,17 @@ def test_classify_new_referenced_table_is_additive() -> None:
 
 
 @pytest.fixture(params=["sqlite", "duckdb"])
-def sql_database(request: pytest.FixtureRequest) -> Iterator[Database]:
+def sql_database(request: pytest.FixtureRequest) -> Iterator[Backend]:
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        with Database.duckdb() as database:
+        with Backend.duckdb() as database:
             yield database
         return
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         yield database
 
 
-def test_reopen_additive_without_upgrade_raises_with_hint(sql_database: Database) -> None:
+def test_reopen_additive_without_upgrade_raises_with_hint(sql_database: Backend) -> None:
     SqlStore(sql_database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(sql_database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecNew),))
@@ -266,7 +266,7 @@ def test_reopen_additive_without_upgrade_raises_with_hint(sql_database: Database
     assert set(error.value.diff["schema"]) == {"upgrade_rec"}
 
 
-def test_reopen_additive_with_upgrade_applies_and_restamps(sql_database: Database) -> None:
+def test_reopen_additive_with_upgrade_applies_and_restamps(sql_database: Backend) -> None:
     old_decl = (_decl(UpgradeFamily, "test-upgrade", RecOld),)
     new_decl = (_decl(UpgradeFamily, "test-upgrade", RecNew),)
     store = SqlStore(sql_database, entry_families=old_decl)
@@ -284,7 +284,7 @@ def test_reopen_additive_with_upgrade_applies_and_restamps(sql_database: Databas
     assert reopened.fetch(RecNew, sid) == RecNew("kept", None)
 
 
-def test_upgrade_preserves_content_id_and_dedup(sql_database: Database) -> None:
+def test_upgrade_preserves_content_id_and_dedup(sql_database: Backend) -> None:
     old_decl = (_decl(UpgradeFamily, "test-upgrade", RecOld),)
     new_decl = (_decl(UpgradeFamily, "test-upgrade", RecNew),)
     store = SqlStore(sql_database, entry_families=old_decl)
@@ -300,7 +300,7 @@ def test_upgrade_preserves_content_id_and_dedup(sql_database: Database) -> None:
 
 
 def test_reopen_new_referenced_table_reads_preexisting_rows() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_families=(_decl(UpgradeRefFamily, "test-upgrade-ref", RecRefOld),))
         old_sid = store.save(RecRefOld("base"))
         upgraded = SqlStore(
@@ -319,7 +319,7 @@ def test_reopen_new_referenced_table_reads_preexisting_rows() -> None:
 
 
 def test_half_applied_upgrade_heals_on_retry() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         old_decl = (_decl(UpgradeFamily, "test-upgrade", RecOld),)
         new_decl = (_decl(UpgradeFamily, "test-upgrade", RecNew),)
         store = SqlStore(database, entry_families=old_decl)
@@ -337,7 +337,7 @@ def test_half_applied_upgrade_heals_on_retry() -> None:
 
 
 def test_reopen_non_nullable_added_field_raises_and_does_not_alter() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
             SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecNewRequired),), upgrade=True)
@@ -349,7 +349,7 @@ def test_reopen_non_nullable_added_field_raises_and_does_not_alter() -> None:
 
 
 def test_reopen_identity_participating_field_has_no_hint() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
             SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecNewNonSkip),))
@@ -358,14 +358,14 @@ def test_reopen_identity_participating_field_has_no_hint() -> None:
 
 
 def test_reopen_removed_field_raises_even_with_upgrade() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecNew),))
         with pytest.raises(StorageLayoutUpgradeRequiredError):
             SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),), upgrade=True)
 
 
 def test_reopen_indexed_added_column_creates_the_index() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         store.save(RecOld("row"))  # materialize the table so the upgrade alters it
         SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecNewIndexed),), upgrade=True)
@@ -375,14 +375,14 @@ def test_reopen_indexed_added_column_creates_the_index() -> None:
 
 
 def test_upgrade_true_with_no_diff_is_a_clean_reopen() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         store = SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),), upgrade=True)
         assert {family.name for family in store.entry_layout} == {"test-upgrade"}
 
 
 def test_apply_is_deferred_until_after_a_failing_later_check() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         store.save(RecOld("kept"))  # materialize upgrade_rec so an ALTER would apply
         # Poison an invalid dirty: marker naming a table that does not exist; its
@@ -400,7 +400,7 @@ def test_apply_is_deferred_until_after_a_failing_later_check() -> None:
 
 
 def test_index_heals_when_column_present_but_index_missing() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_families=(_decl(UpgradeFamily, "test-upgrade", RecOld),))
         store.save(RecOld("row"))
         # Simulate a crash between ADD COLUMN and CREATE INDEX: the column exists

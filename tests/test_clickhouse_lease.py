@@ -9,16 +9,16 @@ import sqlalchemy
 from conftest import clickhouse_test_uri
 from sqlalchemy import text
 
-from httk.store.db import Database, SqlStore
-from httk.store.db import clickhouse as clickhouse_adapter
-from httk.store.db.clickhouse import (
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.clickhouse import support as clickhouse_adapter
+from httk.store.backend.clickhouse.support import (
     acquire_lease,
     clear_ingest_marker,
     release_lease,
     verify_lease,
     write_ingest_marker,
 )
-from httk.store.db.layout import StoreUnderConstructionError
+from httk.store.backend.sql.layout import StoreUnderConstructionError
 
 
 class _P2InjectedCrash(BaseException):
@@ -51,7 +51,7 @@ def clickhouse_p2_database():
                 )
         finally:
             target_admin.dispose()
-        database = Database.clickhouse(source_url, database=database_name)
+        database = Backend.clickhouse(source_url, database=database_name)
         yield database
     finally:
         if database is not None:
@@ -61,16 +61,16 @@ def clickhouse_p2_database():
         admin.dispose()
 
 
-def _metadata(database: Database) -> dict[str, str]:
+def _metadata(database: Backend) -> dict[str, str]:
     with database.engine.connect() as connection:
         return dict(connection.execute(text("SELECT key, value FROM _httk_store_metadata")).all())
 
 
-def _fresh_database(source_url: sqlalchemy.URL, name: str) -> Database:
-    return Database.clickhouse(source_url, database=name)
+def _fresh_database(source_url: sqlalchemy.URL, name: str) -> Backend:
+    return Backend.clickhouse(source_url, database=name)
 
 
-def test_clickhouse_lease_and_marker_values_are_token_carrying(clickhouse_p2_database: Database) -> None:
+def test_clickhouse_lease_and_marker_values_are_token_carrying(clickhouse_p2_database: Backend) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
         lease = acquire_lease(connection, store._lease_owner)
@@ -94,7 +94,7 @@ def test_clickhouse_lease_and_marker_values_are_token_carrying(clickhouse_p2_dat
 
 
 def test_clickhouse_lease_is_acquired_on_first_write_and_reads_do_not_touch_it(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Backend,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
@@ -114,7 +114,7 @@ def test_clickhouse_lease_is_acquired_on_first_write_and_reads_do_not_touch_it(
         fresh_database.dispose()
 
 
-def test_clickhouse_dispose_releases_exact_lease(clickhouse_p2_database: Database) -> None:
+def test_clickhouse_dispose_releases_exact_lease(clickhouse_p2_database: Backend) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
         store._ensure_degraded_lease(connection)
@@ -124,9 +124,9 @@ def test_clickhouse_dispose_releases_exact_lease(clickhouse_p2_database: Databas
 
 
 def test_clickhouse_concurrent_bulk_admission_refuses_second_context(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     store = SqlStore(clickhouse_p2_database, entry_records={})
     first_claimed = threading.Event()
@@ -169,10 +169,10 @@ def test_clickhouse_concurrent_bulk_admission_refuses_second_context(
 
 
 def test_clickhouse_bulk_entry_cleanup_failure_releases_admission_and_mutex(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A secondary entry-cleanup failure cannot strand the bulk ownership."""
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     store = SqlStore(clickhouse_p2_database, entry_records={})
 
@@ -192,7 +192,7 @@ def test_clickhouse_bulk_entry_cleanup_failure_releases_admission_and_mutex(
 
 
 def test_clickhouse_bulk_boundary_leaves_lease_and_marker_for_crash_recovery(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Backend,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     bulk = store.bulk_ingest(finalize="deferred")
@@ -217,7 +217,7 @@ def test_clickhouse_bulk_boundary_leaves_lease_and_marker_for_crash_recovery(
 
 
 def test_clickhouse_preexisting_marker_survives_new_bulk_attempt(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Backend,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     bulk = store.bulk_ingest(finalize="deferred")
@@ -235,9 +235,9 @@ def test_clickhouse_preexisting_marker_survives_new_bulk_attempt(
 
 
 def test_clickhouse_crash_after_lease_before_marker_keeps_lease_until_dispose(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     def crash(_: BulkIngest) -> None:
         raise _P2InjectedCrash("after lease")
@@ -265,7 +265,7 @@ def test_clickhouse_crash_after_lease_before_marker_keeps_lease_until_dispose(
 
 
 def test_clickhouse_uncertain_marker_insert_cleans_observed_token(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     original_insert = clickhouse_adapter._strict_insert
 
@@ -286,7 +286,7 @@ def test_clickhouse_uncertain_marker_insert_cleans_observed_token(
 
 
 def test_clickhouse_marker_residue_rejects_fresh_open_after_marker_write(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Backend,
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
@@ -305,9 +305,9 @@ def test_clickhouse_marker_residue_rejects_fresh_open_after_marker_write(
 
 
 def test_clickhouse_interrupted_marker_clear_leaves_fail_closed_residue(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     monkeypatch.setattr(BulkIngest, "_clickhouse_p3_boundary", lambda _: None)
     monkeypatch.setattr(BulkIngest, "_deferred_finalize", lambda _: None)
@@ -334,10 +334,10 @@ def test_clickhouse_interrupted_marker_clear_leaves_fail_closed_residue(
 
 
 def test_clickhouse_p2_clean_exit_glue_clears_marker_but_keeps_lifecycle_lease(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Prove P2 marker/lease glue; P3 must prove a real durable clean exit."""
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     monkeypatch.setattr(BulkIngest, "_clickhouse_p3_boundary", lambda _: None)
     monkeypatch.setattr(BulkIngest, "_deferred_finalize", lambda _: None)
@@ -350,9 +350,9 @@ def test_clickhouse_p2_clean_exit_glue_clears_marker_but_keeps_lifecycle_lease(
 
 
 def test_clickhouse_teardown_keeps_bulk_admission_closed_until_ownership_release(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     teardown_started = threading.Event()
     second_finished = threading.Event()
@@ -391,7 +391,7 @@ def test_clickhouse_teardown_keeps_bulk_admission_closed_until_ownership_release
 
 
 def test_clickhouse_interrupted_mutex_acquire_unwinds_bulk_admission(
-    clickhouse_p2_database: Database,
+    clickhouse_p2_database: Backend,
 ) -> None:
     class InterruptingLock:
         def acquire(self) -> None:
@@ -406,10 +406,10 @@ def test_clickhouse_interrupted_mutex_acquire_unwinds_bulk_admission(
 
 
 def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    from httk.store.db import engine as engine_module
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql import engine as engine_module
+    from httk.store.backend.sql.bulk import BulkIngest
 
     entered = threading.Event()
     finalizer_started = threading.Event()
@@ -461,7 +461,7 @@ def test_clickhouse_dispose_waits_for_inflight_bulk_lifecycle_guard(
     assert "lease" not in _metadata(clickhouse_p2_database)
 
 
-def test_clickhouse_dispose_from_lifecycle_owner_fails_without_waiting(clickhouse_p2_database: Database) -> None:
+def test_clickhouse_dispose_from_lifecycle_owner_fails_without_waiting(clickhouse_p2_database: Backend) -> None:
     """Disposal from an owned lifecycle guard fails instead of self-deadlocking."""
     done = threading.Event()
     errors: list[BaseException] = []
@@ -489,7 +489,7 @@ def test_clickhouse_dispose_from_lifecycle_owner_fails_without_waiting(clickhous
 
 
 def test_clickhouse_interrupted_release_is_exact_and_idempotent(
-    clickhouse_p2_database: Database, monkeypatch: pytest.MonkeyPatch
+    clickhouse_p2_database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
@@ -531,7 +531,7 @@ def test_clickhouse_code_999_classification_uses_structured_exception_code() -> 
     assert clickhouse_adapter._is_keeper_node_exists(RuntimeError("Node exists"))
 
 
-def test_clickhouse_stale_release_cannot_delete_new_holder(clickhouse_p2_database: Database) -> None:
+def test_clickhouse_stale_release_cannot_delete_new_holder(clickhouse_p2_database: Backend) -> None:
     store = SqlStore(clickhouse_p2_database, entry_records={})
     with clickhouse_p2_database.engine.begin() as connection:
         old = acquire_lease(connection, store._lease_owner)

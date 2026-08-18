@@ -17,15 +17,15 @@ from httk.core.storage import StorageInfo, content_id
 from schema_override_support import schema_override
 
 from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration, storage_layout
-from httk.store.db import (
+from httk.store.backend.sql import (
     STORAGE_PROTOCOL_VERSION,
     BackendFacts,
-    Database,
+    Backend,
     SqlStore,
     StorageLayoutUpgradeRequiredError,
     StoreUnderConstructionError,
 )
-from httk.store.db.layout import (
+from httk.store.backend.sql.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
     actual_schema_objects,
@@ -35,7 +35,7 @@ from httk.store.db.layout import (
     expected_metadata,
     normalize_entry_records,
 )
-from httk.store.db.mapping import entry_dispatch_table_name
+from httk.store.backend.sql.mapping import entry_dispatch_table_name
 from httk.store.storage_layout import schema_fingerprint_diff, schema_fingerprint_json
 
 
@@ -160,12 +160,12 @@ register_entry_record(
 
 
 @pytest.fixture
-def database() -> Iterator[Database]:
-    with Database.sqlite() as database:
+def database() -> Iterator[Backend]:
+    with Backend.sqlite() as database:
         yield database
 
 
-def _tables(database: Database) -> set[str]:
+def _tables(database: Backend) -> set[str]:
     with database.engine.connect() as connection:
         return set(connection.execute(sqlalchemy.text("SELECT name FROM sqlite_master WHERE type = 'table'")).scalars())
 
@@ -243,7 +243,7 @@ def test_common_save_and_paging_imports_do_not_import_sqlalchemy() -> None:
     subprocess.run([sys.executable, "-c", code], check=True, env=dict(os.environ))
 
 
-def test_empty_database_requires_declaration_and_stamps_metadata_only(database: Database) -> None:
+def test_empty_database_requires_declaration_and_stamps_metadata_only(database: Backend) -> None:
     with pytest.raises(TypeError, match="entry_records"):
         SqlStore(database)
 
@@ -260,7 +260,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
     assert SqlStore(database).entry_layout == ()
 
 
-def test_application_owned_declaration_needs_no_registry_and_rebinds_on_reopen(database: Database) -> None:
+def test_application_owned_declaration_needs_no_registry_and_rebinds_on_reopen(database: Backend) -> None:
     store = SqlStore(database, entry_families=(LOCAL_LAYOUT,))
     record = LocalLayoutRecord("private")
     sid = store.save(record)
@@ -281,7 +281,7 @@ def test_application_owned_declaration_needs_no_registry_and_rebinds_on_reopen(d
         SqlStore(database)
 
 
-def test_registered_and_application_owned_declarations_compose(database: Database) -> None:
+def test_registered_and_application_owned_declarations_compose(database: Backend) -> None:
     store = SqlStore(
         database,
         entry_records={LayoutFamily: LayoutSingle},
@@ -290,7 +290,7 @@ def test_registered_and_application_owned_declarations_compose(database: Databas
     assert tuple(layout.family for layout in store.entry_layout) == (LayoutFamily, LocalLayoutFamily)
 
 
-def test_stamp_trust_reopens_with_missing_or_changed_record_tables(database: Database) -> None:
+def test_stamp_trust_reopens_with_missing_or_changed_record_tables(database: Backend) -> None:
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     store.save(LayoutSingle("present"))
     with database.engine.begin() as connection:
@@ -298,7 +298,7 @@ def test_stamp_trust_reopens_with_missing_or_changed_record_tables(database: Dat
     assert SqlStore(database).fetch_by_content_id(LayoutSingle, content_id(LayoutSingle("missing"))) is None
 
 
-def test_multi_record_store_reopens_with_its_dispatch_table(database: Database) -> None:
+def test_multi_record_store_reopens_with_its_dispatch_table(database: Backend) -> None:
     store = SqlStore(database, entry_records={MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
     sid = store.save(LayoutFirst("first"))
 
@@ -315,7 +315,7 @@ def test_multi_record_store_reopens_with_its_dispatch_table(database: Database) 
 
 
 def test_second_store_does_not_cache_an_uncommitted_table(tmp_path: Path) -> None:
-    database = Database.sqlite(tmp_path / "cache.sqlite")
+    database = Backend.sqlite(tmp_path / "cache.sqlite")
     first = SqlStore(database, entry_records={})
     second = SqlStore(database)
     try:
@@ -332,7 +332,7 @@ def test_second_store_does_not_cache_an_uncommitted_table(tmp_path: Path) -> Non
         database.dispose()
 
 
-def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: Database) -> None:
+def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: Backend) -> None:
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     with database.engine.connect() as connection:
         before = actual_table_names(connection)
@@ -350,7 +350,7 @@ def test_fresh_store_reads_are_empty_and_do_not_create_record_tables(database: D
         assert actual_table_names(connection) == before
 
 
-def test_read_candidate_metadata_is_memoized_per_class_set(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_candidate_metadata_is_memoized_per_class_set(database: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     calls: list[frozenset[type]] = []
     original = SqlStore._candidate_metadata
@@ -370,7 +370,7 @@ def test_read_candidate_metadata_is_memoized_per_class_set(database: Database, m
     assert len(calls) == 1
 
 
-def test_warm_read_memo_does_not_block_table_creation_on_write(database: Database) -> None:
+def test_warm_read_memo_does_not_block_table_creation_on_write(database: Backend) -> None:
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     # Warm the read memo for {LayoutSingle} while its table is still absent.
     assert store.fetch_by_content_id(LayoutSingle, "missing") is None
@@ -384,7 +384,7 @@ def test_warm_read_memo_does_not_block_table_creation_on_write(database: Databas
 
 @pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"])
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
-    database: Database, old_protocol: str
+    database: Backend, old_protocol: str
 ) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
@@ -398,14 +398,14 @@ def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": old_protocol}
 
 
-def _read_metadata_value(database: Database, key: str) -> str | None:
+def _read_metadata_value(database: Backend, key: str) -> str | None:
     with database.engine.connect() as connection:
         return connection.execute(
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = :key"), {"key": key}
         ).scalar_one_or_none()
 
 
-def _write_metadata_value(database: Database, key: str, value: str) -> None:
+def _write_metadata_value(database: Backend, key: str, value: str) -> None:
     with database.engine.begin() as connection:
         connection.execute(
             sqlalchemy.text("UPDATE _httk_store_metadata SET value = :value WHERE key = :key"),
@@ -424,7 +424,7 @@ def test_schema_fingerprint_is_deterministic_and_covers_the_closure() -> None:
     assert schema_fingerprint_diff(first, first) == {}
 
 
-def test_reopen_with_changed_record_schema_is_rejected(database: Database) -> None:
+def test_reopen_with_changed_record_schema_is_rejected(database: Backend) -> None:
     SqlStore(database, entry_records={LayoutFamily: LayoutSingle, MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
     stored = json.loads(_read_metadata_value(database, "entry_schemas") or "")
     # Simulate the record's stored column type having changed since creation.
@@ -437,7 +437,7 @@ def test_reopen_with_changed_record_schema_is_rejected(database: Database) -> No
     assert set(schema_diff) == {"layout_single"}
 
 
-def test_reopen_detects_dedup_change_on_referenced_class(database: Database) -> None:
+def test_reopen_detects_dedup_change_on_referenced_class(database: Backend) -> None:
     SqlStore(database, entry_records={RefFamily: RefParent})
     # A real resolution-path change: the referenced child's dedup policy differs
     # from what was stamped, moving its fingerprint without hand-editing JSON.
@@ -448,7 +448,7 @@ def test_reopen_detects_dedup_change_on_referenced_class(database: Database) -> 
         assert set(error.value.diff["schema"]) == {"layout_ref_child"}
 
 
-def test_reopen_detects_identity_name_change_alone(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reopen_detects_identity_name_change_alone(database: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
     SqlStore(database, entry_records={RefFamily: RefParent})
     # Pinning a new identity_name changes content identity with no layout change;
     # the fingerprint must still trip so content_id dedup cannot silently break.
@@ -460,13 +460,13 @@ def test_reopen_detects_identity_name_change_alone(database: Database, monkeypat
     assert set(error.value.diff["schema"]) == {"layout_ref_child"}
 
 
-def test_reopen_with_unchanged_schema_succeeds(database: Database) -> None:
+def test_reopen_with_unchanged_schema_succeeds(database: Backend) -> None:
     SqlStore(database, entry_records={RefFamily: RefParent})
     reopened = SqlStore(database)
     assert {family.name for family in reopened.entry_layout} == {"test-layout-ref-family"}
 
 
-def test_old_metadata_shape_without_entry_schemas_fails_protocol(database: Database) -> None:
+def test_old_metadata_shape_without_entry_schemas_fails_protocol(database: Backend) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         # A pre-v2.6.0 stamp had no entry_schemas row and the earlier protocol.
@@ -479,7 +479,7 @@ def test_old_metadata_shape_without_entry_schemas_fails_protocol(database: Datab
     assert "schema" not in error.value.diff
 
 
-def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:
+def test_backend_facts_are_resolved_and_frozen(database: Backend) -> None:
     store = SqlStore(database, entry_records={})
     assert isinstance(store.backend_facts, BackendFacts)
     assert store.backend_facts.serial_stage_format == "sqlite"
@@ -494,9 +494,9 @@ def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:
 def test_duckdb_main_catalog_ignores_unrelated_attached_database(tmp_path: Path) -> None:
     """An attached database is not part of this store's physical layout scan."""
     pytest.importorskip("duckdb_engine")
-    database = Database.duckdb(tmp_path / "main.duckdb")
+    database = Backend.duckdb(tmp_path / "main.duckdb")
     attached_path = tmp_path / "legitimate.duckdb"
-    attached = Database.duckdb(attached_path)
+    attached = Backend.duckdb(attached_path)
     try:
         with attached.engine.begin() as connection:
             connection.execute(sqlalchemy.text("CREATE TABLE empty_table (value INTEGER)"))
@@ -521,7 +521,7 @@ def test_duckdb_main_catalog_ignores_unrelated_attached_database(tmp_path: Path)
         database.dispose()
 
 
-def test_marker_rejects_read_and_write_opens(database: Database) -> None:
+def test_marker_rejects_read_and_write_opens(database: Backend) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         connection.execute(
@@ -532,7 +532,7 @@ def test_marker_rejects_read_and_write_opens(database: Database) -> None:
             SqlStore(database, entry_records=supplied) if supplied is not None else SqlStore(database)
 
 
-def test_marker_with_partial_application_table_is_still_rejected(database: Database) -> None:
+def test_marker_with_partial_application_table_is_still_rejected(database: Backend) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         connection.execute(
@@ -543,7 +543,7 @@ def test_marker_with_partial_application_table_is_still_rejected(database: Datab
         SqlStore(database)
 
 
-def test_unknown_metadata_key_is_rejected(database: Database) -> None:
+def test_unknown_metadata_key_is_rejected(database: Backend) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
         connection.execute(sqlalchemy.text("INSERT INTO _httk_store_metadata (key, value) VALUES ('mystery', 'value')"))
@@ -551,7 +551,7 @@ def test_unknown_metadata_key_is_rejected(database: Database) -> None:
         SqlStore(database)
 
 
-def test_independent_declaration_mismatches_accumulate(database: Database) -> None:
+def test_independent_declaration_mismatches_accumulate(database: Backend) -> None:
     # Two unrelated declaration problems at once: an unknown metadata key and a
     # flipped store_timestamps state. Both aspects must survive into the diff
     # instead of the later check silently overwriting the earlier one's report.
@@ -564,14 +564,14 @@ def test_independent_declaration_mismatches_accumulate(database: Database) -> No
     assert set(error.value.diff["declaration"]) == {"metadata_keys", "store_timestamps"}
 
 
-def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: Database) -> None:
+def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: Backend) -> None:
     with database.engine.begin() as connection:
         connection.execute(sqlalchemy.text("CREATE TABLE _httk_unknown (value INTEGER)"))
     with pytest.raises(StorageLayoutUpgradeRequiredError):
         SqlStore(database, entry_records={})
     assert METADATA_TABLE_NAME not in _tables(database)
 
-    with Database.sqlite() as marked_database:
+    with Backend.sqlite() as marked_database:
         SqlStore(marked_database, entry_records={})
         with marked_database.engine.begin() as connection:
             connection.execute(sqlalchemy.text("CREATE TABLE _httk_unknown (value INTEGER)"))
@@ -581,7 +581,7 @@ def test_reserved_prefix_tables_are_rejected_before_and_after_marking(database: 
 
 
 def test_failed_empty_initialization_leaves_no_partial_layout(
-    database: Database, monkeypatch: pytest.MonkeyPatch
+    database: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fail_stamp(self: SqlStore, connection: sqlalchemy.Connection, layout: object) -> None:
         raise RuntimeError("stamp failure")
@@ -599,7 +599,7 @@ def test_concurrent_first_initialization_loser_does_not_drop_winner(tmp_path: Pa
     outcomes_lock = threading.Lock()
 
     def initialize() -> None:
-        database = Database.sqlite(path)
+        database = Backend.sqlite(path)
         try:
             start.wait(timeout=10)
             SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
@@ -621,13 +621,13 @@ def test_concurrent_first_initialization_loser_does_not_drop_winner(tmp_path: Pa
     assert len(outcomes) == 2
     assert sum(outcome is not None for outcome in outcomes) <= 1
 
-    with Database.sqlite(path) as reopened:
+    with Backend.sqlite(path) as reopened:
         store = SqlStore(reopened)
         assert tuple(item.family for item in store.entry_layout) == (LayoutFamily,)
         assert _tables(reopened) == {METADATA_TABLE_NAME}
 
 
-def test_registry_normalization_and_single_record_dispatch_free_storage(database: Database) -> None:
+def test_registry_normalization_and_single_record_dispatch_free_storage(database: Backend) -> None:
     with pytest.raises(ValueError, match="registered"):
         SqlStore(database, entry_records={UnregisteredFamily: LayoutSingle})
 
@@ -643,8 +643,8 @@ def test_registry_normalization_and_single_record_dispatch_free_storage(database
     assert sid == store.sid_of(record)
 
 
-def test_fetch_entry_lazy_default_and_eager(database: Database) -> None:
-    from httk.store.db.rows import is_lazy_row
+def test_fetch_entry_lazy_default_and_eager(database: Backend) -> None:
+    from httk.store.backend.sql.rows import is_lazy_row
 
     store = SqlStore(database, entry_records={LayoutFamily: LayoutSingle})
     record = LayoutSingle("single")

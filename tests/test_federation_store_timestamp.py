@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from httk.store import FederatedStore
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -11,7 +11,7 @@ class FederatedTimestampRecord:
     value: int
 
 
-def _timestamped_store(database: Database, values: tuple[tuple[int, int], ...]) -> SqlStore:
+def _timestamped_store(database: Backend, values: tuple[tuple[int, int], ...]) -> SqlStore:
     store = SqlStore(database, entry_records={})
     for value, clock_ns in values:
         store._clock = lambda clock_ns=clock_ns: clock_ns
@@ -20,7 +20,7 @@ def _timestamped_store(database: Database, values: tuple[tuple[int, int], ...]) 
 
 
 def test_federated_store_timestamp_predicate_replays_to_each_source() -> None:
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         federation = FederatedStore(
             {
                 "first": _timestamped_store(first_database, ((1, 1_000_000), (2, 3_000_000))),

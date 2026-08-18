@@ -11,7 +11,7 @@ from httk.core import EntryTypeDefinition, FracVector, RelatedEntry
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
 
-from httk.store.mongo import MongoStore, StoreEntryProvider
+from httk.store.backend.mongo import MongoStore, StoreEntryProvider
 from httk.store.validation import validate_record
 
 

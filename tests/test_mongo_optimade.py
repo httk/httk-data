@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 
-from httk.store.mongo import MongoStore, optimade_filter_searcher
+from httk.store.backend.mongo import MongoStore, optimade_filter_searcher
 from httk.store.query.optimade_filters import FilterTranslationError
 
 

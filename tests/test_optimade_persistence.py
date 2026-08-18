@@ -14,7 +14,7 @@ from httk.core.optimade import (
     ReferenceView,
 )
 
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 PAGE_TEXT = '''{
   "jsonapi": {"version": "1.1"},
@@ -74,10 +74,10 @@ def database(request):
 
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        with Database.duckdb() as db:
+        with Backend.duckdb() as db:
             yield db
     else:
-        with Database.sqlite() as db:
+        with Backend.sqlite() as db:
             yield db
 
 
@@ -88,7 +88,7 @@ def _resources() -> tuple[OptimadeResource, OptimadeResource]:
     return OptimadeResource(page, 0, snapshot), OptimadeResource(page, 1, snapshot)
 
 
-def _count(database: Database, table_name: str) -> int:
+def _count(database: Backend, table_name: str) -> int:
     with database.engine.connect() as connection:
         return int(connection.execute(sqlalchemy.text(f"SELECT COUNT(*) FROM {table_name}")).scalar_one())
 

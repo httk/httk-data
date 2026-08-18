@@ -11,8 +11,8 @@ import sqlalchemy
 from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.db import (
-    Database,
+from httk.store.backend.sql import (
+    Backend,
     ExpiredCursorRowError,
     MultipleResultsError,
     NoResultError,
@@ -62,7 +62,7 @@ def store(request):
                 value.save(record)
             yield value
         return
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         value = SqlStore(database, entry_records={})
         for record in records:
             value.save(record)
@@ -107,7 +107,7 @@ def test_slices_keep_their_own_scope_for_rows_columns_and_one(store):
 
 
 def test_reference_exact_projection_is_pinned_in_outer_statement():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         child = EnergyRecord(Fraction(7, 11))
         store.save(child)
@@ -130,7 +130,7 @@ def test_reference_exact_projection_is_pinned_in_outer_statement():
 
 
 def test_child_projection_is_rejected_at_declaration():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         searcher = store.searcher()
         record = searcher.variable(ChildListRecord)
@@ -139,7 +139,7 @@ def test_child_projection_is_rejected_at_declaration():
 
 
 def test_integer_columns_are_rational_vectors():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(IntRecord(1))
         searcher = store.searcher()
@@ -206,7 +206,7 @@ def test_cursor_proxy_is_a_reused_unhashable_expiring_view(store):
 
 
 def test_column_iteration_does_not_hydrate_records(store, monkeypatch):
-    import httk.store.db.results as results_module
+    import httk.store.backend.sql.results as results_module
 
     calls = 0
     original = results_module.RowHydrator.row
@@ -224,7 +224,7 @@ def test_column_iteration_does_not_hydrate_records(store, monkeypatch):
 
 def test_perf_smoke_statement_bound_and_cursor_proxy_count():
     rows = _profile_rows()
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         value = SqlStore(database, entry_records={})
         with value.transaction():
             for index in range(rows):

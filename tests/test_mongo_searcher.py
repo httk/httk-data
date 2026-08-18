@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from httk.store.db import Database, SqlStore
-from httk.store.mongo import MongoSearcher
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.mongo import MongoSearcher
 from httk.store.query import MultipleResultsError, NoResultError, PageOrder, PaginationCursorError, UnsupportedQueryError
 from httk.store.query.paging_tokens import _decode_continuation, _encode_continuation, _encode_payload, _plan_fingerprint
 
@@ -23,7 +23,7 @@ class MongoQueryRecord:
 
 
 def _query(mongo_test_database):
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     store = MongoStore(mongo_test_database, entry_records={})
     records = [
@@ -149,7 +149,7 @@ class MongoRoot:
 
 def test_deep_reference_chain_missing_links_and_reference_join(mongo_test_database):
     """Lookups preserve roots with missing links without treating them as matches."""
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     store = MongoStore(mongo_test_database, entry_records={})
     leaf = MongoLeaf("present")
@@ -184,7 +184,7 @@ def test_deep_reference_chain_missing_links_and_reference_join(mongo_test_databa
 
 def test_negated_composed_child_sets_with_null_elements(mongo_test_database):
     """An embedded null is an outsider and does not break composed negation."""
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     store = MongoStore(mongo_test_database, entry_records={})
     clean = MongoRoot("clean", None, ["allowed"])
@@ -218,7 +218,7 @@ class MongoChildComparisonRecord:
 
 
 def _child_comparison_store(mongo_test_database):
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     store = MongoStore(mongo_test_database, entry_records={})
     for record in (
@@ -277,7 +277,7 @@ def test_child_string_operations_match_element_values(mongo_test_database, build
 
 def test_join_predicates_below_not_or_or_are_rejected(mongo_test_database):
     """A conditional equality cannot safely establish a physical lookup."""
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     store = MongoStore(mongo_test_database, entry_records={})
     branch = MongoBranch(None)
@@ -298,7 +298,7 @@ def test_join_predicates_below_not_or_or_are_rejected(mongo_test_database):
 
 def test_paging_rejects_sql_tokens_in_both_directions(mongo_test_database):
     """The backend tag in a plan fingerprint makes cursors non-interchangeable."""
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     records = [
         MongoQueryRecord("one", 1),
@@ -311,7 +311,7 @@ def test_paging_rejects_sql_tokens_in_both_directions(mongo_test_database):
     mongo_result = _paging_results(mongo_store)
     order = (PageOrder("rank"),)
 
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
             for record in records:
@@ -450,7 +450,7 @@ def test_verifier_identity_rejects_cross_plan_tokens_and_bare_callbacks(mongo_te
 
 def test_verifier_identity_rejects_empty_payloads(mongo_test_database):
     """The empty identity is reserved for verifier-less fingerprints."""
-    from httk.store.mongo import MongoStore
+    from httk.store.backend.mongo import MongoStore
 
     for identity in ("", b""):
         store = MongoStore(mongo_test_database, entry_records={})
@@ -503,9 +503,9 @@ def test_type_tampered_anchor_is_a_clean_cursor_error(mongo_test_database):
 
 def test_page_anchor_python_type_derives_from_the_order_column_kind():
     """The Mongo anchor-type helper maps a key's stored column kind (no server needed)."""
-    from httk.store.db.codecs import codec_named
-    from httk.store.db.schema import resolve_schema
-    from httk.store.mongo.results import _anchor_python_type
+    from httk.store.backend.sql.codecs import codec_named
+    from httk.store.backend.sql.schema import resolve_schema
+    from httk.store.backend.mongo.results import _anchor_python_type
 
     schema = resolve_schema(MongoQueryRecord)
     rank = schema.field("rank")  # int | None -> scalar int column

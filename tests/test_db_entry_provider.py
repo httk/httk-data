@@ -1,4 +1,4 @@
-"""Tests for StoreEntryProvider (httk.store.db.entry_provider): definitions, records, relationships."""
+"""Tests for StoreEntryProvider (httk.store.backend.sql.entry_provider): definitions, records, relationships."""
 
 import contextlib
 import datetime
@@ -19,7 +19,7 @@ from httk.core import (
 from httk.core.storage import Related, RelationshipLink, Shape, StorageInfo, stored_property
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.db import Database, SqlStore, StoreEntryProvider
+from httk.store.backend.sql import Backend, SqlStore, StoreEntryProvider
 from httk.store.validation import validate_record
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
@@ -99,7 +99,7 @@ def store(request):
                 sql_store.save(BOOK_2)
             yield sql_store
         return
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
             # Writers first, in a known order, so their sids are 1, 2, 3.
@@ -399,7 +399,7 @@ class Simulation:
 
 @contextlib.contextmanager
 def sqlite_store(*objects):
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
             for obj in objects:

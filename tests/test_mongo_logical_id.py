@@ -1,4 +1,4 @@
-"""Live ``logical_id`` lineage, replace/history and ``only_latest`` coverage for :mod:`httk.store.mongo`.
+"""Live ``logical_id`` lineage, replace/history and ``only_latest`` coverage for :mod:`httk.store.backend.mongo`.
 
 Every test needs a real replica-set MongoDB and is env-gated through the
 ``mongo_test_database`` fixture (skips when ``HTTK_TEST_MONGODB_URI`` is unset).
@@ -14,10 +14,10 @@ import pytest
 from httk.core.storage import StorageInfo
 from test_db_stored_properties import FIRST, CalculationEntry
 
-from httk.store.db.schema import resolve_schema
-from httk.store.db.store import EntryReplacementError
-from httk.store.mongo import MongoStore
-from httk.store.mongo.mapping import collection_name_for
+from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.sql.store import EntryReplacementError
+from httk.store.backend.mongo import MongoStore
+from httk.store.backend.mongo.mapping import collection_name_for
 
 
 @dataclass(frozen=True)
@@ -256,8 +256,8 @@ def test_variable_logical_id_filters_and_outputs(mongo_test_database) -> None:
 def test_evaluator_resolves_logical_id_without_a_database() -> None:
     # The evaluator's logical_id resolver is pure Python, so this runs without
     # MongoDB and guards the resolver threading directly.
-    from httk.store.mongo.evaluator import evaluate
-    from httk.store.mongo.stored_properties import _MongoQueryContext
+    from httk.store.backend.mongo.evaluator import evaluate
+    from httk.store.backend.mongo.stored_properties import _MongoQueryContext
 
     context = _MongoQueryContext(Widget, store=None)
     predicate = context.compare(context.field("logical_id"), "=", context.constant(5))

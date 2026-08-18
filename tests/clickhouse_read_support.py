@@ -8,7 +8,7 @@ import pytest
 from conftest import clickhouse_test_uri
 from test_clickhouse_bulk import _clickhouse_bulk_database
 
-from httk.store.db import SqlStore
+from httk.store.backend.sql import SqlStore
 
 CLICKHOUSE_PARAM = pytest.param("clickhousedb", marks=pytest.mark.xdist_group("clickhouse_read"))
 

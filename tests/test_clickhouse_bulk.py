@@ -26,10 +26,10 @@ from test_db_bulk_deferred import (
 )
 from test_db_bulk_parallel import TwoFloatMeta
 
-from httk.store.db import Database, SqlStore
-from httk.store.db.bulk import BulkIngest
-from httk.store.db.clickhouse import ClickHouseBulkIntegrityError
-from httk.store.db.layout import StoreUnderConstructionError
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.sql.bulk import BulkIngest
+from httk.store.backend.clickhouse.support import ClickHouseBulkIntegrityError
+from httk.store.backend.sql.layout import StoreUnderConstructionError
 from httk.store.store_common import EntryMetadataConflictError
 
 
@@ -76,7 +76,7 @@ def _clickhouse_bulk_database(uri):
                 )
         finally:
             bootstrap.dispose()
-        database = Database.clickhouse(source, database=name)
+        database = Backend.clickhouse(source, database=name)
         yield database
     finally:
         if database is not None:
@@ -92,7 +92,7 @@ def clickhouse_bulk_database():
         yield database
 
 
-def _dense(store: SqlStore, database: Database) -> None:
+def _dense(store: SqlStore, database: Backend) -> None:
     with database.engine.connect() as connection:
         for name, table in store._metadata.tables.items():
             if "sid" not in table.c:
@@ -106,7 +106,7 @@ def _dense(store: SqlStore, database: Database) -> None:
 def test_clickhouse_deferred_equivalent_to_duckdb(clickhouse_bulk_database, workers):
     """The shared mixed deferred corpus has backend-independent logical output."""
     pytest.importorskip("duckdb_engine")
-    duck_database = Database.duckdb()
+    duck_database = Backend.duckdb()
     try:
         duck = SqlStore(duck_database, entry_records=CALC_FAMILY)
         click = SqlStore(clickhouse_bulk_database, entry_records=CALC_FAMILY)
@@ -124,7 +124,7 @@ def test_clickhouse_deferred_equivalent_to_duckdb(clickhouse_bulk_database, work
         _dense(duck, duck_database)
         _dense(click, clickhouse_bulk_database)
         reopened = SqlStore(
-            Database.clickhouse(
+            Backend.clickhouse(
                 clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database
             ),
             entry_records=CALC_FAMILY,
@@ -160,7 +160,7 @@ def test_clickhouse_nan_conflict_and_mutual_fixpoint(clickhouse_bulk_database):
         assert connection.execute(text("SELECT count() FROM bulk_deferred_mutual_a")).scalar_one() == 2
         assert connection.execute(text("SELECT count() FROM bulk_deferred_mutual_b")).scalar_one() == 1
     reopened = SqlStore(
-        Database.clickhouse(clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database),
+        Backend.clickhouse(clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database),
         entry_records={},
     )
     try:
@@ -177,7 +177,7 @@ def test_clickhouse_marker_residue_rejects_reopen(clickhouse_bulk_database):
     try:
         with pytest.raises(StoreUnderConstructionError):
             SqlStore(
-                Database.clickhouse(
+                Backend.clickhouse(
                     clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database
                 )
             )
@@ -239,7 +239,7 @@ def test_clickhouse_crash_seams_preserve_marker(clickhouse_bulk_database, monkey
         assert connection.execute(
             text("SELECT count() FROM _httk_store_metadata WHERE key = 'ingest_state'")
         ).scalar_one()
-    fresh = Database.clickhouse(
+    fresh = Backend.clickhouse(
         clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database
     )
     try:
@@ -311,7 +311,7 @@ def test_clickhouse_generated_integrity_rejects_raw_corruption(clickhouse_bulk_d
         assert connection.execute(
             text("SELECT count() FROM _httk_store_metadata WHERE key = 'ingest_state'")
         ).scalar_one()
-    fresh = Database.clickhouse(
+    fresh = Backend.clickhouse(
         clickhouse_bulk_database.engine.url, database=clickhouse_bulk_database.engine.url.database
     )
     try:
@@ -382,7 +382,7 @@ class _DisconnectingLoader:
 @pytest.mark.parametrize("lands", [True, False], ids=["accepted", "not-landed"])
 def test_clickhouse_loader_disconnect_is_exactly_once(clickhouse_bulk_database, monkeypatch, target, lands):
     """Count verification neither replays accepted parent/child/root shards nor loses a rejected one."""
-    from httk.store.db import clickhouse
+    from httk.store.backend.clickhouse import support as clickhouse
 
     uri = clickhouse_bulk_database.engine.url
     corpus = [OptionalChildRoundTrip("row", ["child"])]
@@ -422,7 +422,7 @@ def test_deferred_role_promotion_is_max_across_chunks_workers_and_backends(
         # Exercise the public default-argument route without constructing
         # 100,000 filler objects solely to trip its production-sized boundary.
         monkeypatch.setitem(SqlStore.bulk_ingest.__kwdefaults__, "chunk_size", effective_chunk_size)
-    duck_database = Database.duckdb()
+    duck_database = Backend.duckdb()
     leaf = Leaf(9, "metadata")
     root = Root("outer", leaf, [leaf], datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC))
     try:
@@ -490,7 +490,7 @@ def test_clickhouse_map_swap_boundaries_preserve_marker_and_clean_relations(
 def test_duckdb_manifest_roots_and_parquet_spilled_roots_keep_the_same_orphans(monkeypatch):
     """The root-sidecar scale path preserves the legacy manifest-root survivor set."""
     pytest.importorskip("duckdb_engine")
-    from httk.store.db.bulk_parallel import ParallelController
+    from httk.store.backend.sql.bulk_parallel import ParallelController
 
     stream = [
         PrivateNoneParent("same", [NoneRec("kept")]),
@@ -499,7 +499,7 @@ def test_duckdb_manifest_roots_and_parquet_spilled_roots_keep_the_same_orphans(m
     ]
 
     def build(*, spill: bool):
-        database = Database.duckdb()
+        database = Backend.duckdb()
         store = SqlStore(database, entry_records={})
         try:
             store._clock = lambda: 1_700_000_000_000_000_000

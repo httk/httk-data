@@ -19,7 +19,7 @@ import sqlalchemy
 from httk.core.storage import StorageInfo
 from postgres_support import IsolatedPostgresDatabase, postgres_admin_uri
 
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -42,11 +42,11 @@ class Reading:
 def pg_stores():
     """Yield a factory of fresh isolated PostgreSQL stores, dropped on teardown."""
     postgres_admin_uri()  # skip early when no admin URI is configured
-    created: list[tuple[Database, IsolatedPostgresDatabase]] = []
+    created: list[tuple[Backend, IsolatedPostgresDatabase]] = []
 
-    def make() -> tuple[SqlStore, Database]:
+    def make() -> tuple[SqlStore, Backend]:
         isolated = IsolatedPostgresDatabase()
-        database = Database.postgres(isolated.uri)
+        database = Backend.postgresql(isolated.uri)
         created.append((database, isolated))
         return SqlStore(database, entry_records={}), database
 
@@ -58,7 +58,7 @@ def pg_stores():
             isolated.drop()
 
 
-def _stored_floats(database: Database) -> list[tuple[float | None, float | None]]:
+def _stored_floats(database: Backend) -> list[tuple[float | None, float | None]]:
     """Read the query-visible float columns straight from the table (no store cache)."""
     with database.engine.connect() as connection:
         return [

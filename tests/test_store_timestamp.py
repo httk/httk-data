@@ -7,10 +7,10 @@ import pytest
 import sqlalchemy
 from httk.core.storage import StorageInfo
 
-from httk.store.db import Database, SqlStore, StorageLayoutUpgradeRequiredError, StoreClockRegressionError
-from httk.store.db.mapping import STORE_TIMESTAMP_COLUMN, sqlalchemy_metadata
-from httk.store.db.optimade import optimade_filter_searcher
-from httk.store.db.schema import resolve_schema
+from httk.store.backend.sql import Backend, SqlStore, StorageLayoutUpgradeRequiredError, StoreClockRegressionError
+from httk.store.backend.sql.mapping import STORE_TIMESTAMP_COLUMN, sqlalchemy_metadata
+from httk.store.backend.sql.optimade import optimade_filter_searcher
+from httk.store.backend.sql.schema import resolve_schema
 from httk.store.store_timestamp import (
     encode_store_timestamp_state,
     ns_operand_to_store_units,
@@ -45,7 +45,7 @@ def test_parent_column_index_and_off_mapping():
 
 
 def test_one_save_uses_one_pinned_timestamp_and_dedup_does_not_touch_it():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_234_567
         first = store.save(TimestampRecord(1))
@@ -59,7 +59,7 @@ def test_one_save_uses_one_pinned_timestamp_and_dedup_does_not_touch_it():
 
 
 def test_reopen_requires_exact_timestamp_configuration():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_records={}, store_timestamp_resolution=1000)
         with pytest.raises(StorageLayoutUpgradeRequiredError, match="store_timestamps"):
             SqlStore(database, store_timestamps=False)
@@ -79,7 +79,7 @@ def test_reopen_requires_exact_timestamp_configuration():
 
 
 def test_explicit_transaction_pins_timestamp_and_rollback_keeps_mark() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_000_000
         with store.transaction():
@@ -101,7 +101,7 @@ def test_explicit_transaction_pins_timestamp_and_rollback_keeps_mark() -> None:
 
 
 def test_clock_regression_guard_and_opt_out():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 10_000
         store.save(TimestampRecord(1))
@@ -115,7 +115,7 @@ def test_clock_regression_guard_and_opt_out():
 
 
 def test_fsck_future_timestamp_and_clamp():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_000_000_000
         sid = store.save(TimestampRecord(1))
@@ -141,7 +141,7 @@ def test_fsck_future_timestamp_and_clamp():
 
 
 def test_fsck_future_timestamp_nondivisor_boundary():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamp_resolution=3)
         store._clock = lambda: 1
         sid = store.save(TimestampRecord(1))
@@ -161,7 +161,7 @@ def test_fsck_future_timestamp_nondivisor_boundary():
 
 
 def test_degraded_transaction_exception_recomputes_mark():
-    with Database.sqlite(degraded=True) as database:
+    with Backend.sqlite(degraded=True) as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 3_000_000
         with pytest.raises(RuntimeError), store.transaction():
@@ -173,7 +173,7 @@ def test_degraded_transaction_exception_recomputes_mark():
 
 
 def test_fsck_clamp_mark_is_not_published_before_commit(monkeypatch):
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_000_000_000
         sid = store.save(TimestampRecord(1))
@@ -188,7 +188,7 @@ def test_fsck_clamp_mark_is_not_published_before_commit(monkeypatch):
         def fail_after_clamp(*_args, **_kwargs):
             raise RuntimeError("fsck commit failure")
 
-        monkeypatch.setattr("httk.store.db.fsck._repair_dispatches", fail_after_clamp)
+        monkeypatch.setattr("httk.store.backend.sql.fsck._repair_dispatches", fail_after_clamp)
         with pytest.raises(RuntimeError, match="fsck commit failure"):
             store.fsck(
                 repair=True,
@@ -202,7 +202,7 @@ def test_fsck_clamp_mark_is_not_published_before_commit(monkeypatch):
 
 
 def test_timestamp_mark_is_not_published_when_commit_fails(monkeypatch):
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.ensure_tables(TimestampNoneRecord)
         real_commit = database.engine.dialect.do_commit
@@ -219,7 +219,7 @@ def test_timestamp_mark_is_not_published_when_commit_fails(monkeypatch):
 
 
 def test_query_operands_floor_sort_and_optimade_integer_path():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamp_resolution=1000)
         store._clock = lambda: 1_000_000
         store.save(TimestampNoneRecord(1))
@@ -267,7 +267,7 @@ def test_query_operands_floor_sort_and_optimade_integer_path():
 
 
 def test_bulk_uses_one_batch_timestamp_and_keeps_existing_rows():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_000_000
         store.save(TimestampValueRecord(1))
@@ -284,13 +284,13 @@ def test_bulk_uses_one_batch_timestamp_and_keeps_existing_rows():
 
 
 def test_disabled_query_and_resolution_one():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamps=False)
         query = store.searcher()
         variable = query.variable(TimestampRecord)
         with pytest.raises(AttributeError, match="store_timestamps"):
             _ = variable.store_timestamp
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamp_resolution=1)
         store._clock = lambda: 1_234_567_890
         store.save(TimestampRecord(1))

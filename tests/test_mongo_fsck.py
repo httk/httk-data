@@ -1,4 +1,4 @@
-"""Live integrity-repair and mark/sweep coverage for :mod:`httk.store.mongo`."""
+"""Live integrity-repair and mark/sweep coverage for :mod:`httk.store.backend.mongo`."""
 
 import os
 import random
@@ -9,9 +9,9 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, content_id
 
-from httk.store.db.schema import resolve_schema
-from httk.store.mongo import MongoDatabase, MongoStore
-from httk.store.mongo.mapping import (
+from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.mongo import MongoDatabase, MongoStore
+from httk.store.backend.mongo.mapping import (
     COUNTERS_COLLECTION,
     METADATA_COLLECTION,
     collection_name_for,

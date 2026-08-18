@@ -18,7 +18,7 @@ from httk.core import FracScalar, FracVector
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import IdentitySkip, Indexed, Shape, StorageInfo, content_id
 
-from httk.store.db.mapping import CONTENT_ID_COLUMN
+from httk.store.backend.sql.mapping import CONTENT_ID_COLUMN
 from httk.store.store_common import EntryDispatchIntegrityError, EntryMetadataConflictError
 
 # --------------------------------------------------------------------- record classes
@@ -440,7 +440,7 @@ def test_bulk_failure_leaves_no_tables_or_rows(store_factory):
         bulk.save(ValidatedRecord(-1))  # validator raises here
 
     with _database_of(store).engine.connect() as connection:
-        from httk.store.db.layout import actual_table_names
+        from httk.store.backend.sql.layout import actual_table_names
 
         present = {name for name in actual_table_names(connection) if not name.startswith("_httk_")}
     assert present == set()
@@ -468,7 +468,7 @@ def test_bulk_then_ordinary_save_continues_sids(store_factory):
 
 def _physical_counts(database) -> dict[str, int]:
     """Row counts of the physically present, non-marker tables of a database."""
-    from httk.store.db.layout import actual_table_names
+    from httk.store.backend.sql.layout import actual_table_names
 
     counts: dict[str, int] = {}
     with database.engine.connect() as connection:

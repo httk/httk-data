@@ -8,7 +8,7 @@ management**. It is the *capability* layer built on the stdlib-only *contracts
 and models* in *httk-core*: it serves httk-core's record models through the
 neutral `httk.core.EntryProvider` contract, validates values against their
 OPTIMADE property definitions with `jsonschema`, and provides the database
-storage layer `httk.store.db` — relational storage and querying of plain frozen
+storage layer `httk.store.backend.sql` — relational storage and querying of plain frozen
 dataclasses over SQLite, DuckDB, or PostgreSQL (via the `httk-store[db]` /
 `httk-store[duckdb]` / `httk-store[postgresql]` extras).
 
@@ -16,7 +16,7 @@ dataclasses over SQLite, DuckDB, or PostgreSQL (via the `httk-store[db]` /
 :class: tip
 
 - **Data management guide**: {doc}`data`
-- **Database storage guide**: {doc}`db`
+- **Backend storage guide**: {doc}`db`
 - **MongoDB storage guide**: {doc}`mongo`
 - **Federated stores guide**: {doc}`federation`
 - **Migrating from httk v1**: {doc}`migrating_from_v1`

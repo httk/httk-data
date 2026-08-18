@@ -1,4 +1,4 @@
-"""Tests for the query DSL (httk.store.db.searcher): operators, joins, set semantics, parity."""
+"""Tests for the query DSL (httk.store.backend.sql.searcher): operators, joins, set semantics, parity."""
 
 import gc
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from httk.core import FracVector
 from httk.core.storage import Shape, StorageInfo
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.db import Database, SchemaError, SqlStore
+from httk.store.backend.sql import Backend, SchemaError, SqlStore
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 
@@ -117,9 +117,9 @@ def store(request):
         return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        database_manager = Database.duckdb()
+        database_manager = Backend.duckdb()
     else:
-        database_manager = Database.sqlite()
+        database_manager = Backend.sqlite()
     with database_manager as database:
         sql_store = SqlStore(database, entry_records={})
         with sql_store.transaction():
@@ -467,7 +467,7 @@ def test_unknown_field_raises_attribute_error(store):
 
 
 def test_fixed_array_field_not_queryable():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sql_store = SqlStore(database, entry_records={})
         searcher = sql_store.searcher()
         v = searcher.variable(Cell)
@@ -476,7 +476,7 @@ def test_fixed_array_field_not_queryable():
 
 
 def test_iteration_without_variables_raises():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         searcher = SqlStore(database, entry_records={}).searcher()
         with pytest.raises(ValueError, match="variable"):
             searcher.count()
@@ -673,9 +673,9 @@ def test_object_outputs_survive_reconstruction_on_every_row(store):
     if dialect == "postgresql":
         manager = postgres_database()
     elif dialect == "duckdb":
-        manager = Database.duckdb()
+        manager = Backend.duckdb()
     else:
-        manager = Database.sqlite()
+        manager = Backend.sqlite()
     with manager as isolated_database:
         isolated_store = SqlStore(isolated_database, entry_records={})
         throwaways = [Rec(f"Throwaway{index}", 1, Fraction(index), ["Zz"]) for index in range(4)]

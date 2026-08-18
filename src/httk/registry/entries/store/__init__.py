@@ -10,4 +10,4 @@ register_entry_provider(name="store-records", factory="httk.store.entry_provider
 
 # The database-backed provider (requires the httk-store[db] extra); the factory
 # reference is lazy, so registration itself never imports sqlalchemy.
-register_entry_provider(name="store-db-store", factory="httk.store.db.entry_provider:StoreEntryProvider")
+register_entry_provider(name="store-db-store", factory="httk.store.backend.sql.entry_provider:StoreEntryProvider")

@@ -72,7 +72,7 @@ from typing import Any, ClassVar
 
 from httk.core.storage import StorageInfo
 
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 from httk.store.query import Searcher, SearchVariable
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
@@ -125,7 +125,7 @@ TAGS = [
 
 def populate() -> SqlStore:
     """An in-memory store holding the structures and their tags."""
-    store = SqlStore(Database.sqlite(), entry_records={})
+    store = SqlStore(Backend.sqlite(), entry_records={})
     with store.transaction():  # one transaction for the whole load
         for structure in STRUCTURES:
             store.save(structure)

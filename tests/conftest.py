@@ -49,19 +49,19 @@ def _duckdb_test_memory_limit() -> str:
 
 os.environ.setdefault("HTTK_DUCKDB_MEMORY_LIMIT", _duckdb_test_memory_limit())
 
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @pytest.fixture(autouse=True)
 def _fail_loudly_for_abandoned_bulk_contexts(monkeypatch):
     """Clean up and fail a test that abandoned a successfully entered bulk context.
 
-    Database disposal must still wait for a legitimate long finalizer.  A test
+    Backend disposal must still wait for a legitimate long finalizer.  A test
     that bypasses ``__exit__`` is different: release its local ownership before
     fixture teardown so the failure is reported instead of turning into a
-    deadlock in ``Database.dispose()``.
+    deadlock in ``Backend.dispose()``.
     """
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     entered: list[BulkIngest] = []
     original_enter = BulkIngest.__enter__
@@ -165,11 +165,11 @@ class _StoreFactory:
 
     def __call__(self, *, entry_records=None):
         if self._backend == "sqlite":
-            database = Database.sqlite()
+            database = Backend.sqlite()
             declaration = entry_records if entry_records is not None else {}
             store = SqlStore(database, entry_records=declaration)
         elif self._backend == "duckdb":
-            database = Database.duckdb()
+            database = Backend.duckdb()
             declaration = entry_records if entry_records is not None else {}
             store = SqlStore(database, entry_records=declaration)
         elif self._backend == "postgresql":
@@ -177,11 +177,11 @@ class _StoreFactory:
 
             isolated = IsolatedPostgresDatabase()
             self._postgres_isolated.append(isolated)
-            database = Database.postgres(isolated.uri)
+            database = Backend.postgresql(isolated.uri)
             declaration = entry_records if entry_records is not None else {}
             store = SqlStore(database, entry_records=declaration)
         else:
-            from httk.store.mongo import MongoDatabase, MongoStore
+            from httk.store.backend.mongo import MongoDatabase, MongoStore
 
             name = f"httk_behavior_{uuid.uuid4().hex}"
             assert self._mongo_client is not None
@@ -201,14 +201,14 @@ class _StoreFactory:
         if original is not store:
             raise ValueError("store was not created by this store_factory")
         if self._backend == "mongo":
-            from httk.store.mongo import MongoDatabase, MongoStore
+            from httk.store.backend.mongo import MongoDatabase, MongoStore
 
             assert self._mongo_client is not None
             mongo_database = MongoDatabase(self._mongo_client, database.database.name, transactions="never")
             self._databases.append(mongo_database)
             return MongoStore(mongo_database, entry_records=declaration)
         if self._backend == "postgresql":
-            reopened = Database.postgres(database.engine.url)
+            reopened = Backend.postgresql(database.engine.url)
             self._databases.append(reopened)
             return SqlStore(reopened, entry_records=declaration)
         return SqlStore(database, entry_records=declaration)
@@ -237,7 +237,7 @@ def store_factory(store_backend):
 @pytest.fixture
 def mongo_test_database(mongo_test_client):
     """Yield a fresh live MongoDB database when the test URI is configured."""
-    from httk.store.mongo import MongoDatabase
+    from httk.store.backend.mongo import MongoDatabase
 
     name = f"httk_test_{uuid.uuid4().hex}"
     database = MongoDatabase(mongo_test_client, name)

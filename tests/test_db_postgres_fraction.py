@@ -3,7 +3,7 @@
 Skipped unless ``HTTK_TEST_POSTGRES_URI`` names a reachable admin database.
 PostgreSQL cannot register the per-connection Python UDF that SQLite/DuckDB use,
 so ``httk_fraction_scaled_equal`` is rewritten to inline ``numeric`` SQL by the
-``@compiles`` hook in :mod:`httk.store.db.postgres`.  These tests confirm the
+``@compiles`` hook in :mod:`httk.store.backend.postgresql.compiler`.  These tests confirm the
 inline SQL matches the Python reference and that the real stored-property filter
 path works against a PostgreSQL store.  Each test runs against a freshly created,
 uniquely named database and drops it on teardown.
@@ -16,8 +16,8 @@ import pytest
 import sqlalchemy
 from sqlalchemy.engine import make_url
 
-from httk.store.db import Database, SqlStore, stored_property_sql_plan
-from httk.store.db.engine import _fraction_scaled_equal
+from httk.store.backend.sql import Backend, SqlStore, stored_property_sql_plan
+from httk.store.backend.sql.engine import _fraction_scaled_equal
 
 from test_db_stored_properties import (
     FIRST,
@@ -68,11 +68,11 @@ _ARGUMENT_TABLE = (
 
 @pytest.mark.parametrize("arguments", _ARGUMENT_TABLE)
 def test_inline_fraction_equality_matches_python_reference(postgres_uri, arguments):
-    database = Database.postgres(postgres_uri)
+    database = Backend.postgresql(postgres_uri)
     try:
         with database.engine.connect() as connection:
             statement = sqlalchemy.select(sqlalchemy.func.httk_fraction_scaled_equal(*arguments))
-            # Opening Database.postgres must self-register the @compiles hook, so
+            # Opening Backend.postgresql must self-register the @compiles hook, so
             # the call compiles to inline SQL rather than a bare function call.
             compiled = str(statement.compile(connection, compile_kwargs={"literal_binds": True}))
             assert "split_part" in compiled
@@ -86,7 +86,7 @@ def test_inline_fraction_equality_matches_python_reference(postgres_uri, argumen
 def test_stored_property_exact_fraction_filter_selects_matching_rows(postgres_uri):
     # Mirrors test_db_stored_properties' 'immutable_id = "one-third"' case, whose
     # query emits httk_fraction_scaled_equal against the energy_exact column.
-    database = Database.postgres(postgres_uri)
+    database = Backend.postgresql(postgres_uri)
     try:
         store = SqlStore(
             database,

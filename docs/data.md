@@ -10,7 +10,7 @@ models:
 - **entry providers** that serve the record models through the provider
   contract,
 - **property-definition validation** on `jsonschema`, and
-- the **database storage layer** `httk.store.db` (see {doc}`db`), which stores
+- the **database storage layer** `httk.store.backend.sql` (see {doc}`db`), which stores
   plain frozen dataclasses relationally and serves them through the same
   provider contract.
 
@@ -142,10 +142,10 @@ except PropertyValidationError as exc:
     assert exc.name == "id"
 ```
 
-## Database-backed serving
+## Backend-backed serving
 
 The entry providers above are in-memory. To store records in a database and
-serve them the same way, see {doc}`db`: `httk.store.db.SqlStore` stores plain
+serve them the same way, see {doc}`db`: `httk.store.backend.sql.SqlStore` stores plain
 frozen dataclasses in SQLite, DuckDB, or PostgreSQL, and `StoreEntryProvider`
 (registered as `store-db-store`) serves them through the identical provider
 contract.

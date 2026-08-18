@@ -1,4 +1,4 @@
-"""Tests for the value-codec registry and exact text formats (httk.store.db.codecs)."""
+"""Tests for the value-codec registry and exact text formats (httk.store.backend.sql.codecs)."""
 
 import datetime
 import math
@@ -10,14 +10,14 @@ import pytest
 from httk.core import FracScalar, FracVector, SurdScalar, SurdVector
 from httk.core.storage import content_id, register_canonical_encoder
 
-from httk.store.db import (
-    Database,
+from httk.store.backend.sql import (
+    Backend,
     SchemaError,
     SqlStore,
     ValueCodec,
     register_value_codec,
 )
-from httk.store.db.codecs import (
+from httk.store.backend.sql.codecs import (
     codec_for,
     codec_named,
     decode_fraction_exact,
@@ -267,5 +267,5 @@ def test_custom_codec_does_not_apply_to_subclasses():
 
     assert codec_for(CustomValue) is not None
     assert codec_for(CustomSubclass) is None
-    with Database.sqlite() as database, pytest.raises(SchemaError, match="CustomSubclass.*not storable"):
+    with Backend.sqlite() as database, pytest.raises(SchemaError, match="CustomSubclass.*not storable"):
         SqlStore(database, entry_records={}).save(CustomSubclassRecord(CustomSubclass("value")))

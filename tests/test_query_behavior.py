@@ -89,7 +89,7 @@ def stored_property_plan(store, family):
         return plan_factory(family)
     # The SQL store predates the backend-neutral hook; keep this compatibility
     # adapter local to the test until the next backend supplies that hook.
-    from httk.store.db import stored_property_sql_plan
+    from httk.store.backend.sql import stored_property_sql_plan
 
     return stored_property_sql_plan(store, family)
 

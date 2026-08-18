@@ -12,7 +12,7 @@ import pytest
 import sqlalchemy
 from sqlalchemy.engine import make_url
 
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 from test_db_store import Sample, make_sample
 
@@ -42,7 +42,7 @@ def postgres_uri():
 
 def test_postgres_save_fetch_dedup_and_reopen(postgres_uri):
     sample = make_sample()
-    database = Database.postgres(postgres_uri)
+    database = Backend.postgresql(postgres_uri)
     try:
         store = SqlStore(database, entry_records={})
 

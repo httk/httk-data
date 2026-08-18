@@ -11,7 +11,7 @@ import pytest
 import sqlalchemy
 from httk.core.storage import IdentitySkip, StorageInfo, stored_property
 
-from httk.store.db import Database, EntryMetadataConflictError, SqlStore
+from httk.store.backend.sql import Backend, EntryMetadataConflictError, SqlStore
 
 _calls: dict[tuple[str, int], int] = {}
 
@@ -271,21 +271,21 @@ def _root(name: str = "one") -> RootView:
 def projection_database(request):
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        manager = Database.duckdb()
+        manager = Backend.duckdb()
     else:
-        manager = Database.sqlite()
+        manager = Backend.sqlite()
     with manager as database:
         yield database
 
 
-def _count(database: Database, table_name: str) -> int:
+def _count(database: Backend, table_name: str) -> int:
     with database.engine.connect() as connection:
         return connection.execute(sqlalchemy.text(f"SELECT COUNT(*) FROM {table_name}")).scalar_one()
 
 
 def test_same_content_identity_has_store_local_sids():
     source = _root()
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         first = SqlStore(first_database, entry_records={})
         second = SqlStore(second_database, entry_records={})
         first_sid = first.save(source)
@@ -301,11 +301,11 @@ def test_same_content_identity_has_store_local_sids():
 def test_sid_of_queries_reopened_database(tmp_path):
     path = tmp_path / "projection.sqlite"
     source = _root()
-    database = Database.sqlite(path)
+    database = Backend.sqlite(path)
     sid = SqlStore(database, entry_records={}).save(source)
     database.dispose()
 
-    with Database.sqlite(path) as reopened:
+    with Backend.sqlite(path) as reopened:
         assert SqlStore(reopened).sid_of(_root()) == sid
 
 
@@ -314,7 +314,7 @@ def test_recursive_metadata_free_type_has_no_dedup_metadata_query():
     middle = RecursiveNoMetadataRecord(2, leaf)
     root = RecursiveNoMetadataRecord(1, middle)
 
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         root_sid = store.save(root)
         statements: list[str] = []
@@ -333,7 +333,7 @@ def test_recursive_metadata_free_type_has_no_dedup_metadata_query():
 
 
 def test_dedup_hit_with_no_identity_skip_has_no_metadata_query():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(NoMetadataProbeRecord(1))
         statements: list[str] = []
@@ -353,7 +353,7 @@ def test_dedup_hit_with_no_identity_skip_has_no_metadata_query():
 
 def test_dedup_hit_checks_metadata_without_reconstructing_or_selecting_the_graph():
     MetadataProbeRecord.constructed = 0
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(MetadataProbeRecord(1, "metadata"))
         second = MetadataProbeRecord(1, "metadata")
@@ -376,7 +376,7 @@ def test_dedup_hit_checks_metadata_without_reconstructing_or_selecting_the_graph
 
 def test_insert_race_winner_still_checks_metadata(monkeypatch):
     source = _root()
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(source)
         original_execute = sqlalchemy.Connection.execute
@@ -456,7 +456,7 @@ def test_content_race_loss_discards_nested_no_dedup_insert(projection_database, 
 
 def test_reference_comparison_uses_declared_record_target():
     source = _root()
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
@@ -473,7 +473,7 @@ def test_reference_comparison_uses_declared_record_target():
 
 def test_alternate_record_sids_are_cached_per_record_type():
     source = _root()
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         default_sid = store.save(source)
         store.save(_root("other"), as_record=SummaryRecord)
@@ -486,7 +486,7 @@ def test_alternate_record_sids_are_cached_per_record_type():
 
 
 def test_projected_stored_property_is_read_from_source():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         sid = store.save(DerivedView(4), as_record=DerivedRecord)
         assert store.fetch(DerivedRecord, sid).doubled == 8
@@ -498,7 +498,7 @@ def test_projected_source_must_expose_record_stored_properties():
         def doubled(self) -> int:
             raise AttributeError
 
-    with Database.sqlite() as database, pytest.raises(TypeError, match="expose derived stored property 'doubled'"):
+    with Backend.sqlite() as database, pytest.raises(TypeError, match="expose derived stored property 'doubled'"):
         SqlStore(database, entry_records={}).save(IncompleteDerivedView(4), as_record=DerivedRecord)
 
 
@@ -508,17 +508,17 @@ def test_sql_reopened_store_checks_datetime_metadata_against_utc_instants(tmp_pa
     first = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=0)
     second = datetime.datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
     source = FoldMetadata("fold", (first,))
-    database = Database.sqlite(path)
+    database = Backend.sqlite(path)
     store = SqlStore(database, entry_records={})
     store.save(source)
     database.dispose()
 
-    with Database.sqlite(path) as reopened, pytest.raises(EntryMetadataConflictError, match="instants"):
+    with Backend.sqlite(path) as reopened, pytest.raises(EntryMetadataConflictError, match="instants"):
         SqlStore(reopened).save(FoldMetadata("fold", (second,)))
 
 
 def test_lazy_row_alternate_sid_uses_requested_record_target():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         source_sid = store.save(LazySourceRecord(7))
         store.save(LazySourceRecord(8), as_record=LazyAlternateRecord)
@@ -541,7 +541,7 @@ def test_concrete_record_save_returns_same_live_record():
         (LeafRecord(6),),
         datetime.datetime(2026, 8, 1, tzinfo=datetime.UTC),
     )
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         sid = store.save(record)
         assert store.fetch(RootRecord, sid) is record

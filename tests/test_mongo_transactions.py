@@ -8,9 +8,9 @@ import pytest
 from httk.core.register import register_entry_family, register_entry_record
 from pymongo import MongoClient, monitoring
 
-from httk.store.db.schema import resolve_schema
-from httk.store.mongo import MongoDatabase, MongoStore, TransactionsUnavailableError
-from httk.store.mongo.mapping import collection_name_for, entry_dispatch_table_name
+from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.mongo import MongoDatabase, MongoStore, TransactionsUnavailableError
+from httk.store.backend.mongo.mapping import collection_name_for, entry_dispatch_table_name
 
 
 @dataclass(frozen=True)

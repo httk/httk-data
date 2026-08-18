@@ -6,10 +6,10 @@ from dataclasses import dataclass
 import pytest
 from test_db_stored_federation import FederatedCalculation, FederationFirst
 
-from httk.store.db import StoredEntryFederation, StoredEntrySource
-from httk.store.db.schema import resolve_schema
-from httk.store.mongo import MongoStore, StoreClockRegressionError
-from httk.store.mongo.mapping import collection_name_for
+from httk.store.backend.sql import StoredEntryFederation, StoredEntrySource
+from httk.store.backend.sql.schema import resolve_schema
+from httk.store.backend.mongo import MongoStore, StoreClockRegressionError
+from httk.store.backend.mongo.mapping import collection_name_for
 from httk.store.storage_layout import StorageLayoutUpgradeRequiredError
 
 

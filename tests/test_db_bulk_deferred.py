@@ -33,8 +33,8 @@ from test_db_bulk import (
     make_sample,
 )
 
-from httk.store.db.layout import StoreUnderConstructionError, actual_schema_objects
-from httk.store.db.mapping import backing_dispatch_column_name, entry_dispatch_table_name
+from httk.store.backend.sql.layout import StoreUnderConstructionError, actual_schema_objects
+from httk.store.backend.sql.mapping import backing_dispatch_column_name, entry_dispatch_table_name
 from httk.store.store_common import EntryMetadataConflictError
 
 # These modules fork their own worker processes; the loadgroup scheduler
@@ -356,7 +356,7 @@ def test_sqlite_deferred_columns_named_check_ingest_without_a_check_constraint(s
 
 def test_sqlite_check_clause_parser_detects_a_real_mismatch():
     """A genuine CHECK expression still compares unequal after extraction."""
-    from httk.store.db.bulk import BulkIngest
+    from httk.store.backend.sql.bulk import BulkIngest
 
     actual = BulkIngest._sqlite_check_clauses('CREATE TABLE x (checksum TEXT, checked INTEGER, CHECK (checked > 0))')
     assert actual == [BulkIngest._physical_check("checked > 0")]
@@ -535,9 +535,9 @@ def test_deferred_track_sids_false_keeps_logical_result_without_resolution(store
 
 def test_deferred_sqlite_more_than_ten_workers() -> None:
     """Explicit deferred finalization is independent of SQLite's ATTACH ceiling."""
-    from httk.store.db import Database, SqlStore
+    from httk.store.backend.sql import Backend, SqlStore
 
-    database = Database.sqlite()
+    database = Backend.sqlite()
     try:
         store = SqlStore(database, entry_records={})
         with store.bulk_ingest(workers=11, finalize="deferred") as bulk:

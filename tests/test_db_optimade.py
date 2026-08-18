@@ -1,11 +1,11 @@
-"""SQLite end-to-end tests for OPTIMADE-filter querying over stored classes (httk.store.db.optimade)."""
+"""SQLite end-to-end tests for OPTIMADE-filter querying over stored classes (httk.store.backend.sql.optimade)."""
 
 from dataclasses import dataclass
 from fractions import Fraction
 
 import pytest
 
-from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.backend.sql import Backend, SqlStore, optimade_filter_searcher
 from httk.store.query.optimade_filters import FilterTranslationError
 
 
@@ -45,7 +45,7 @@ MAT_3 = Material("gamma oxide", Fraction(7, 2), ["O"], None)
 
 @pytest.fixture()
 def store():
-    store = SqlStore(Database.sqlite(":memory:"), entry_records={})
+    store = SqlStore(Backend.sqlite(":memory:"), entry_records={})
     for material in (MAT_1, MAT_2, MAT_3):
         store.save(material)
     return store

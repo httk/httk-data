@@ -11,9 +11,9 @@ from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import IdentitySkip, StorageInfo
 from sqlalchemy import event
 
-from httk.store.db import Database, EntryMetadataConflictError, SqlStore, StorageLayoutUpgradeRequiredError
-from httk.store.db.mapping import entry_dispatch_table_name
-from httk.store.db.store import _DegradedWriteCrash
+from httk.store.backend.sql import Backend, EntryMetadataConflictError, SqlStore, StorageLayoutUpgradeRequiredError
+from httk.store.backend.sql.mapping import entry_dispatch_table_name
+from httk.store.backend.sql.store import _DegradedWriteCrash
 
 
 @dataclass(frozen=True)
@@ -147,7 +147,7 @@ def _tiered_crash_points(points: tuple[str, ...]) -> tuple[object, ...]:
     )
 
 
-def _role(database: Database, table: str, sid: int) -> int:
+def _role(database: Backend, table: str, sid: int) -> int:
     with database.engine.connect() as connection:
         return int(
             connection.execute(
@@ -157,7 +157,7 @@ def _role(database: Database, table: str, sid: int) -> int:
 
 
 def test_top_level_dedup_promotes_dependency_for_content_and_by_value() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         leaf = RoleLeaf("content")
         store.save(RoleRoot(leaf))
@@ -177,11 +177,11 @@ def test_top_level_dedup_promotes_dependency_for_content_and_by_value() -> None:
 
 def test_degraded_lease_counter_and_fsck(tmp_path: Path) -> None:
     path = tmp_path / "degraded.sqlite"
-    first_database = Database.sqlite(path, degraded=True)
+    first_database = Backend.sqlite(path, degraded=True)
     first = SqlStore(first_database, entry_records={})
     sid = first.save(RoleRoot(RoleLeaf("one")))
     assert sid == 1
-    second_database = Database.sqlite(path, degraded=True)
+    second_database = Backend.sqlite(path, degraded=True)
     second = SqlStore(second_database)
     with pytest.raises(RuntimeError, match="lease is held"):
         second.save(RoleLeaf("blocked"))
@@ -195,30 +195,30 @@ def test_degraded_lease_counter_and_fsck(tmp_path: Path) -> None:
 
 def test_degraded_profile_requires_degraded_database(tmp_path: Path) -> None:
     path = tmp_path / "profile.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     SqlStore(database, entry_records={})
     database.dispose()
     with pytest.raises(StorageLayoutUpgradeRequiredError):
-        SqlStore(Database.sqlite(path))
+        SqlStore(Backend.sqlite(path))
 
 
 def test_write_profile_validates_live_sqlite_connection_mode() -> None:
     autocommit_engine = sqlalchemy.create_engine("sqlite://", isolation_level="AUTOCOMMIT")
     try:
         with pytest.raises(StorageLayoutUpgradeRequiredError):
-            SqlStore(Database(autocommit_engine), entry_records={})
+            SqlStore(Backend(autocommit_engine), entry_records={})
     finally:
         autocommit_engine.dispose()
     transactional_engine = sqlalchemy.create_engine("sqlite://")
     try:
         with pytest.raises(StorageLayoutUpgradeRequiredError):
-            SqlStore(Database(transactional_engine, degraded=True), entry_records={})
+            SqlStore(Backend(transactional_engine, degraded=True), entry_records={})
     finally:
         transactional_engine.dispose()
 
 
 def test_sqlite_rejects_a_bulk_fenced_stamp() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         SqlStore(database, entry_records={})
         with database.engine.begin() as connection:
             connection.execute(
@@ -230,7 +230,7 @@ def test_sqlite_rejects_a_bulk_fenced_stamp() -> None:
 
 def test_duckdb_rejects_a_bulk_fenced_stamp() -> None:
     pytest.importorskip("duckdb_engine")
-    with Database.duckdb() as database:
+    with Backend.duckdb() as database:
         SqlStore(database, entry_records={})
         with database.engine.begin() as connection:
             connection.execute(
@@ -242,15 +242,15 @@ def test_duckdb_rejects_a_bulk_fenced_stamp() -> None:
 
 def test_disposed_database_refuses_late_lifecycle_registration_and_mutation(tmp_path: Path) -> None:
     path = tmp_path / "disposed.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     store = SqlStore(database, entry_records={})
     store.save(RoleLeaf("one"))
     database.dispose()
-    with pytest.raises(RuntimeError, match="disposed Database"):
+    with pytest.raises(RuntimeError, match="disposed Backend"):
         database.add_dispose_callback(lambda: None)
     with pytest.raises(RuntimeError, match="disposed"):
         store.save(RoleLeaf("two"))
-    other_database = Database.sqlite(path, degraded=True)
+    other_database = Backend.sqlite(path, degraded=True)
     other = SqlStore(other_database)
     assert other.save(RoleLeaf("three")) == 2
     other_database.dispose()
@@ -260,7 +260,7 @@ def test_pre_registration_dispose_cannot_strand_a_degraded_lease(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "pre-registration.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     original = database.add_dispose_callback
 
     def dispose_after_registration(callback, *, generation=None):
@@ -271,7 +271,7 @@ def test_pre_registration_dispose_cannot_strand_a_degraded_lease(
     monkeypatch.setattr(database, "add_dispose_callback", dispose_after_registration)
     with pytest.raises(RuntimeError, match="disposed"):
         SqlStore(database, entry_records={})
-    with Database.sqlite(path, degraded=True) as recovered_database:
+    with Backend.sqlite(path, degraded=True) as recovered_database:
         recovered = SqlStore(recovered_database, entry_records={})
         assert recovered.save(RoleLeaf("recovered")) == 1
         with recovered_database.engine.connect() as connection:
@@ -285,7 +285,7 @@ def test_pre_registration_dispose_cannot_strand_a_degraded_lease(
 
 def test_dispose_waits_for_the_degraded_mutation_lock(tmp_path: Path) -> None:
     path = tmp_path / "dispose-race.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     store = SqlStore(database, entry_records={})
     entered = threading.Event()
     allow_write = threading.Event()
@@ -316,7 +316,7 @@ def test_dispose_waits_for_the_degraded_mutation_lock(tmp_path: Path) -> None:
     assert not writer.is_alive() and not disposer.is_alive()
 
 
-def _dirty_keys(database: Database) -> set[str]:
+def _dirty_keys(database: Backend) -> set[str]:
     with database.engine.connect() as connection:
         return {
             str(key)
@@ -326,7 +326,7 @@ def _dirty_keys(database: Database) -> set[str]:
         }
 
 
-def _counter_values(database: Database) -> dict[str, int]:
+def _counter_values(database: Backend) -> dict[str, int]:
     with database.engine.connect() as connection:
         if (
             connection.execute(
@@ -343,7 +343,7 @@ def _counter_values(database: Database) -> dict[str, int]:
         }
 
 
-def _assert_one_way_invariant(database: Database) -> None:
+def _assert_one_way_invariant(database: Backend) -> None:
     """Every visible root has its leaf and both child-element sequences."""
     with database.engine.connect() as connection:
         roots = connection.execute(sqlalchemy.text("SELECT sid, leaf_sid FROM crash_root")).all()
@@ -367,7 +367,7 @@ def _assert_one_way_invariant(database: Database) -> None:
             )
 
 
-def _assert_no_crash_residue(database: Database) -> None:
+def _assert_no_crash_residue(database: Backend) -> None:
     """Physical post-fsck assertion, before any recovery write can hide residue."""
     with database.engine.connect() as connection:
         assert (
@@ -405,7 +405,7 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
     path = tmp_path / f"crash-{point.replace(':', '-')}.sqlite"
     crashed = CrashRoot(CrashLeaf("crashed", ["Li", "O"]), ["one", "two"])
     trigger = CrashRoot(CrashLeaf("trigger", ["Na", "Cl"]), ["three", "four"])
-    original_database = Database.sqlite(path, degraded=True)
+    original_database = Backend.sqlite(path, degraded=True)
     original = SqlStore(original_database, entry_records={})
     original._degraded_fault_hook = lambda observed: observed == point
     with pytest.raises(_DegradedWriteCrash, match=point):
@@ -417,7 +417,7 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
     # A fresh owner observes exactly the crash residue, steals the stale lease,
     # and proves that its first write invokes targeted cleanup for every dirty
     # table left by the stopped operation.
-    reopened_database = Database.sqlite(path, degraded=True)
+    reopened_database = Backend.sqlite(path, degraded=True)
     reopened = SqlStore(reopened_database)
     reopened.steal_lease()
     report = reopened.fsck(known_types=(CrashRoot,))
@@ -447,7 +447,7 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
     expected = [trigger]
     if crashed in stored:
         expected.insert(0, crashed)
-    with Database.sqlite() as reference_database:
+    with Backend.sqlite() as reference_database:
         reference = SqlStore(reference_database, entry_records={})
         for record in expected:
             reference.save(record)
@@ -460,12 +460,12 @@ def test_degraded_crash_battery_recovers_every_ordering_step(tmp_path: Path, poi
 def test_degraded_crash_battery_covers_root_counter_lifecycle(tmp_path: Path, point: str) -> None:
     """A root without dependencies exercises its own counter create/init path."""
     path = tmp_path / f"root-counter-{point.replace(':', '-')}.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     store = SqlStore(database, entry_records={})
     store._degraded_fault_hook = lambda observed: observed == point
     with pytest.raises(_DegradedWriteCrash, match=point):
         store.save(CrashSolo(["one", "two"]))
-    reopened_database = Database.sqlite(path, degraded=True)
+    reopened_database = Backend.sqlite(path, degraded=True)
     reopened = SqlStore(reopened_database)
     reopened.steal_lease()
     report = reopened.fsck(known_types=(CrashSolo,))
@@ -489,7 +489,7 @@ def test_degraded_crash_battery_covers_root_counter_lifecycle(tmp_path: Path, po
 
 @pytest.mark.parametrize("finalize", ["parity", "deferred"])
 def test_bulk_preserves_main_and_dependency_roles(finalize: str) -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         with store.bulk_ingest(finalize=finalize) as bulk:
             bulk.save(RoleRoot(RoleLeaf("dependency")))
@@ -499,7 +499,7 @@ def test_bulk_preserves_main_and_dependency_roles(finalize: str) -> None:
 
 def test_transactional_save_has_no_p3_round_trips_except_dedup_promotion() -> None:
     """The role value changes INSERT payloads, not transactional statement count."""
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.ensure_tables(StatementRecord, RoleRoot)
         statements: list[str] = []
@@ -530,7 +530,7 @@ def test_transactional_save_has_no_p3_round_trips_except_dedup_promotion() -> No
 @pytest.mark.parametrize("finalize", ["parity", "deferred"])
 def test_transactional_bulk_save_issues_no_main_database_statement_per_record(finalize: str) -> None:
     """P3 role propagation remains entirely in the transactional bulk encoder."""
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         if finalize == "parity":
             # This pre-existing parity bookkeeping initializes per-table sid
@@ -556,7 +556,7 @@ def test_transactional_bulk_save_issues_no_main_database_statement_per_record(fi
 
 
 def test_degraded_content_metadata_conflict_does_not_promote() -> None:
-    with Database.sqlite(degraded=True) as database:
+    with Backend.sqlite(degraded=True) as database:
         store = SqlStore(database, entry_records={})
         leaf = MetadataLeaf("same", "dependency")
         store.save(MetadataRoot(leaf))
@@ -571,7 +571,7 @@ def test_degraded_content_metadata_conflict_does_not_promote() -> None:
 @pytest.mark.parametrize("point", ("content-dedup-select:role_leaf", "content-promotion-update:role_leaf"))
 def test_degraded_crash_battery_covers_content_promotion_window(tmp_path: Path, point: str) -> None:
     path = tmp_path / f"promotion-{point.replace(':', '-')}.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     store = SqlStore(database, entry_records={})
     leaf = RoleLeaf("dependency")
     store.save(RoleRoot(leaf))
@@ -580,7 +580,7 @@ def test_degraded_crash_battery_covers_content_promotion_window(tmp_path: Path, 
     store._degraded_fault_hook = lambda observed: observed == point
     with pytest.raises(_DegradedWriteCrash, match=point):
         store.save(leaf)
-    reopened_database = Database.sqlite(path, degraded=True)
+    reopened_database = Backend.sqlite(path, degraded=True)
     reopened = SqlStore(reopened_database)
     reopened.steal_lease()
     assert reopened.fsck(known_types=(RoleRoot,)).violations == ()
@@ -592,13 +592,13 @@ def test_degraded_crash_battery_covers_content_promotion_window(tmp_path: Path, 
 @pytest.mark.extended
 def test_degraded_crash_battery_covers_dispatch_write(tmp_path: Path) -> None:
     path = tmp_path / "dispatch.sqlite"
-    database = Database.sqlite(path, degraded=True)
+    database = Backend.sqlite(path, degraded=True)
     store = SqlStore(database, entry_records={CrashDispatchFamily: (CrashDispatchA, CrashDispatchB)})
     dispatch = entry_dispatch_table_name(store.entry_layout[0].name)
     store._degraded_fault_hook = lambda observed: observed == f"dispatch-row-write:{dispatch}"
     with pytest.raises(_DegradedWriteCrash, match="dispatch-row-write"):
         store.save(CrashDispatchA("entry"))
-    reopened_database = Database.sqlite(path, degraded=True)
+    reopened_database = Backend.sqlite(path, degraded=True)
     reopened = SqlStore(reopened_database)
     reopened.steal_lease()
     assert reopened.fsck(known_types=(CrashDispatchA,)).violations == ()
@@ -609,7 +609,7 @@ def test_degraded_crash_battery_covers_dispatch_write(tmp_path: Path) -> None:
 
 
 def test_fsck_uses_physical_dispatch_presence_for_empty_and_missing_families() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={CrashDispatchFamily: (CrashDispatchA, CrashDispatchB)})
         # Fresh families have neither backing nor dispatch table; fsck must not
         # turn this ordinary lazy-DDL state into a failure.
@@ -627,7 +627,7 @@ def test_fsck_uses_physical_dispatch_presence_for_empty_and_missing_families() -
     [(RoleLeaf, RoleLeaf("bulk-content"), "role_leaf"), (ValueLeaf, ValueLeaf("bulk-value"), "value_leaf")],
 )
 def test_populated_serial_bulk_promotes_existing_main(leaf_type, leaf, table: str) -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         root = RoleRoot(leaf) if leaf_type is RoleLeaf else ValueRoot(leaf)
         store.save(root)
@@ -639,7 +639,7 @@ def test_populated_serial_bulk_promotes_existing_main(leaf_type, leaf, table: st
 
 
 def test_fsck_is_immediate_read_only_when_requested_and_reaches_child_fixpoint(tmp_path: Path) -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store.save(CrashRoot(CrashLeaf("orphan", ["a", "b"]), ["x", "y"]))
         with database.engine.begin() as connection:
@@ -662,7 +662,7 @@ def test_fsck_is_immediate_read_only_when_requested_and_reaches_child_fixpoint(t
             assert connection.execute(sqlalchemy.text("SELECT count(*) FROM crash_leaf")).scalar_one() == 0
             assert connection.execute(sqlalchemy.text("SELECT count(*) FROM crash_leaf_atoms")).scalar_one() == 0
 
-    with Database.sqlite(tmp_path / "verify-only.sqlite", degraded=True) as degraded_database:
+    with Backend.sqlite(tmp_path / "verify-only.sqlite", degraded=True) as degraded_database:
         degraded = SqlStore(degraded_database, entry_records={})
         with degraded_database.engine.connect() as connection:
             before = connection.execute(
@@ -678,7 +678,7 @@ def test_fsck_is_immediate_read_only_when_requested_and_reaches_child_fixpoint(t
 
 
 def test_fsck_unattributed_refusal_and_invalid_role_repair() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         sid = store.save(RoleLeaf("role"))
         with database.engine.begin() as connection:

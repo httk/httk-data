@@ -19,11 +19,11 @@ from test_db_stored_properties import (
 )
 
 from httk.store import PageOrder
-from httk.store.db import SqlStore, stored_property_sql_plan
-from httk.store.db.clickhouse import ClickHouseUnsupportedQueryError
-from httk.store.db.entry_provider import StoreEntryProvider
-from httk.store.db.stored_federation import StoredEntryFederation, StoredEntrySource
-from httk.store.db.stored_properties import StoredPropertySqlPlan
+from httk.store.backend.sql import SqlStore, stored_property_sql_plan
+from httk.store.backend.clickhouse.support import ClickHouseUnsupportedQueryError
+from httk.store.backend.sql.entry_provider import StoreEntryProvider
+from httk.store.backend.sql.stored_federation import StoredEntryFederation, StoredEntrySource
+from httk.store.backend.sql.stored_properties import StoredPropertySqlPlan
 
 pytestmark = pytest.mark.xdist_group("clickhouse_acceptance")
 LITERAL_LABEL = Label("slash\\quote'_%")

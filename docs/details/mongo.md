@@ -1,6 +1,6 @@
 # MongoDB storage in detail
 
-`httk.store.mongo` stores the same plain frozen dataclasses as the SQL layer,
+`httk.store.backend.mongo` stores the same plain frozen dataclasses as the SQL layer,
 but uses MongoDB's document model: one document per record, embedded child
 arrays, and links to referenced records in their own collections. It exposes
 the same neutral `Store`/`Searcher` protocols, entry-family dispatch, stored
@@ -35,7 +35,7 @@ replica set is the recommended deployment, including a single-node replica
 set for a development or CI database:
 
 ```python
-from httk.store.mongo import MongoDatabase, MongoStore
+from httk.store.backend.mongo import MongoDatabase, MongoStore
 
 uri = "mongodb://127.0.0.1:27017/?replicaSet=httk2rs"
 with MongoDatabase.connect(uri, database="materials", transactions="require") as database:
@@ -72,7 +72,7 @@ multi-document transactional deployment.
 ## Declaring records and opening a store
 
 Record declarations are the same non-intrusive frozen-dataclass declarations
-described in [Database storage](db.md#declaring-a-storable-class). The Mongo
+described in [Backend storage](db.md#declaring-a-storable-class). The Mongo
 backend persists the logical entry-family declaration in its metadata
 collection. On the first open, pass `entry_records`; later opens validate the
 persisted declaration rather than silently changing it:
@@ -177,7 +177,7 @@ rows = searcher.results(record=record)
 The equivalent OPTIMADE filter is:
 
 ```python
-from httk.store.mongo import optimade_filter_searcher
+from httk.store.backend.mongo import optimade_filter_searcher
 
 rows = optimade_filter_searcher(
     store, StructureRecord, '_httk_store_timestamp <= "2026-01-01T00:00:00Z"'
@@ -307,7 +307,7 @@ optimization.
 
 ## Entry providers and federation
 
-`httk.store.mongo.StoreEntryProvider` serves configured entry families or
+`httk.store.backend.mongo.StoreEntryProvider` serves configured entry families or
 concrete backing records through the neutral `httk.core.EntryProvider`
 contract. Family entries use the Mongo stored-property plan, and relationship
 links can be declared with the same provider-facing concepts as the SQL

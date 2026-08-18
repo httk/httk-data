@@ -23,11 +23,11 @@ supplies *capabilities*:
   :func:`~httk.store.query.optimade_filters.filter_searcher`), with
   neutral :class:`~httk.store.query.optimade_filters.FilterTranslationError` categories; and
 
-- the **database storage layer** (:mod:`httk.store.db`, requiring the
+- the **database storage layer** (:mod:`httk.store.backend.sql`, requiring the
   ``httk-store[db]`` extra) — relational storage and querying of plain frozen
-  dataclasses (:class:`~httk.store.db.store.SqlStore` over SQLite or DuckDB),
+  dataclasses (:class:`~httk.store.backend.sql.store.SqlStore` over SQLite or DuckDB),
   served through the provider contract by
-  :class:`~httk.store.db.entry_provider.StoreEntryProvider`.
+  :class:`~httk.store.backend.sql.entry_provider.StoreEntryProvider`.
 
 The providers self-register (under ``httk.registry.entries.store``, as
 ``store-references``/``store-files``/``store-calculations``/``store-db-store``)
@@ -37,6 +37,9 @@ when ``httk.core`` discovers the module, so a serving module (such as
 .. py:class:: StandardEntryProvider
    :canonical: httk.store.entry_providers.StandardEntryProvider
 """
+
+import importlib
+from typing import Any
 
 from .entry_providers import (
     CalculationEntryProvider,
@@ -88,6 +91,7 @@ from .store_common import EntryStore
 from .validation import PropertyValidationError, validate_property, validate_record
 
 __all__ = [
+    "Backend",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "CalculationEntryProvider",
     "ContinuationToken",
     "CountUnavailableError",
@@ -105,6 +109,7 @@ __all__ = [
     "FileEntryProvider",
     "FilterTranslationCategory",
     "FilterTranslationError",
+    "MongoStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "MultipleResultsError",
     "NoResultError",
     "PageOrder",
@@ -123,6 +128,7 @@ __all__ = [
     "SearchResult",
     "SearchVariable",
     "Searcher",
+    "SqlStore",  # pyright: ignore[reportUnsupportedDunderAll]  (provided lazily via __getattr__)
     "Store",
     "UnsupportedQueryError",
     "export_dataset",
@@ -133,3 +139,26 @@ __all__ = [
     "validate_property",
     "validate_record",
 ]
+
+# The storage-backend engines are re-exported lazily: importing ``httk.store``
+# must stay free of both ``sqlalchemy`` and ``pymongo``, so ``Backend`` and
+# ``SqlStore`` load the SQL layer, and ``MongoStore`` the MongoDB layer, only on
+# first attribute access.
+_LAZY_EXPORTS = {
+    "Backend": "httk.store.backend.sql.engine",
+    "SqlStore": "httk.store.backend.sql.store",
+    "MongoStore": "httk.store.backend.mongo",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Import a storage-backend engine lazily on first access.
+
+    :param name: The module attribute to import.
+    :return: The requested storage-backend export.
+    :raises AttributeError: If ``name`` is not a lazily re-exported attribute.
+    """
+    module_name = _LAZY_EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return getattr(importlib.import_module(module_name), name)

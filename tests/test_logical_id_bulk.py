@@ -17,7 +17,7 @@ import pytest
 import sqlalchemy
 from httk.core.storage import StorageInfo
 
-from httk.store.db import SqlStore
+from httk.store.backend.sql import SqlStore
 
 # --------------------------------------------------------------------- records
 

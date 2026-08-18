@@ -14,15 +14,15 @@ from httk.core import (
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, StoredPropertyProjection, content_id
 
-from httk.store.db import (
-    Database,
+from httk.store.backend.sql import (
+    Backend,
     DuplicateEntryIdError,
     SqlSearcher,
     SqlStore,
     StoredEntryFederation,
     StoredEntrySource,
 )
-from httk.store.db.schema import resolve_schema
+from httk.store.backend.sql.schema import resolve_schema
 from httk.store.query.optimade_filters import FilterTranslationError
 from httk.store.store_common import EntryStore
 
@@ -191,7 +191,7 @@ def test_stored_entry_source_accepts_structural_entry_store() -> None:
 
 def test_snapshot_cutoff_ns_uses_the_coarsest_capable_source_and_skips_disabled_sources() -> None:
     resolutions = (1, 1_000, 1_000_000_000)
-    databases = [Database.sqlite() for _ in resolutions]
+    databases = [Backend.sqlite() for _ in resolutions]
     try:
         sources = []
         for index, (database, resolution) in enumerate(zip(databases, resolutions, strict=True)):
@@ -209,7 +209,7 @@ def test_snapshot_cutoff_ns_uses_the_coarsest_capable_source_and_skips_disabled_
         for database in databases:
             database.dispose()
 
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(
             database,
             entry_records={FederatedCalculation: (FederationFirst, FederationSecond)},
@@ -223,11 +223,11 @@ def test_snapshot_cutoff_ns_uses_the_coarsest_capable_source_and_skips_disabled_
 def databases(request):
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        first = Database.duckdb()
-        second = Database.duckdb()
+        first = Backend.duckdb()
+        second = Backend.duckdb()
     else:
-        first = Database.sqlite()
-        second = Database.sqlite()
+        first = Backend.sqlite()
+        second = Backend.sqlite()
     with first, second:
         yield first, second
 
@@ -342,7 +342,7 @@ def test_unsorted_page_preserves_source_backing_native_order_and_hydrates_only_v
 
 
 def test_unique_prefix_page_has_no_duplicate_probe_queries() -> None:
-    managers = (Database.sqlite(), Database.sqlite(), Database.sqlite())
+    managers = (Backend.sqlite(), Backend.sqlite(), Backend.sqlite())
     with managers[0] as first_database, managers[1] as second_database, managers[2] as third_database:
         records = (_record("first"), _record("second"), _record("third"))
         stores = tuple(
@@ -376,7 +376,7 @@ def test_unique_prefix_page_has_no_duplicate_probe_queries() -> None:
 
 
 def test_single_source_page_skips_probes_but_audit_detects_corrupt_cross_backing_ids() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={FederatedCalculation: (FederationFirst, FederationSecond)})
         first = _record("first")
         second = _record("second", second=True)

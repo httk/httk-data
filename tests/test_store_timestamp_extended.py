@@ -7,9 +7,9 @@ import pytest
 import sqlalchemy
 from httk.core.storage import StorageInfo
 
-from httk.store.db import Database, SqlStore
-from httk.store.db.bulk_deferred import DeferredFinalizer
-from httk.store.db.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.sql.bulk_deferred import DeferredFinalizer
+from httk.store.backend.sql.mapping import SID_COLUMN, STORE_TIMESTAMP_COLUMN
 
 TABLE_NAME = "extended_timestamp_record"
 
@@ -23,7 +23,7 @@ class ExtendedTimestampRecord:
 
 @pytest.mark.extended
 def test_parallel_workers_use_one_batch_timestamp_and_first_by_value_row() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 7_654_321
         with store.bulk_ingest(workers=2, finalize="parity") as bulk:
@@ -65,7 +65,7 @@ def test_deferred_by_value_collapse_ignores_timestamp_and_sqlite_validation_incl
         finalizer.stage_views[table_name] = variant
 
     monkeypatch.setattr(DeferredFinalizer, "_make_stage_views", make_stage_views_with_timestamp_variant)
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 8_765_432
         with store.bulk_ingest(workers=2, finalize="deferred") as bulk:

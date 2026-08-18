@@ -10,11 +10,11 @@ from httk.core.files import FileEntry, FileRecord
 from httk.core.project import initialize_project
 
 from httk.store import export_dataset
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 def _store(path: Path) -> None:
-    with Database.sqlite(path) as database:
+    with Backend.sqlite(path) as database:
         store = SqlStore(database, entry_records={FileEntry: FileRecord})
         store.save(FileRecord("file:///presentation", "presentation", size=3, sha256="abc"))
 
@@ -102,7 +102,7 @@ def test_structure_export_contains_extended_family_definition(tmp_path: Path) ->
         (Species("Na", ("Na",), (1,)),),
         ("Na",),
     )
-    with Database.sqlite(source) as database:
+    with Backend.sqlite(source) as database:
         store = SqlStore(database, entry_records={StructureEntry: UnitcellStructureRecord})
         store.save(structure)
 

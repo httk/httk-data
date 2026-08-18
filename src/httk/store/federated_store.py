@@ -535,7 +535,7 @@ class FederatedStore:
     strict common query surface accepted by every participating source, and
     counts are exact sums of the unpaged source counts. This live borrowed-store
     view is distinct from the persisted registry in
-    :mod:`httk.store.db.stored_federation`.
+    :mod:`httk.store.backend.sql.stored_federation`.
 
     :param sources: Child stores keyed by stable federation source name.
     :raises TypeError: If ``sources`` is not a mapping.

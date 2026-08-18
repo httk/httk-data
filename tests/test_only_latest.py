@@ -13,7 +13,7 @@ import pytest
 from httk.core.storage import StorageInfo
 
 from httk.store import FederatedStore
-from httk.store.db import Database, SqlStore, StoreEntryProvider
+from httk.store.backend.sql import Backend, SqlStore, StoreEntryProvider
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,7 @@ def test_only_latest_with_as_of_returns_the_latest_as_of_t(store_factory) -> Non
 
 
 def test_only_latest_without_timestamps() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamps=False)
         assert store.store_timestamps is False
         first = LatestWidget(1)
@@ -108,7 +108,7 @@ def test_only_latest_without_timestamps() -> None:
 
 
 def test_only_latest_self_join_filters_each_variable_independently() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         # Two lineages, each replaced once.
         a = LatestPair(1)
@@ -175,7 +175,7 @@ def test_variable_logical_id_in_filter_and_output(store_factory) -> None:
 
 
 def test_entry_provider_only_latest_serves_only_latest_rows() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         first = LatestWidget(1)
         store.save(first)
@@ -190,7 +190,7 @@ def test_entry_provider_only_latest_serves_only_latest_rows() -> None:
 
 
 def test_federated_store_only_latest_fan_out() -> None:
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         stores = []
         for database, base in ((first_database, 1), (second_database, 10)):
             store = SqlStore(database, entry_records={})

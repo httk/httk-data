@@ -15,7 +15,7 @@ from fractions import Fraction
 import pytest
 from httk.core import EntryTypeDefinition, PropertyDefinition
 
-from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.backend.sql import Backend, SqlStore, optimade_filter_searcher
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ def _definition_hiding(*names: str) -> EntryTypeDefinition:
 
 @pytest.fixture()
 def store():
-    store = SqlStore(Database.sqlite(":memory:"), entry_records={})
+    store = SqlStore(Backend.sqlite(":memory:"), entry_records={})
     store.save(Material("alpha oxide", Fraction(1, 2), ["O", "H"]))
     store.save(Material("beta metal", Fraction(5, 2), ["Fe"]))
     return store

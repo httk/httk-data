@@ -46,7 +46,7 @@ point the failures below illustrate: OPTIMADE's `references.year` is a
 a mistake that is easy to make, and easy to catch here.
 
 For storing and querying data in a database rather than holding it in memory,
-see the other examples, which build on `httk.store.db`.
+see the other examples, which build on `httk.store.backend.sql`.
 """
 
 from typing import Any

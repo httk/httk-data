@@ -11,12 +11,13 @@ from typing import Annotated, Any, Protocol, TypeVar, runtime_checkable
 from httk.core.storage import IdentitySkip, project_storage_record
 from httk.core.storage.identity import _trusted_content_id
 
-from httk.store.db.schema import FieldSpec, resolve_schema
+from httk.store.backend.sql.schema import FieldSpec, resolve_schema
 from httk.store.storage_layout import EntryFamilyLayout
 
 __all__ = [
     "EntryDispatchIntegrityError",
     "EntryMetadataConflictError",
+    "EntryReplacementError",
     "EntryStore",
     "IdentityCaches",
     "SaveProjection",
@@ -29,7 +30,7 @@ _StoredRecord = TypeVar("_StoredRecord")
 
 @runtime_checkable
 class EntryStore(Protocol):
-    """The store surface consumed by :mod:`httk.store.db.stored_federation`.
+    """The store surface consumed by :mod:`httk.store.backend.sql.stored_federation`.
 
     This protocol deliberately describes the small backend seam used by the
     federation.  The stored-property plan and candidate-stream objects remain
@@ -79,6 +80,24 @@ class EntryStore(Protocol):
 
 class EntryMetadataConflictError(ValueError):
     """Stored identity-excluded metadata differs from a repeated save."""
+
+
+class EntryReplacementError(ValueError):
+    """A replacement deduplicated onto a row from a different lineage.
+
+    :param table_name: The table (or collection) whose replacement failed.
+    :param predecessor_logical_id: The logical_id of the intended predecessor.
+    :param conflicting_logical_id: The logical_id of the row actually hit.
+    """
+
+    def __init__(self, table_name: str, predecessor_logical_id: int, conflicting_logical_id: int) -> None:
+        self.table_name = table_name
+        self.predecessor_logical_id = predecessor_logical_id
+        self.conflicting_logical_id = conflicting_logical_id
+        super().__init__(
+            f"replacement in table {table_name!r} deduplicated onto an existing row with logical_id "
+            f"{conflicting_logical_id}, but the predecessor's logical_id is {predecessor_logical_id}"
+        )
 
 
 class EntryDispatchIntegrityError(RuntimeError):

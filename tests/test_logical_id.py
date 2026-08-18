@@ -9,10 +9,10 @@ from httk.core import PropertyDefinition, load_entry_type_definition
 from httk.core.register import register_entry_family, register_entry_record
 from httk.core.storage import StorageInfo, StoredPropertyProjection
 
-from httk.store.db import Database, EntryReplacementError, SchemaError, SqlStore, stored_property_sql_plan
-from httk.store.db.mapping import LOGICAL_ID_COLUMN, sqlalchemy_metadata
-from httk.store.db.optimade import optimade_filter_searcher
-from httk.store.db.schema import resolve_schema
+from httk.store.backend.sql import Backend, EntryReplacementError, SchemaError, SqlStore, stored_property_sql_plan
+from httk.store.backend.sql.mapping import LOGICAL_ID_COLUMN, sqlalchemy_metadata
+from httk.store.backend.sql.optimade import optimade_filter_searcher
+from httk.store.backend.sql.schema import resolve_schema
 
 LOGICAL_ID_CALC_DEFINITION = "https://schemas.optimade.org/defs/v1.3/entrytypes/optimade/calculations"
 
@@ -258,7 +258,7 @@ def test_replace_rejects_a_cross_table_object(store_factory):
 
 
 def test_logical_id_with_store_timestamps_disabled():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={}, store_timestamps=False)
         first = Widget(1)
         a = store.save(first)
@@ -269,7 +269,7 @@ def test_logical_id_with_store_timestamps_disabled():
 
 
 def test_logical_id_degraded_write_profile():
-    with Database.sqlite(degraded=True) as database:
+    with Backend.sqlite(degraded=True) as database:
         store = SqlStore(database, entry_records={})
         first = Widget(1)
         a = store.save(first)

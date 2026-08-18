@@ -11,8 +11,8 @@ from clickhouse_read_support import CLICKHOUSE_PARAM, bulk_store
 from postgres_support import POSTGRES_PARAM, postgres_database
 
 from httk.store import ContinuationToken, PageOrder, PaginationCursorError, UnsupportedQueryError
-from httk.store.db import Database, SqlStore
-from httk.store.db.paging import _decode_continuation, _encode_continuation
+from httk.store.backend.sql import Backend, SqlStore
+from httk.store.backend.sql.paging import _decode_continuation, _encode_continuation
 from httk.store.query.paging_tokens import _encode_payload, _validate_anchor_types
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
@@ -62,9 +62,9 @@ def store(request):
         return
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        manager = Database.duckdb()
+        manager = Backend.duckdb()
     else:
-        manager = Database.sqlite()
+        manager = Backend.sqlite()
     with manager as database:
         value = SqlStore(database, entry_records={})
         with value.transaction():
@@ -130,7 +130,7 @@ def backwards_to_start(result, page, order: tuple[PageOrder, ...], size: int) ->
 
 def test_token_rejects_changed_schema_and_dialect():
     order = (PageOrder("bucket"),)
-    with Database.sqlite() as sqlite_database:
+    with Backend.sqlite() as sqlite_database:
         sqlite_store = SqlStore(sqlite_database, entry_records={})
         with sqlite_store.transaction():
             for row in ROWS:
@@ -145,7 +145,7 @@ def test_token_rejects_changed_schema_and_dialect():
             changed_result.page(size=2, order_by=order, cursor=token)
 
         pytest.importorskip("duckdb_engine")
-        with Database.duckdb() as duckdb_database:
+        with Backend.duckdb() as duckdb_database:
             duckdb_store = SqlStore(duckdb_database, entry_records={})
             with duckdb_store.transaction():
                 for row in ROWS:
@@ -208,7 +208,7 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
     first = result.page(size=2, order_by=order)
     assert first.next is not None
     fingerprint = result._page_fingerprint(result._page_keys(order))
-    from httk.store.db.paging import _decode_continuation
+    from httk.store.backend.sql.paging import _decode_continuation
 
     cursor = _decode_continuation(first.next, fingerprint=fingerprint, anchors=1)
     statement, _raw_width = result._page_statement(result._page_keys(order), cursor, 2)
@@ -238,7 +238,7 @@ def test_page_statement_is_seek_based_and_total_is_opt_in(store, monkeypatch):
 
 @pytest.mark.extended
 def test_extended_deep_page_has_a_bounded_seek_statement():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         with store.transaction():
             for index in range(10_000):

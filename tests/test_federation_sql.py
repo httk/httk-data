@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 
 from httk.store import FederatedStore, MultipleResultsError, UnsupportedQueryError
-from httk.store.db import Database, SqlStore
+from httk.store.backend.sql import Backend, SqlStore
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class FederatedRecord:
     energy: Fraction
 
 
-def _store(database: Database, records: tuple[FederatedRecord, ...]) -> SqlStore:
+def _store(database: Backend, records: tuple[FederatedRecord, ...]) -> SqlStore:
     store = SqlStore(database, entry_records={})
     with store.transaction():
         for record in records:
@@ -41,7 +41,7 @@ def test_sqlite_federation_matches_a_materialized_source_major_union() -> None:
         ("second", second_records[1], "second-only"),
     )
 
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         federation = FederatedStore(
             {
                 "first": _store(first_database, first_records),
@@ -84,7 +84,7 @@ def test_sqlite_federation_matches_a_materialized_source_major_union() -> None:
 def test_sqlite_child_field_cannot_be_used_as_a_federated_literal() -> None:
     records = (FederatedRecord("one", "first", Fraction(1, 3)),)
 
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         first_store = _store(first_database, records)
         second_store = _store(second_database, records)
         searcher = FederatedStore({"first": first_store, "second": second_store}).searcher()

@@ -10,7 +10,7 @@ from typing import Any, Final, cast
 
 from httk.core import PropertyDefinition
 
-from httk.store.db.schema import FieldSpec, TableSchema
+from httk.store.backend.sql.schema import FieldSpec, TableSchema
 
 __all__ = ["definition_fulltype", "served_specs"]
 

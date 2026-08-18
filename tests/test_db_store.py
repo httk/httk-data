@@ -16,8 +16,8 @@ from httk.core import FracScalar, FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, Unique, stored_property
 from postgres_support import POSTGRES_PARAM, postgres_database
 
-from httk.store.db import Database, SqlStore, resolve_schema
-from httk.store.db.mapping import sqlalchemy_metadata, table_for
+from httk.store.backend.sql import Backend, SqlStore, resolve_schema
+from httk.store.backend.sql.mapping import sqlalchemy_metadata, table_for
 
 
 @dataclass(frozen=True)
@@ -137,14 +137,14 @@ def database(request):
             yield db
     elif request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        with Database.duckdb() as db:
+        with Backend.duckdb() as db:
             yield db
     else:
-        with Database.sqlite() as db:
+        with Backend.sqlite() as db:
             yield db
 
 
-def _count(db: Database, table_name: str) -> int:
+def _count(db: Backend, table_name: str) -> int:
     with db.engine.connect() as connection:
         return connection.execute(sqlalchemy.text(f"SELECT COUNT(*) FROM {table_name}")).scalar_one()
 
@@ -395,27 +395,27 @@ def test_sql_optional_child_presence_query(database):
 
 
 def test_in_memory_database_is_shared_across_operations():
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         sid = SqlStore(database, entry_records={}).save(Author("Ada", 1852))
         assert SqlStore(database).fetch(Author, sid) == Author("Ada", 1852)
 
 
 def test_file_backed_database_persists_across_instances(tmp_path):
     path = tmp_path / "authors.sqlite"
-    database = Database.sqlite(path)
+    database = Backend.sqlite(path)
     sid = SqlStore(database, entry_records={}).save(Author("Ada", 1852))
     database.dispose()
-    with Database.sqlite(path) as reopened:
+    with Backend.sqlite(path) as reopened:
         assert SqlStore(reopened).fetch(Author, sid) == Author("Ada", 1852)
 
 
 def test_file_backed_duckdb_persists_and_continues_sids(tmp_path):
     pytest.importorskip("duckdb_engine")
     path = tmp_path / "authors.duckdb"
-    database = Database.duckdb(path)
+    database = Backend.duckdb(path)
     sid = SqlStore(database, entry_records={}).save(Author("Ada", 1852))
     database.dispose()
-    with Database.duckdb(path) as reopened:
+    with Backend.duckdb(path) as reopened:
         store = SqlStore(reopened)
         assert store.fetch(Author, sid) == Author("Ada", 1852)
         # The sid sequence lives in the file: new saves do not collide with old sids.
@@ -433,7 +433,7 @@ def _subprocess_env() -> dict[str, str]:
 
 
 def test_plain_import_does_not_import_sqlalchemy():
-    code = "import httk.store.db\nimport sys\nassert 'sqlalchemy' not in sys.modules, 'sqlalchemy was imported'"
+    code = "import httk.store.backend.sql\nimport sys\nassert 'sqlalchemy' not in sys.modules, 'sqlalchemy was imported'"
     subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
 
 
@@ -447,12 +447,45 @@ def test_missing_sqlalchemy_raises_import_error_naming_extra():
         "            raise ModuleNotFoundError(f'No module named {fullname!r}', name=fullname)\n"
         "        return None\n"
         "sys.meta_path.insert(0, Block())\n"
-        "import httk.store.db\n"
+        "import httk.store.backend.sql\n"
         "try:\n"
-        "    httk.store.db.Database\n"
+        "    httk.store.backend.sql.Backend\n"
         "except ImportError as error:\n"
         "    assert 'httk-store[db]' in str(error), error\n"
         "else:\n"
         "    raise SystemExit('expected an ImportError')\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
+
+
+def test_plain_store_import_pulls_neither_driver():
+    """``import httk.store`` must stay free of both sqlalchemy and pymongo."""
+    code = (
+        "import httk.store\n"
+        "import sys\n"
+        "assert 'sqlalchemy' not in sys.modules, 'sqlalchemy was imported'\n"
+        "assert 'pymongo' not in sys.modules, 'pymongo was imported'\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
+
+
+def test_backend_export_does_not_import_pymongo():
+    """Touching the SQL engine via the root re-export must not drag in pymongo."""
+    code = (
+        "from httk.store import Backend\n"
+        "import sys\n"
+        "assert 'sqlalchemy' in sys.modules, 'the SQL layer should load sqlalchemy'\n"
+        "assert 'pymongo' not in sys.modules, 'pymongo must not load for the SQL engine'\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())
+
+
+def test_mongo_store_export_imports_pymongo_but_not_sqlalchemy():
+    """Touching MongoStore via the root re-export loads pymongo but not sqlalchemy."""
+    code = (
+        "from httk.store import MongoStore\n"
+        "import sys\n"
+        "assert 'pymongo' in sys.modules, 'the MongoDB layer should load pymongo'\n"
+        "assert 'sqlalchemy' not in sys.modules, 'the MongoDB layer must not load sqlalchemy'\n"
     )
     subprocess.run([sys.executable, "-c", code], check=True, env=_subprocess_env())

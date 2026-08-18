@@ -7,7 +7,7 @@ from httk.core.storage import StorageInfo
 from test_db_stored_federation import FederatedCalculation, FederationFirst
 
 from httk.store import FederatedSourceError, FederatedStore
-from httk.store.db import Database, SqlStore, StoredEntryFederation, StoredEntrySource
+from httk.store.backend.sql import Backend, SqlStore, StoredEntryFederation, StoredEntrySource
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ def test_searcher_as_of_forms_and_boundary(store_factory) -> None:
 
 
 def test_searcher_as_of_constrains_each_variable_and_disabled_capability() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={})
         store._clock = lambda: 1_000_000
         store.save(AsOfPair(1))
@@ -67,7 +67,7 @@ def test_searcher_as_of_constrains_each_variable_and_disabled_capability() -> No
         assert store.store_timestamps is True
         assert store.store_timestamp_resolution == 1000
 
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         disabled = SqlStore(database, entry_records={}, store_timestamps=False)
         assert disabled.store_timestamps is False
         assert disabled.store_timestamp_resolution is None
@@ -76,7 +76,7 @@ def test_searcher_as_of_constrains_each_variable_and_disabled_capability() -> No
 
 
 def test_federated_store_forwards_as_of_and_rejects_disabled_child() -> None:
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         stores = []
         for database, timestamp, value in (
             (first_database, 1_000_000, 1),
@@ -91,7 +91,7 @@ def test_federated_store_forwards_as_of_and_rejects_disabled_child() -> None:
         variable = searcher.variable(AsOfRecord)
         assert [row.record.value for row in searcher.results(record=variable)] == [1]
 
-    with Database.sqlite() as first_database, Database.sqlite() as second_database:
+    with Backend.sqlite() as first_database, Backend.sqlite() as second_database:
         enabled = SqlStore(first_database, entry_records={})
         disabled = SqlStore(second_database, entry_records={}, store_timestamps=False)
         federation = FederatedStore({"enabled": enabled, "disabled": disabled})
@@ -100,7 +100,7 @@ def test_federated_store_forwards_as_of_and_rejects_disabled_child() -> None:
 
 
 def test_stored_entry_federation_degrades_per_source_for_as_of() -> None:
-    with Database.sqlite() as enabled_database, Database.sqlite() as disabled_database:
+    with Backend.sqlite() as enabled_database, Backend.sqlite() as disabled_database:
         enabled = SqlStore(enabled_database, entry_records={FederatedCalculation: FederationFirst})
         enabled._clock = lambda: 1_000_000
         enabled.save(FederationFirst("enabled-old", None))
@@ -125,7 +125,7 @@ def test_stored_entry_federation_degrades_per_source_for_as_of() -> None:
 
 
 def test_stored_property_cutoff_is_per_query_not_plan_state() -> None:
-    with Database.sqlite() as database:
+    with Backend.sqlite() as database:
         store = SqlStore(database, entry_records={FederatedCalculation: FederationFirst})
         store._clock = lambda: 1_000_000
         store.save(FederationFirst("old", None))

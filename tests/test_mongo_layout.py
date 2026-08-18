@@ -10,8 +10,8 @@ from httk.core.storage import IdentitySkip, StorageInfo
 from schema_override_support import schema_override
 
 from httk.store import EntryFamilyDeclaration, EntryLayoutBindingError, EntryRecordDeclaration
-from httk.store.mongo import MongoStore
-from httk.store.mongo.mapping import METADATA_COLLECTION
+from httk.store.backend.mongo import MongoStore
+from httk.store.backend.mongo.mapping import METADATA_COLLECTION
 from httk.store.storage_layout import StorageLayoutUpgradeRequiredError
 
 

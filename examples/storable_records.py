@@ -1,6 +1,6 @@
 """Storing frozen dataclasses in a database, exactly
 
-`httk.store.db` stores **plain frozen dataclasses**. There is no base class to
+`httk.store.backend.sql` stores **plain frozen dataclasses**. There is no base class to
 inherit, no metaclass, no ORM session: any frozen dataclass whose field types
 resolve is storable, and the vocabulary that fine-tunes how it is stored lives
 in *httk-core* (`Indexed`, `Unique`, `Skip`, `Shape`, `StorageInfo`,
@@ -60,9 +60,9 @@ the foreign key, without writing a query.
 
 ## Persistence
 
-`Database.sqlite(path)` is a file; `Database.sqlite()` is in memory. The last
+`Backend.sqlite(path)` is a file; `Backend.sqlite()` is in memory. The last
 section saves into a file, disposes the database entirely, reopens it in a
-second `Database`/`SqlStore` pair, and fetches the same sid back.
+second `Backend`/`SqlStore` pair, and fetches the same sid back.
 """
 
 import tempfile
@@ -74,7 +74,7 @@ from typing import Annotated, ClassVar
 from httk.core import FracVector
 from httk.core.storage import Indexed, Shape, Skip, StorageInfo, content_id, stored_property
 
-from httk.store.db import Database, SqlStore, resolve_schema
+from httk.store.backend.sql import Backend, SqlStore, resolve_schema
 
 HTTK_EXAMPLE_REQUIRES = ["sqlalchemy"]
 
@@ -164,7 +164,7 @@ def show_schema() -> None:
     print()
 
 
-def show_round_trip(store: SqlStore, database: Database) -> int:
+def show_round_trip(store: SqlStore, database: Backend) -> int:
     """Save, then fetch through a *fresh* store so no identity cache is involved."""
     print("== Save and fetch back ==")
     sid = store.save(PEROVSKITE)
@@ -243,12 +243,12 @@ def show_persistence() -> None:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "measurements.sqlite"
 
-        database = Database.sqlite(path)
+        database = Backend.sqlite(path)
         sid = SqlStore(database, entry_records={}).save(ROCKSALT)
         database.dispose()  # close the engine entirely: nothing is left in memory
         print(f"  wrote sid {sid} to {path.name} ({path.stat().st_size} bytes on disk)")
 
-        with Database.sqlite(path) as reopened:
+        with Backend.sqlite(path) as reopened:
             store = SqlStore(reopened)
             fetched = store.fetch(Measurement, sid)
             print(f"  reopened in a second store, fetched: {fetched.formula}, energy {fetched.energy}")
@@ -257,7 +257,7 @@ def show_persistence() -> None:
 
 def main() -> None:
     show_schema()
-    with Database.sqlite() as database:  # in memory; Database.sqlite(path) for a file
+    with Backend.sqlite() as database:  # in memory; Backend.sqlite(path) for a file
         store = SqlStore(database, entry_records={})
         sid = show_round_trip(store, database)
         show_dedup(store, sid)

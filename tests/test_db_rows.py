@@ -10,8 +10,8 @@ import pytest
 import sqlalchemy
 from httk.core.storage import Skip, StorageInfo, content_id
 
-from httk.store.db import Database, SchemaError, SqlStore, StaleResultError, resolve_schema
-from httk.store.db.rows import ExpiredLazyRecordError, RowHydrator, is_lazy_row, row_class
+from httk.store.backend.sql import Backend, SchemaError, SqlStore, StaleResultError, resolve_schema
+from httk.store.backend.sql.rows import ExpiredLazyRecordError, RowHydrator, is_lazy_row, row_class
 
 
 @dataclass(frozen=True)
@@ -100,10 +100,10 @@ class CustomHashRecord:
 def database(request):
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        with Database.duckdb() as db:
+        with Backend.duckdb() as db:
             yield db
     else:
-        with Database.sqlite() as db:
+        with Backend.sqlite() as db:
             yield db
 
 

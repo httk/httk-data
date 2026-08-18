@@ -16,10 +16,10 @@ from test_db_stored_properties import (
 )
 
 from httk.store import PageOrder, UnsupportedQueryError
-from httk.store.db import SqlStore, stored_property_sql_plan
-from httk.store.db.clickhouse import ClickHouseUnsupportedQueryError
-from httk.store.db.mapping import STORE_TIMESTAMP_COLUMN
-from httk.store.db.optimade import optimade_filter_searcher
+from httk.store.backend.sql import SqlStore, stored_property_sql_plan
+from httk.store.backend.clickhouse.support import ClickHouseUnsupportedQueryError
+from httk.store.backend.sql.mapping import STORE_TIMESTAMP_COLUMN
+from httk.store.backend.sql.optimade import optimade_filter_searcher
 
 pytestmark = pytest.mark.xdist_group("clickhouse_read_corpus")
 

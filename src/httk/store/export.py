@@ -222,12 +222,12 @@ def export_dataset(store_path: str | Path, out_path: str | Path) -> Path:
             "DuckDB dataset export is refused: a safe single-file snapshot is not implemented; "
             "export from a SQLite store instead"
         )
-    from httk.store.db import Database, SqlStore
+    from httk.store.backend.sql import Backend, SqlStore
 
     with tempfile.TemporaryDirectory() as staging:
         snapshot = Path(staging) / source.name
         _sqlite_snapshot(source, snapshot)
-        with Database.sqlite(snapshot) as database:
+        with Backend.sqlite(snapshot) as database:
             store = SqlStore(database)
             documents, definitions, declaration = _definitions(store)
         store_bytes = snapshot.read_bytes()

@@ -23,7 +23,7 @@ from httk.core.register import (
 )
 from httk.core.storage import storage_identity_name
 
-from httk.store.db.schema import ChildTableSpec, ColumnSpec, FieldSpec, TableSchema, resolve_schema
+from httk.store.backend.sql.schema import ChildTableSpec, ColumnSpec, FieldSpec, TableSchema, resolve_schema
 
 __all__ = [
     "ADDITIVE_UPGRADE_HINT",
@@ -342,7 +342,7 @@ def schema_fingerprint_json(layout: StorageLayout) -> str:
 
     The fingerprint covers every declared record class plus the transitive
     closure of referenced storable classes, resolved through
-    :func:`~httk.store.db.schema.resolve_schema`.  It captures what determines
+    :func:`~httk.store.backend.sql.schema.resolve_schema`.  It captures what determines
     the on-disk layout, the stored value encoding, and the *content identity* of
     each table — the logical identity name, dedup policy, composite indexes,
     relationship links, and per-field roles, codecs, shapes, columns, child
@@ -469,7 +469,7 @@ class AdditiveUpgradePlan:
     """The nullable parent columns an additive fingerprint upgrade must add per table.
 
     :param added_columns: Physical table name mapped to the ordered
-        :class:`~httk.store.db.schema.ColumnSpec` values newly present in the
+        :class:`~httk.store.backend.sql.schema.ColumnSpec` values newly present in the
         current fingerprint.  New tables carry no entry (they are created whole);
         a table appears only when it already exists in the stored fingerprint
         and gained one or more nullable parent columns.

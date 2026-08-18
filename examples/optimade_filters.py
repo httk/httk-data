@@ -67,7 +67,7 @@ with category `"not-implemented"`.
 from dataclasses import dataclass
 from fractions import Fraction
 
-from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.backend.sql import Backend, SqlStore, optimade_filter_searcher
 from httk.store.query import Searcher
 from httk.store.query.optimade_filters import FilterTranslationError
 
@@ -133,7 +133,7 @@ REJECTED_FILTERS = [
 
 
 def populate() -> SqlStore:
-    store = SqlStore(Database.sqlite(), entry_records={})
+    store = SqlStore(Backend.sqlite(), entry_records={})
     with store.transaction():
         for material in MATERIALS:
             store.save(material)

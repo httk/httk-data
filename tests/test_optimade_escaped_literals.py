@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from httk.store.db import Database, SqlStore, optimade_filter_searcher
+from httk.store.backend.sql import Backend, SqlStore, optimade_filter_searcher
 
 
 @dataclass(frozen=True)
@@ -35,9 +35,9 @@ RECORDS = (D_QUOTE, D_BS, D_ABC, D_PCT, D_505, D_US, D_545)
 def store(request):
     if request.param == "duckdb":
         pytest.importorskip("duckdb_engine")
-        manager = Database.duckdb()
+        manager = Backend.duckdb()
     else:
-        manager = Database.sqlite(":memory:")
+        manager = Backend.sqlite(":memory:")
     with manager as database:
         value = SqlStore(database, entry_records={})
         for record in RECORDS:
