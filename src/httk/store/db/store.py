@@ -77,6 +77,8 @@ from httk.store.db.layout import (
     metadata_table_for,
     normalize_entry_declaration,
     read_store_metadata,
+    schema_fingerprint_diff,
+    schema_fingerprint_json,
 )
 from httk.store.db.mapping import (
     CONTENT_ID_COLUMN,
@@ -443,7 +445,7 @@ class SqlStore:
             validate_metadata_table(connection)
         stored = None
         read_error: ValueError | SQLAlchemyError | None = None
-        visible_metadata_keys = {"protocol", "entry_declaration", "store_timestamps"}
+        visible_metadata_keys = {"protocol", "entry_declaration", "entry_schemas", "store_timestamps"}
         if self.backend_facts.metadata_backend == "keepermap":
             visible_metadata_keys.add("write_profile")
         for attempt in range(20 if retry_metadata_visibility else 1):
@@ -521,7 +523,7 @@ class SqlStore:
         stored: Mapping[str, str],
         supplied: StorageLayout | None,
     ) -> None:
-        required_keys = {"protocol", "entry_declaration", "store_timestamps"}
+        required_keys = {"protocol", "entry_declaration", "entry_schemas", "store_timestamps"}
         persistent_optional_keys = {"write_profile"}
         recognized_runtime_keys = {"ingest_state", "lease"}
         allowed_keys = required_keys | persistent_optional_keys | recognized_runtime_keys
@@ -595,6 +597,11 @@ class SqlStore:
                     "actual": stored_declaration,
                     "error": str(error),
                 }
+        if persisted is not None and "entry_schemas" in stored:
+            # Absence of the key is already reported by required_keys above.
+            schema_diff = schema_fingerprint_diff(stored["entry_schemas"], schema_fingerprint_json(persisted))
+            if schema_diff:
+                diff["schema"] = schema_diff
         if diff:
             raise StorageLayoutUpgradeRequiredError(diff)
         assert persisted is not None
@@ -653,6 +660,7 @@ class SqlStore:
         rows = {
             "protocol": STORAGE_PROTOCOL_VERSION,
             "entry_declaration": declaration_json(layout),
+            "entry_schemas": schema_fingerprint_json(layout),
             "store_timestamps": self._store_timestamp_state,
         }
         if self._write_profile != "transactional":

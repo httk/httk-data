@@ -1,10 +1,12 @@
 """Focused SqlStore protocol/layout and entry-family dispatch coverage."""
 
+import json
 import os
 import subprocess
 import sys
 import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -23,6 +25,7 @@ from httk.store.db import (
     StorageLayoutUpgradeRequiredError,
     StoreUnderConstructionError,
 )
+from httk.store.db import schema as schema_module
 from httk.store.db.layout import (
     METADATA_TABLE_NAME,
     StorageLayout,
@@ -32,8 +35,11 @@ from httk.store.db.layout import (
     declaration_json,
     expected_metadata,
     normalize_entry_records,
+    schema_fingerprint_diff,
+    schema_fingerprint_json,
 )
 from httk.store.db.mapping import entry_dispatch_table_name
+from httk.store.db.schema import register_schema_override
 
 
 class LayoutFamily:
@@ -127,6 +133,33 @@ register_entry_record(
     record=f"{__name__}:LayoutSecond",
 )
 register_entry_record(name="test-layout-unbound-record", record=f"{__name__}:PrivateLayoutRecord")
+
+
+class RefFamily:
+    """Registered test entry family whose record references another storable class."""
+
+
+@dataclass(frozen=True)
+class RefChild:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="layout_ref_child")
+
+    tag: str
+
+
+@dataclass(frozen=True)
+class RefParent:
+    __httk_storage__: ClassVar[StorageInfo] = StorageInfo(storage_name="layout_ref_parent")
+
+    child: RefChild
+    value: str
+
+
+register_entry_family(name="test-layout-ref-family", family=f"{__name__}:RefFamily")
+register_entry_record(
+    name="test-layout-ref-backing",
+    family="test-layout-ref-family",
+    record=f"{__name__}:RefParent",
+)
 
 
 @pytest.fixture
@@ -226,7 +259,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":2}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.5.0"
+    assert STORAGE_PROTOCOL_VERSION == "v2.6.0"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -366,6 +399,99 @@ def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
         SqlStore(database)
     assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": old_protocol}
+
+
+def _read_metadata_value(database: Database, key: str) -> str | None:
+    with database.engine.connect() as connection:
+        return connection.execute(
+            sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = :key"), {"key": key}
+        ).scalar_one_or_none()
+
+
+def _write_metadata_value(database: Database, key: str, value: str) -> None:
+    with database.engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text("UPDATE _httk_store_metadata SET value = :value WHERE key = :key"),
+            {"key": key, "value": value},
+        )
+
+
+def test_schema_fingerprint_is_deterministic_and_covers_the_closure() -> None:
+    layout = normalize_entry_records({RefFamily: RefParent})
+    first = schema_fingerprint_json(layout)
+    assert first == schema_fingerprint_json(layout)
+    document = json.loads(first)
+    assert set(document) == {"tables"}
+    # The referenced child class is pulled in through the closure.
+    assert set(document["tables"]) == {"layout_ref_parent", "layout_ref_child"}
+    assert schema_fingerprint_diff(first, first) == {}
+
+
+def test_reopen_with_changed_record_schema_is_rejected(database: Database) -> None:
+    SqlStore(database, entry_records={LayoutFamily: LayoutSingle, MultiLayoutFamily: (LayoutFirst, LayoutSecond)})
+    stored = json.loads(_read_metadata_value(database, "entry_schemas") or "")
+    # Simulate the record's stored column type having changed since creation.
+    stored["tables"]["layout_single"]["fields"]["value"]["columns"][0]["kind"] = "int"
+    _write_metadata_value(database, "entry_schemas", json.dumps(stored, sort_keys=True, separators=(",", ":")))
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        SqlStore(database)
+    schema_diff = error.value.diff["schema"]
+    # Only the changed table is named, not the unrelated ones.
+    assert set(schema_diff) == {"layout_single"}
+
+
+@contextmanager
+def _schema_override(cls: type, info: StorageInfo) -> Iterator[None]:
+    """Register a schema override and evict it (and its cache entries) afterwards."""
+    register_schema_override(cls, info)
+    try:
+        yield
+    finally:
+        schema_module._schema_overrides.pop(cls, None)
+        for key in [key for key in schema_module._schema_cache if key[0] is cls]:
+            del schema_module._schema_cache[key]
+
+
+def test_reopen_detects_dedup_change_on_referenced_class(database: Database) -> None:
+    SqlStore(database, entry_records={RefFamily: RefParent})
+    # A real resolution-path change: the referenced child's dedup policy differs
+    # from what was stamped, moving its fingerprint without hand-editing JSON.
+    with _schema_override(RefChild, StorageInfo(storage_name="layout_ref_child", dedup="by_value")):
+        with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+            SqlStore(database)
+        # The offending table is the referenced child, not the declared parent.
+        assert set(error.value.diff["schema"]) == {"layout_ref_child"}
+
+
+def test_reopen_detects_identity_name_change_alone(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+    SqlStore(database, entry_records={RefFamily: RefParent})
+    # Pinning a new identity_name changes content identity with no layout change;
+    # the fingerprint must still trip so content_id dedup cannot silently break.
+    monkeypatch.setattr(
+        RefChild, "__httk_storage__", StorageInfo(storage_name="layout_ref_child", identity_name="pinned-ref-child")
+    )
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        SqlStore(database)
+    assert set(error.value.diff["schema"]) == {"layout_ref_child"}
+
+
+def test_reopen_with_unchanged_schema_succeeds(database: Database) -> None:
+    SqlStore(database, entry_records={RefFamily: RefParent})
+    reopened = SqlStore(database)
+    assert {family.name for family in reopened.entry_layout} == {"test-layout-ref-family"}
+
+
+def test_old_metadata_shape_without_entry_schemas_fails_protocol(database: Database) -> None:
+    SqlStore(database, entry_records={})
+    with database.engine.begin() as connection:
+        # A pre-v2.6.0 stamp had no entry_schemas row and the earlier protocol.
+        connection.execute(sqlalchemy.text("DELETE FROM _httk_store_metadata WHERE key = 'entry_schemas'"))
+        connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.5.0' WHERE key = 'protocol'"))
+    with pytest.raises(StorageLayoutUpgradeRequiredError) as error:
+        SqlStore(database)
+    assert error.value.diff["protocol"] == {"expected": STORAGE_PROTOCOL_VERSION, "actual": "v2.5.0"}
+    # Absence of the key is reported by required_keys, not the schema diff.
+    assert "schema" not in error.value.diff
 
 
 def test_backend_facts_are_resolved_and_frozen(database: Database) -> None:

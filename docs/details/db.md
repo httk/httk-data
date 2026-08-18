@@ -225,12 +225,25 @@ saving a naturally bound domain object) makes it discoverable through
 `fetch_entry(StructureEntry, content_id)`; that method returns the actual
 concrete Record.
 
-Later registry-backed `SqlStore(db)` calls trust the persisted declaration; there is no layout
-mode or schema diffing. Missing or edited record tables fail with the database's
-own errors when used. Tables are created lazily on the first write; reads never
-issue DDL. Old, unversioned, or incompatible layouts raise
+Later registry-backed `SqlStore(db)` calls trust the persisted declaration for
+which classes and families are stored. Beyond the declaration, reopen also
+verifies a per-table *schema fingerprint*: the resolved on-disk layout and
+content identity of every declared class and its referenced classes — the
+logical `identity_name`, dedup, indexes, links, and each field's role, codec,
+columns, child tables, identity participation, and list-vs-tuple container. A
+record class whose stored shape or identity changed since creation — a gained or
+retyped field, a new codec, a changed index, a `list`↔`tuple` swap, an added
+`IdentitySkip`, a changed `identity_name` — is rejected up front with
+`StorageLayoutUpgradeRequiredError`, whose diff names the offending tables
+(`{"schema": {table: {"expected", "actual"}}}`) rather than failing later at use
+(or, worse, silently breaking `content_id` deduplication). A code move or rename
+is safe only when the record pins an explicit `identity_name` (every shipped
+httk record does); without a pin the qualified class name *is* the content
+identity, so the move changes `content_id` and the store correctly refuses to
+open. Tables are still created lazily on the first write; reads never issue DDL.
+Old, unversioned, or incompatible layouts raise
 `StorageLayoutUpgradeRequiredError`; this redesign does not migrate old stores,
-so rebuild them explicitly.
+so rebuild them explicitly — automatic migration paths may come later.
 
 A source object with an exact `__httk_storage_record__` can be saved directly;
 `save(source, as_record=OtherRecord)` selects another declared projection.
