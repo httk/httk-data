@@ -62,6 +62,7 @@ import sqlalchemy
 from httk.core.storage import StorageProjectionCycleError, resolve_storage_record
 
 from httk.store.backend.schema import TableSchema, resolve_schema
+from httk.store.backend.sql.layout import actual_table_names
 from httk.store.backend.sql.mapping import (
     CONTENT_ID_COLUMN,
     DISPATCH_CONTENT_ID_COLUMN,
@@ -1232,9 +1233,13 @@ class _Merger:
                 break
         self._promote_late_roles()
         self._sweep_orphans()
+        # A declared family whose table was never written stays uncreated (deferred DDL only
+        # happens on write); the compaction pass must treat such a missing table as empty
+        # rather than querying it, matching the module's lazy-DDL read-path principle.
+        existing = actual_table_names(self._connection)
         for name in self._graph.dependency_order(self._store._metadata.tables):
             table = self._store._metadata.tables[name]
-            if SID_COLUMN in table.c:
+            if name in existing and SID_COLUMN in table.c:
                 self._compact(table)
         self._merge_dispatch()
         self._populate_resolved_map()

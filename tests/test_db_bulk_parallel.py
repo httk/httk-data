@@ -65,25 +65,45 @@ CALC_FAMILY = {BulkCalcFamily: (BulkCalcA, BulkCalcB)}
 @pytest.mark.parametrize("finalize", ["parity", "deferred"])
 @pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("track_sids", [True, False])
-def test_bulk_promotes_nested_entry_records(finalize, workers, track_sids) -> None:
-    """A named nested record becomes an entry even after its private occurrence was flushed."""
-    database = Backend.sqlite()
-    try:
-        store = SqlStore(database, entry_records=CALC_FAMILY)
-        structure = BulkCalcA("alpha", 1)
-        envelope = BulkImportEnvelope("1000008.cif", structure)
-        with store.bulk_ingest(
-            workers=workers,
-            finalize=finalize,
-            track_sids=track_sids,
-            chunk_size=1,
-        ) as bulk:
-            bulk.save(envelope)
-            bulk.save(Author("separator", 0))
-            bulk.save(envelope, promote=BulkCalcA)
-        assert store.fetch_entry(BulkCalcFamily, content_id(structure)) == structure
-    finally:
-        database.dispose()
+def test_bulk_promotes_nested_entry_records(store_factory, finalize, workers, track_sids) -> None:
+    """A named nested record becomes an entry even after its private occurrence was flushed.
+
+    Runs on every bulk engine: a ``promote=`` occurrence writes a second root per task, so the
+    deferred lost-task check must account for tasks, not root rows -- on DuckDB (parquet stage)
+    this previously mis-counted ``roots`` and aborted, while SQLite's task-counting stage masked it.
+    """
+    store = store_factory(entry_records=CALC_FAMILY)
+    _require_bulk(store)
+    structure = BulkCalcA("alpha", 1)
+    envelope = BulkImportEnvelope("1000008.cif", structure)
+    with store.bulk_ingest(
+        workers=workers,
+        finalize=finalize,
+        track_sids=track_sids,
+        chunk_size=1,
+    ) as bulk:
+        bulk.save(envelope)
+        bulk.save(Author("separator", 0))
+        bulk.save(envelope, promote=BulkCalcA)
+    assert store_factory.reopen(store).fetch_entry(BulkCalcFamily, content_id(structure)) == structure
+
+
+@pytest.mark.parametrize("finalize", ["parity", "deferred"])
+def test_parallel_finalize_ignores_declared_but_unwritten_family(store_factory, finalize) -> None:
+    """A declared family whose table is never written must not break parallel finalize.
+
+    Deferred DDL only creates a table on first write, so the merge's compaction pass must
+    treat a declared-but-unwritten family's table as empty rather than querying a table that
+    does not exist -- previously it aborted with "<table> does not exist" on every engine.
+    """
+    store = store_factory(entry_records=CALC_FAMILY)  # declares BulkCalcA/BulkCalcB tables
+    _require_bulk(store)
+    with store.bulk_ingest(workers=2, finalize=finalize, track_sids=False) as bulk:
+        bulk.save(Author("only", 1))  # nothing writes the declared BulkCalc* tables
+    reopened = store_factory.reopen(store)
+    searcher = reopened.searcher()
+    searcher.variable(Author)
+    assert searcher.count() == 1
 
 
 def test_bulk_rejects_unreachable_promoted_record() -> None:

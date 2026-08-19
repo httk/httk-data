@@ -2018,21 +2018,17 @@ class BulkIngest:
 
     def _assert_no_lost_tasks(self, manifests: list[Any]) -> None:
         """Abort (never commit) if any dispatched task did not come back encoded in a worker manifest."""
-        # Deferred Parquet stages carry one root row per submitted task.  Count
-        # those sidecars directly, avoiding a second O(N) Python token set on
-        # the scale path (``token_sid`` itself is retained only when the public
-        # resolved_sid contract requested it).
+        # A Parquet stage spills roots to sidecars instead of the manifest, but every worker
+        # still self-reports ``encoded_count`` (one per dispatched task, not per root row).
+        # Counting root rows over-counts a ``promote=`` task, which writes an extra root per
+        # promotion; ``encoded_count`` is the per-task signal this check is defined on, and is
+        # O(workers) rather than a full token set.
         if any("_httk_roots" in manifest.shards for manifest in manifests):
-            roots = 0
-            for manifest in manifests:
-                for path in manifest.shards.get("_httk_roots", ()):
-                    from pyarrow.parquet import ParquetFile
-
-                    roots += ParquetFile(path).metadata.num_rows
-            if roots != self._records_total:
+            encoded_count = sum(manifest.encoded_count for manifest in manifests)
+            if encoded_count != self._records_total:
                 raise RuntimeError(
                     "bulk_ingest lost tasks between dispatch and deferred finalize: "
-                    f"expected {self._records_total} roots, found {roots}"
+                    f"expected {self._records_total} task(s), found {encoded_count}"
                 )
             return
         if not self._track_sids:
