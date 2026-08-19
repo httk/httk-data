@@ -183,6 +183,9 @@ class MongoStore:
         self._last_generation = self._layout_generation()
         self._initialize_store_timestamp_mark()
 
+    def __repr__(self) -> str:
+        return f"MongoStore(database={self._database!r})"
+
     @property
     def layout(self) -> StorageLayout:
         """Return the immutable persisted entry declaration.

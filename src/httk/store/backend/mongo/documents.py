@@ -31,7 +31,7 @@ def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: 
     if tensor.dim == (shape.rows, shape.cols):
         return tensor
     if shape.rows == 1 and tensor.dim == (shape.cols,):
-        return FracVector.from_noms_and_denom((tensor.noms,), tensor.denom)
+        return FracVector._of((tensor.noms,), tensor.denom)
     raise ValueError(
         f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape "
         f"({shape.rows}, {shape.cols}), got {tensor.dim}"
@@ -50,7 +50,7 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
             f"got shape {tensor.dim}"
         )
     rows = typing.cast(tuple[tuple[int, ...], ...], tensor.noms)
-    return [FracVector.from_noms_and_denom(row, tensor.denom) for row in rows]
+    return [FracVector._of(row, tensor.denom) for row in rows]
 
 
 def _value(record_type: type, source: Any, projected: Mapping[str, object], spec: FieldSpec) -> Any:

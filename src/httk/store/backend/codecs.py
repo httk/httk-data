@@ -261,15 +261,15 @@ def decode_surdscalar_exact(text: str) -> SurdScalar:
     :raises ZeroDivisionError: If a coefficient denominator is zero.
     """
     if text == "0":
-        return SurdScalar.from_components({}, ())
+        return SurdScalar._of({}, ())
     components: dict[int, FracVector] = {}
     for term in text.split(";"):
         radicand_text, _, coefficient_text = term.partition(":")
         if not coefficient_text:
             raise ValueError(f"invalid exact surd text {text!r}; expected {SURD_EXACT_FORMAT!r}")
         coefficient = decode_fraction_exact(coefficient_text)
-        components[int(radicand_text)] = FracVector.from_noms_and_denom(coefficient.numerator, coefficient.denominator)
-    return SurdScalar.from_components(components, ())
+        components[int(radicand_text)] = FracVector._of(coefficient.numerator, coefficient.denominator)
+    return SurdScalar._of(components, ())
 
 
 def _flat_fractions(value: FracVector) -> list[fractions.Fraction]:
@@ -330,7 +330,7 @@ def decode_fracvector_exact(text: str, rows: int, cols: int) -> FracVector:
     if len(numerators) != rows * cols:
         raise ValueError(f"exact tensor text {text!r} holds {len(numerators)} elements; expected {rows}x{cols}")
     noms = tuple(tuple(numerators[row * cols : (row + 1) * cols]) for row in range(rows))
-    return FracVector.from_noms_and_denom(noms, denominator)
+    return FracVector._of(noms, denominator)
 
 
 def encode_fracvector_floats(value: FracVector) -> tuple[float, ...]:

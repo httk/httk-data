@@ -263,6 +263,9 @@ class SqlStore:
         supplied = normalize_entry_declaration(entry_records, entry_families)
         self._initialize_layout(supplied)
 
+    def __repr__(self) -> str:
+        return f"SqlStore(database={self._database!r}, write_profile={self._write_profile!r})"
+
     @property
     def layout(self) -> StorageLayout:
         """Return the immutable persisted entry declaration and resolved classes.
@@ -2669,7 +2672,7 @@ def _as_fixed_tensor(schema: TableSchema, spec: FieldSpec, shape: Shape, value: 
     if dim == (shape.rows, shape.cols):
         return tensor
     if shape.rows == 1 and dim == (shape.cols,):
-        return FracVector.from_noms_and_denom((tensor.noms,), tensor.denom)
+        return FracVector._of((tensor.noms,), tensor.denom)
     raise ValueError(
         f"{schema.cls.__name__}.{spec.field}: expected a FracVector of shape ({shape.rows}, {shape.cols}), got {dim}"
     )
@@ -2689,7 +2692,7 @@ def _tensor_rows(schema: TableSchema, spec: FieldSpec, shape: Shape, value: Any)
             f"got shape {dim}"
         )
     rows = cast(tuple[tuple[int, ...], ...], tensor.noms)  # dim was validated two-dimensional above
-    return [FracVector.from_noms_and_denom(noms_row, tensor.denom) for noms_row in rows]
+    return [FracVector._of(noms_row, tensor.denom) for noms_row in rows]
 
 
 def _field_path(path: str, field: str) -> str:

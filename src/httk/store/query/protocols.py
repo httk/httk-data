@@ -101,6 +101,9 @@ class ContinuationToken(str):
             raise TypeError(f"ContinuationToken requires str, got {type(value).__name__}")
         return str.__new__(cls, value)
 
+    def __repr__(self) -> str:
+        return f"ContinuationToken({str.__repr__(self)})"
+
 
 @dataclass(frozen=True, slots=True)
 class ResultPage:

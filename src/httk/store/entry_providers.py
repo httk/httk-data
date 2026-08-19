@@ -118,6 +118,9 @@ class StandardEntryProvider(EntryProvider):
         self._entries = {str(key): record_type.create(value) for key, value in entries.items()}
         self._relationships = _normalized_relationships(relationships)
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(entry_type={self._entry_type!r}, entries={len(self._entries)})"
+
     def _check_entry_type(self, entry_type: str) -> None:
         if entry_type != self._entry_type:
             raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
@@ -256,6 +259,9 @@ class RunEntryProvider(EntryProvider):
     def __init__(self, entries: Mapping[str, Run | Mapping[str, Any]]) -> None:
         self._entries = {str(key): Run.create(value) for key, value in entries.items()}
 
+    def __repr__(self) -> str:
+        return f"RunEntryProvider(entries={len(self._entries)})"
+
     def _check_entry_type(self, entry_type: str) -> None:
         if entry_type != self._entry_type:
             raise KeyError(f"{type(self).__name__} serves only the '{self._entry_type}' entry type.")
@@ -376,6 +382,9 @@ class DataRecordEntryProvider(EntryProvider):
         properties = dict(base.properties)
         properties.update(resolved)
         self._definition = _entry_definition(self._entry_type, RECORDS_DEFINITION_ID, properties)
+
+    def __repr__(self) -> str:
+        return f"DataRecordEntryProvider(entries={len(self._entries)})"
 
     def _check_entry_type(self, entry_type: str) -> None:
         if entry_type != self._entry_type:

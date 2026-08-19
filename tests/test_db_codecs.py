@@ -114,7 +114,7 @@ def test_surdscalar_round_trip():
     assert isinstance(decoded, SurdScalar)
     assert decoded == value
 
-    zero = SurdScalar.from_components({}, ())
+    zero = SurdScalar._of({}, ())
     assert encode_surdscalar_exact(zero) == "0"
     assert decode_surdscalar_exact("0") == zero
     negative = SurdVector.sqrt_of(Fraction(1, 2)) - Fraction(5, 7)
@@ -154,7 +154,7 @@ def test_fracvector_exact_text_round_trips_1xn():
 def test_fracvector_exact_text_is_canonical():
     # The same value with a non-minimal internal denominator encodes identically.
     plain = FracVector([[1, 2], [3, 4]])
-    inflated = FracVector.from_noms_and_denom(((6, 12), (18, 24)), 6)
+    inflated = FracVector._of(((6, 12), (18, 24)), 6)
     assert encode_fracvector_exact(plain) == encode_fracvector_exact(inflated)
     assert encode_fracvector_exact(plain) == "1;1,2,3,4"
 

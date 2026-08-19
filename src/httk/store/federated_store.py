@@ -555,6 +555,9 @@ class FederatedStore:
         self._sources = MappingProxyType(copied)
         self._source_names = tuple(copied)
 
+    def __repr__(self) -> str:
+        return f"FederatedStore(sources={self._source_names!r})"
+
     @property
     def source_names(self) -> tuple[str, ...]:
         """Return the immutable source names in constructor iteration order.
