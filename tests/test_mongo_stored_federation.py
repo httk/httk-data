@@ -18,7 +18,7 @@ def _mongo_store(database):
 @pytest.fixture
 def mongo_store_pair(mongo_test_database):
     name = f"httk_test_federation_{uuid.uuid4().hex}"
-    second_database = MongoDatabase.connect(os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never")
+    second_database = MongoDatabase(os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never")
     try:
         yield _mongo_store(mongo_test_database), _mongo_store(second_database)
     finally:

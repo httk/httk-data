@@ -152,7 +152,7 @@ def test_concurrent_fetches_use_independent_hydration_contexts(mongo_test_databa
     store = _store(mongo_test_database)
     record = MongoRoleContainer("hydration", [MongoRoleDependency("child")])
     sid = store.save(record)
-    reader_database = MongoDatabase.connect(
+    reader_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     reader = _store(reader_database)
@@ -195,7 +195,7 @@ def test_dispatch_missing_is_detected_and_resaved(mongo_test_database):
 def test_content_id_race_returns_one_sid(mongo_test_database):
     uri = os.environ["HTTK_TEST_MONGODB_URI"]
     first = _store(mongo_test_database)
-    second_db = MongoDatabase.connect(uri, database=mongo_test_database.database.name, transactions="never")
+    second_db = MongoDatabase(uri, database=mongo_test_database.database.name, transactions="never")
     second = _store(second_db)
     try:
         barrier = Barrier(2)
@@ -241,7 +241,7 @@ def test_by_value_hit_compensation_depends_on_mode(mongo_test_database, transact
     owned_database = None
     if transactions == "never":
         name = f"httk_test_degraded_{id(mongo_test_database)}"
-        database = MongoDatabase.connect(os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never")
+        database = MongoDatabase(os.environ["HTTK_TEST_MONGODB_URI"], database=name, transactions="never")
         owned_database = database
     try:
         store = _store(database)

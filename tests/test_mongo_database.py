@@ -22,7 +22,7 @@ def test_never_forces_degraded_mode(mongo_test_database) -> None:
     uri = os.environ.get("HTTK_TEST_MONGODB_URI")
     if not uri:
         pytest.skip("HTTK_TEST_MONGODB_URI is not set")
-    database = MongoDatabase.connect(uri, database=f"httk_test_never_{id(mongo_test_database)}", transactions="never")
+    database = MongoDatabase(uri, database=f"httk_test_never_{id(mongo_test_database)}", transactions="never")
     try:
         assert database.supports_transactions is False
     finally:
@@ -35,7 +35,7 @@ def test_require_succeeds_on_the_replica_set(mongo_test_database) -> None:
     uri = os.environ.get("HTTK_TEST_MONGODB_URI")
     if not uri:
         pytest.skip("HTTK_TEST_MONGODB_URI is not set")
-    database = MongoDatabase.connect(
+    database = MongoDatabase(
         uri, database=f"httk_test_require_{id(mongo_test_database)}", transactions="require"
     )
     try:

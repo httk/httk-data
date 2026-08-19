@@ -129,7 +129,7 @@ def test_fsck_marks_reference_child_and_shared_dependency_graphs(mongo_test_data
 
     store.fsck()
 
-    reopened_database = MongoDatabase.connect(
+    reopened_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     reopened = _store(reopened_database)
@@ -176,7 +176,7 @@ def test_fsck_repairs_only_main_family_dispatches_and_reports_conflicts(mongo_te
 
 def test_fsck_generation_invalidates_another_store_cache(mongo_test_database) -> None:
     first = _store(mongo_test_database)
-    second_database = MongoDatabase.connect(
+    second_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     second = _store(second_database)
@@ -210,7 +210,7 @@ def test_fsck_aborts_sweep_until_reopened_private_type_is_supplied(mongo_test_da
     leaves = mongo_test_database.database[collection_name_for(resolve_schema(FsckLeaf))]
     orphan = FsckLeaf("private-orphan")
     orphan_sid = _insert_orphan_leaf(mongo_test_database, orphan)
-    reopened_database = MongoDatabase.connect(
+    reopened_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     reopened = _store(reopened_database)
@@ -237,7 +237,7 @@ def test_fsck_randomized_graphs_retain_reachable_documents(mongo_test_database, 
     seed = 20260808
     rng = random.Random(seed)
     store = _store(mongo_test_database)
-    reopened_database = MongoDatabase.connect(
+    reopened_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     reopened = _store(reopened_database)

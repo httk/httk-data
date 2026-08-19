@@ -115,7 +115,7 @@ class StandardEntryProvider(EntryProvider):
     ) -> None:
         self._record_type = record_type
         self._entry_type = entry_type
-        self._entries = {str(key): record_type.create(value) for key, value in entries.items()}
+        self._entries = {str(key): record_type.from_obj(value) for key, value in entries.items()}
         self._relationships = _normalized_relationships(relationships)
 
     def __repr__(self) -> str:
@@ -257,7 +257,7 @@ class RunEntryProvider(EntryProvider):
     _entry_type = "_httk_runs"
 
     def __init__(self, entries: Mapping[str, Run | Mapping[str, Any]]) -> None:
-        self._entries = {str(key): Run.create(value) for key, value in entries.items()}
+        self._entries = {str(key): Run.from_obj(value) for key, value in entries.items()}
 
     def __repr__(self) -> str:
         return f"RunEntryProvider(entries={len(self._entries)})"
@@ -346,7 +346,7 @@ class DataRecordEntryProvider(EntryProvider):
         definitions: Mapping[str, PropertyDefinition] | None = None,
         relationships: Mapping[str, Iterable[RelatedEntry]] | None = None,
     ) -> None:
-        self._entries = {str(key): DataRecord.create(value) for key, value in entries.items()}
+        self._entries = {str(key): DataRecord.from_obj(value) for key, value in entries.items()}
         self._relationships = _normalized_relationships(relationships)
         resolved = dict(definitions or {})
         for name in resolved:

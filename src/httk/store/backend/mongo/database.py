@@ -27,35 +27,28 @@ class MongoDatabase:
         are unavailable.
     """
 
-    def __init__(self, client: MongoClient, database: str, *, transactions: str = "auto") -> None:
+    def __init__(self, client: MongoClient | str, database: str, *, transactions: str = "auto") -> None:
         if transactions not in {"auto", "require", "never"}:
             raise ValueError("transactions must be one of 'auto', 'require', or 'never'")
-        self._client = client
-        # Store-level handles must never inherit a caller's secondary-preferred
-        # default: dedup and metadata observations are primary-authoritative.
-        self._database = client.get_database(database, read_preference=ReadPreference.PRIMARY)
-        hello = client.admin.command("hello")
-        replica_set = bool(hello.get("setName"))
-        if transactions == "require" and not replica_set:
-            raise ValueError("transactions='require' needs a MongoDB replica set")
-        self._supports_transactions = replica_set and transactions != "never"
-        self._transactions_mode = transactions
-
-    @classmethod
-    def connect(cls, uri: str, *, database: str, transactions: str = "auto") -> Self:
-        """Connect to a MongoDB URI with durable majority defaults.
-
-        :param uri: MongoDB connection URI.
-        :param database: Backend name to expose through the wrapper.
-        :param transactions: ``"auto"``, ``"require"``, or ``"never"``.
-        :return: A connected database wrapper.
-        :raises ValueError: If the requested transaction mode is unavailable.
-        """
-        client: MongoClient[dict[str, Any]] = MongoClient(uri, w="majority", journal=True, readConcernLevel="majority")
+        # A URI string is connected here with durable majority defaults; the resulting client is then
+        # owned by this wrapper and closed if construction fails. An already-built client is used as-is.
+        owns_client = isinstance(client, str)
+        if isinstance(client, str):
+            client = MongoClient(client, w="majority", journal=True, readConcernLevel="majority")
         try:
-            return cls(client, database, transactions=transactions)
+            self._client = client
+            # Store-level handles must never inherit a caller's secondary-preferred
+            # default: dedup and metadata observations are primary-authoritative.
+            self._database = client.get_database(database, read_preference=ReadPreference.PRIMARY)
+            hello = client.admin.command("hello")
+            replica_set = bool(hello.get("setName"))
+            if transactions == "require" and not replica_set:
+                raise ValueError("transactions='require' needs a MongoDB replica set")
+            self._supports_transactions = replica_set and transactions != "never"
+            self._transactions_mode = transactions
         except BaseException:
-            client.close()
+            if owns_client:
+                client.close()
             raise
 
     @property

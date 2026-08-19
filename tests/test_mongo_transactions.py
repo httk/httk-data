@@ -84,7 +84,7 @@ def _disable_failpoint(client) -> None:
 
 def test_transaction_commit_visibility_rollback_and_flat_nesting(mongo_test_database) -> None:
     store = _store(mongo_test_database)
-    other_database = MongoDatabase.connect(
+    other_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name
     )
     other = _store(other_database)
@@ -111,7 +111,7 @@ def test_transaction_commit_visibility_rollback_and_flat_nesting(mongo_test_data
 
 
 def test_degraded_transaction_is_unavailable_and_rollback_does_not_cache(mongo_test_database) -> None:
-    database = MongoDatabase.connect(
+    database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name, transactions="never"
     )
     try:
@@ -132,7 +132,7 @@ def test_degraded_transaction_is_unavailable_and_rollback_does_not_cache(mongo_t
 
 def test_save_race_against_an_open_transaction_converges(mongo_test_database) -> None:
     first = _store(mongo_test_database)
-    second_database = MongoDatabase.connect(
+    second_database = MongoDatabase(
         os.environ["HTTK_TEST_MONGODB_URI"], database=mongo_test_database.database.name
     )
     second = _store(second_database)
