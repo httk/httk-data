@@ -256,7 +256,7 @@ def test_empty_database_requires_declaration_and_stamps_metadata_only(database: 
             sqlalchemy.text("SELECT value FROM _httk_store_metadata WHERE key = 'entry_declaration'")
         ).scalar_one()
         assert declaration == '{"families":[],"format":2}'
-    assert STORAGE_PROTOCOL_VERSION == "v2.6.0"
+    assert STORAGE_PROTOCOL_VERSION == "2"
     assert SqlStore(database).entry_layout == ()
 
 
@@ -382,7 +382,7 @@ def test_warm_read_memo_does_not_block_table_creation_on_write(database: Backend
     assert fetched is not None and fetched.value == "kept"
 
 
-@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"])
+@pytest.mark.parametrize("old_protocol", ["v2.1.0", "v2.3.0", "v2.4.0", "v2.5.0"])
 def test_protocol_and_explicit_declaration_mismatches_have_structured_diffs(
     database: Backend, old_protocol: str
 ) -> None:
@@ -469,7 +469,7 @@ def test_reopen_with_unchanged_schema_succeeds(database: Backend) -> None:
 def test_old_metadata_shape_without_entry_schemas_fails_protocol(database: Backend) -> None:
     SqlStore(database, entry_records={})
     with database.engine.begin() as connection:
-        # A pre-v2.6.0 stamp had no entry_schemas row and the earlier protocol.
+        # An earlier stamp had no entry_schemas row and a v-prefixed protocol.
         connection.execute(sqlalchemy.text("DELETE FROM _httk_store_metadata WHERE key = 'entry_schemas'"))
         connection.execute(sqlalchemy.text("UPDATE _httk_store_metadata SET value = 'v2.5.0' WHERE key = 'protocol'"))
     with pytest.raises(StorageLayoutUpgradeRequiredError) as error:

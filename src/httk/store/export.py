@@ -234,7 +234,7 @@ def export_dataset(store_path: str | Path, out_path: str | Path) -> Path:
         store_name = source.name
         manifest = {
             "format": "httk-dataset",
-            "format_version": 1,
+            "format_version": 2,
             "store": {
                 "path": f"store/{store_name}",
                 "filename": store_name,

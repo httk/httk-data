@@ -47,12 +47,10 @@ __all__ = [
     "read_store_metadata",
 ]
 
-STORAGE_PROTOCOL_VERSION: Final = "v2.6.0"
-# v2.6.0 adds the per-table resolved-schema fingerprint (entry_schemas) to the
-# metadata stamp, so a record class whose stored layout changed is rejected on
-# reopen rather than failing later at use. v2.5.0 made entry declarations
-# self-describing and permitted explicit application-owned family bindings
-# without global registry discovery.
+STORAGE_PROTOCOL_VERSION: Final = "2"
+# The value is the major store generation only, compared for strict equality on
+# reopen; it is never parsed. Bump it to "3" solely on a breaking change to the
+# physical SqlStore layout that an existing store could not be reopened against.
 """The persisted SqlStore layout protocol implemented by this package."""
 
 METADATA_TABLE_NAME: Final = "_httk_store_metadata"

@@ -755,7 +755,7 @@ class SqlResultSet:
         compiled = sqlalchemy.select(inner).compile(dialect=dialect)
         root = self._plan._variables[0]
         payload = {
-            "version": 1,
+            "version": 2,
             "dialect": {
                 "name": dialect.name,
                 "driver": dialect.driver,

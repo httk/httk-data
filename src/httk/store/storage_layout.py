@@ -43,8 +43,13 @@ __all__ = [
     "schema_fingerprint_json",
 ]
 
-DECLARATION_PROTOCOL_VERSION: Final = "v2.2.0"
-"""The current backend-neutral declaration protocol."""
+DECLARATION_PROTOCOL_VERSION: Final = "2"
+"""The current backend-neutral declaration protocol.
+
+The value is the major generation only, compared for strict equality on reopen
+and never parsed. Bump it to "3" solely on a breaking change to the declaration
+protocol that an existing store could not be reopened against.
+"""
 
 ADDITIVE_UPGRADE_HINT: Final = (
     "the schema difference is purely additive (new nullable columns / lazily created tables); "

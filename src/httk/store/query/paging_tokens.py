@@ -20,7 +20,7 @@ from httk.store.query import ContinuationToken, PaginationCursorError
 
 __all__ = []
 
-_TOKEN_VERSION = 1
+_TOKEN_VERSION = 2
 _MAX_TOKEN_CHARS = 12_000
 _MAX_JSON_BYTES = 9_000
 _MAX_ANCHORS = 32
