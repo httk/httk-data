@@ -22,10 +22,10 @@ docs-inventories:
 	curl -fsSL https://docs.python.org/3/objects.inv -o docs/_inventories/python.inv
 	# Requires a committed, current docs/requirements.lock; dependency release docs must be published.
 	$(PYTHON) -m httk.core.docs lock-check
-	$(PYTHON) -m httk.core.docs refresh-inventories --base-url $(DOCS_BASE_URL) --channel release
+	$(PYTHON) -m httk.core.docs refresh-inventories --base-url $(DOCS_BASE_URL) --channel release .
 # Regenerate the portable documentation lock (network target).
 docs-lock:
-	$(PYTHON) -m httk.core.docs lock
+	$(PYTHON) -m httk.core.docs lock .
 
 # Verify the lock in a clean environment and run the strict documentation build
 # (network target; the lock installation and build are intentionally transparent).
